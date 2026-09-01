@@ -59,6 +59,7 @@ class AppState extends ChangeNotifier {
   bool liveConnected = false;
   bool busy = false;
   String? lastError;
+  TrackingHealth trackingHealth = const TrackingHealth.unchecked();
 
   List<TraccarDevice> devices = const [];
   Map<int, TraccarPosition> positions = const {};
@@ -102,6 +103,7 @@ class AppState extends ChangeNotifier {
     } on Object catch (error) {
       lastError = 'Tracking needs attention. ${userFacingError(error)}';
     }
+    await refreshTrackingHealth();
 
     try {
       await _connectManager(provisioning!);
@@ -221,6 +223,7 @@ class AppState extends ChangeNotifier {
       }
 
       phase = AppPhase.ready;
+      await refreshTrackingHealth();
       await refresh();
       _connectLive();
     } on DeviceConflictException {
@@ -371,6 +374,7 @@ class AppState extends ChangeNotifier {
       }
       tracking = await _tracker.isTracking();
       await _preferences.setBool(_trackingWantedKey, tracking);
+      await refreshTrackingHealth();
     } on Object catch (error) {
       lastError = userFacingError(error);
     } finally {
@@ -378,6 +382,20 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> refreshTrackingHealth() async {
+    if (phase != AppPhase.ready) return;
+    try {
+      trackingHealth = await _tracker.trackingHealth();
+    } on Object {
+      trackingHealth = const TrackingHealth.unchecked();
+    }
+    notifyListeners();
+  }
+
+  Future<void> openLocationSettings() => _tracker.openLocationSettings();
+
+  Future<void> openBatterySettings() => _tracker.openBatterySettings();
 
   Future<bool> sendPositionNow() async {
     busy = true;
@@ -528,16 +546,12 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> resetApp() async {
-    await _tracker.stop();
-    await _credentialStore.clearProvisioning();
-    await Future.wait(<Future<void>>[
-      _preferences.remove(_firstNameKey),
-      _preferences.remove(_deviceUsernameKey),
-      _preferences.remove(_trackingWantedKey),
-      _namedPlaceStore.save(const []),
-    ]);
-    await _liveSubscription?.cancel();
+    // Leave the authenticated UI immediately. Native tracker shutdown and
+    // storage cleanup can take time, and must not trap the user on Settings.
+    final subscription = _liveSubscription;
+    _liveSubscription = null;
     _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     _api?.close();
     _api = null;
     provisioning = null;
@@ -551,8 +565,40 @@ class AppState extends ChangeNotifier {
     deviceImages = const {};
     namedPlaces = const [];
     lastError = null;
+    trackingHealth = const TrackingHealth.unchecked();
     phase = AppPhase.onboarding;
     notifyListeners();
+
+    Object? resetError;
+    Future<void> attempt(Future<void> Function() action) async {
+      try {
+        await action();
+      } on Object catch (error) {
+        resetError ??= error;
+      }
+    }
+
+    await attempt(
+      () => _tracker.stop().timeout(const Duration(seconds: 15)),
+    );
+    await attempt(() async {
+      await subscription?.cancel();
+    });
+    await attempt(_credentialStore.clearProvisioning);
+    await attempt(
+      () => Future.wait(<Future<void>>[
+        _preferences.remove(_firstNameKey),
+        _preferences.remove(_deviceUsernameKey),
+        _preferences.remove(_trackingWantedKey),
+        _namedPlaceStore.save(const []),
+      ]),
+    );
+
+    if (resetError != null) {
+      lastError =
+          'Some local data could not be cleared. Please try resetting again.';
+      notifyListeners();
+    }
   }
 
   @override

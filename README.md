@@ -100,7 +100,17 @@ The official Traccar SDK supplies Android's tracking permissions and foreground
 service declarations. The iOS project declares always-on location, motion,
 camera, photo-library, and background-location usage. `AppDelegate`
 reconstructs the persisted SDK tracker early when iOS relaunches the app for a
-background location event.
+background location event. On first tracking start, the SDK requests iOS Always
+location authorization. If the user previously granted only While Using,
+Trakkar requests the iOS-supported upgrade to Always; location collection itself
+continues to be performed exclusively by the Traccar SDK.
+
+While signed in, Trakkar checks the settings required for reliable background
+tracking whenever the app opens or returns from system settings. A red banner
+links to location settings when iOS is not set to Always or Android is not set
+to Allow all the time. On Android 6 and newer it also links to the system battery
+optimization list until Trakkar is exempt. iOS has no equivalent per-app battery
+optimization exemption, so no non-actionable battery warning is shown there.
 
 ## Build and verify
 
