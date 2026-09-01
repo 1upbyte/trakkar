@@ -360,7 +360,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            'Your first name is shown on the map. Your username is also the '
+            'Your first name identifies you on the map. Your username is also the '
             'unique device ID sent by the official Traccar SDK.',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -386,7 +386,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   textCapitalization: TextCapitalization.none,
                   decoration: const InputDecoration(
                     labelText: 'Username',
-                    helperText: 'This becomes your Traccar device ID',
+                    helperText: 'Letters, numbers, dots, dashes, underscores',
                     prefixIcon: Icon(Icons.alternate_email),
                   ),
                 ),

@@ -8,7 +8,8 @@ Trakkar is a Flutter client for Android and iOS that:
 - receives devices and positions in real time from `/api/socket`;
 - displays all devices available to the provisioned manager account on an
   OpenStreetMap map;
-- keeps user-defined place names locally until the server supports them.
+- displays official Traccar device images as profile-picture map markers; and
+- shares friendly place names as tagged geofences on the unmodified server.
 
 The application ID and iOS bundle ID are both `com.oneupbyte.trakkar`.
 
@@ -49,11 +50,35 @@ cookie returned by Traccar.
 
 ## Map and place names
 
-The app loads initial state from `GET /api/devices` and `GET /api/positions`,
-then consumes live `devices` and `positions` updates from `/api/socket`.
+The app loads initial state from `GET /api/devices`, `GET /api/positions`, and
+`GET /api/geofences`, then consumes live `devices` and `positions` updates from
+`/api/socket`.
 
-Long-press the map to create a named place and choose its radius. These names
-are stored on the phone and take priority over reverse-geocoded addresses.
+People appear as screen-upright profile-picture circles without permanent name
+labels, even when the map is rotated. The default view centers on this phone's
+device position at a neighborhood zoom. The OpenFreeMap Positron vector style
+keeps useful road and city context but omits restaurant, shop, and other POI
+labels. Tap a picture to open a bottom sheet with the person's name and current
+address. A user can change their own picture from Settings; the image uses
+Traccar's official device-image endpoint.
+
+While Traccar reports a person in motion, their map bubble shows walking below
+10 mph or driving above 10 mph, together with the latest speed in mph. Motion
+uses the standard Traccar position attribute when available and ignores
+sub-1-mph GPS drift when it must fall back to speed alone. The official Traccar
+Client SDK is configured for 25-meter / 30-second movement updates and retains
+its stop detection to pause frequent GPS work while stationary.
+
+Use the bottom sheet or long-press the map to create a named place and choose
+its radius. These names are tagged circular Traccar geofences, so every app
+signed into the same manager account sees them after refresh. A local cache is
+used only for offline display. Friendly names take priority over
+reverse-geocoded addresses.
+
+The exact unmodified-server protocol, migration behavior, security rules, and
+an optional first-class server design are documented in
+[`SERVER-MODS.md`](SERVER-MODS.md).
+
 Reverse geocoding can use:
 
 - the configured Traccar server;
@@ -72,8 +97,9 @@ API keys are kept in secure device storage.
 
 The official Traccar SDK supplies Android's tracking permissions and foreground
 service declarations. The iOS project declares always-on location, motion,
-camera, and background-location usage. `AppDelegate` reconstructs the persisted
-SDK tracker early when iOS relaunches the app for a background location event.
+camera, photo-library, and background-location usage. `AppDelegate`
+reconstructs the persisted SDK tracker early when iOS relaunches the app for a
+background location event.
 
 ## Build and verify
 

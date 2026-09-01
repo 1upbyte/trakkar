@@ -34,6 +34,8 @@
 	<string>Trakkar uses your location to share it with your private Traccar server.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Trakkar uses motion activity to pause GPS while you are stationary and reduce battery use.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Trakkar lets you choose a profile picture to show on the shared map.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

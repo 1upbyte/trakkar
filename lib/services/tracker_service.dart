@@ -12,7 +12,11 @@ class TrackerService {
     final config = Config(
       serverUrl: serverUrl.toString(),
       deviceId: deviceId,
-      location: const LocationConfig(),
+      location: const LocationConfig(
+        distanceMeters: 25,
+        intervalSeconds: 30,
+        stopDetection: true,
+      ),
       buffer: true,
       notification: const NotificationConfig(
         text: 'Trakkar is sharing your location',

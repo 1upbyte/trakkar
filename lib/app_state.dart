@@ -62,8 +62,16 @@ class AppState extends ChangeNotifier {
 
   List<TraccarDevice> devices = const [];
   Map<int, TraccarPosition> positions = const {};
+  Map<int, Uint8List> deviceImages = const {};
   List<NamedPlace> namedPlaces = const [];
   GeocodingSettings geocodingSettings = const GeocodingSettings();
+
+  TraccarDevice? get ownDevice {
+    for (final device in devices) {
+      if (device.uniqueId == deviceUsername) return device;
+    }
+    return null;
+  }
 
   Future<void> bootstrap() async {
     namedPlaces = await _namedPlaceStore.load();
@@ -161,6 +169,13 @@ class AppState extends ChangeNotifier {
     if (cleanName.isEmpty || cleanUsername.isEmpty) {
       throw const FormatException('First name and username are required.');
     }
+    if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$').hasMatch(cleanUsername) ||
+        cleanUsername.contains('..')) {
+      throw const FormatException(
+        'Username may use letters, numbers, dots, dashes, and underscores, '
+        'must start with a letter or number, and cannot contain two dots.',
+      );
+    }
 
     busy = true;
     lastError = null;
@@ -233,15 +248,40 @@ class AppState extends ChangeNotifier {
     final api = _api;
     if (api == null) return;
     try {
+      final cachedLocalPlaces = namedPlaces
+          .where((place) => !place.serverBacked)
+          .toList(growable: false);
       final results = await Future.wait<Object>([
         api.devices(),
         api.positions(),
+        api.namedPlaces(),
       ]);
       devices = results[0] as List<TraccarDevice>;
       positions = <int, TraccarPosition>{
         for (final position in results[1] as List<TraccarPosition>)
           position.deviceId: position,
       };
+      var sharedPlaces = results[2] as List<NamedPlace>;
+      for (final local in cachedLocalPlaces) {
+        final alreadyExists = sharedPlaces.any(
+          (shared) =>
+              shared.name == local.name &&
+              (shared.latitude - local.latitude).abs() < 0.000001 &&
+              (shared.longitude - local.longitude).abs() < 0.000001,
+        );
+        if (!alreadyExists) {
+          final migrated = await api.createNamedPlace(
+            name: local.name,
+            latitude: local.latitude,
+            longitude: local.longitude,
+            radiusMeters: local.radiusMeters,
+          );
+          sharedPlaces = <NamedPlace>[...sharedPlaces, migrated];
+        }
+      }
+      namedPlaces = sharedPlaces;
+      await _namedPlaceStore.save(namedPlaces);
+      unawaited(_loadDeviceImages(devices));
       lastError = null;
     } on Object catch (error) {
       lastError = userFacingError(error);
@@ -285,6 +325,12 @@ class AppState extends ChangeNotifier {
         byId[device.id] = device;
       }
       devices = byId.values.toList(growable: false);
+      for (final payload in devicePayloads) {
+        final device = TraccarDevice.fromJson(
+          Map<String, dynamic>.from(payload as Map),
+        );
+        unawaited(_loadDeviceImage(device, force: true));
+      }
     }
     final positionPayloads = message['positions'] as List<dynamic>?;
     if (positionPayloads != null) {
@@ -380,22 +426,105 @@ class AppState extends ChangeNotifier {
     required double longitude,
     double radiusMeters = 150,
   }) async {
-    final place = NamedPlace(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: name.trim(),
-      latitude: latitude,
-      longitude: longitude,
-      radiusMeters: radiusMeters,
-    );
-    namedPlaces = <NamedPlace>[...namedPlaces, place];
-    await _namedPlaceStore.save(namedPlaces);
-    notifyListeners();
+    final api = _api;
+    final cleanName = name.trim();
+    if (api == null) {
+      throw const TraccarApiException(
+        'Connect to the manager server before saving a shared place.',
+      );
+    }
+    if (cleanName.isEmpty) {
+      throw const FormatException('Enter a place name.');
+    }
+    if (!radiusMeters.isFinite || radiusMeters < 10 || radiusMeters > 10000) {
+      throw const FormatException(
+        'Radius must be between 10 and 10,000 meters.',
+      );
+    }
+    try {
+      final place = await api.createNamedPlace(
+        name: cleanName,
+        latitude: latitude,
+        longitude: longitude,
+        radiusMeters: radiusMeters,
+      );
+      namedPlaces = <NamedPlace>[...namedPlaces, place];
+      await _namedPlaceStore.save(namedPlaces);
+      lastError = null;
+      notifyListeners();
+    } on Object catch (error) {
+      lastError = userFacingError(error);
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> deleteNamedPlace(String id) async {
-    namedPlaces = namedPlaces.where((place) => place.id != id).toList();
-    await _namedPlaceStore.save(namedPlaces);
+    final api = _api;
+    final serverId = int.tryParse(id);
+    if (api == null || serverId == null) {
+      throw const TraccarApiException(
+        'Connect to the manager server before deleting a shared place.',
+      );
+    }
+    try {
+      await api.deleteNamedPlace(serverId);
+      namedPlaces = namedPlaces.where((place) => place.id != id).toList();
+      await _namedPlaceStore.save(namedPlaces);
+      lastError = null;
+      notifyListeners();
+    } on Object catch (error) {
+      lastError = userFacingError(error);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> updateProfilePicture(Uint8List bytes, String contentType) async {
+    final api = _api;
+    final device = ownDevice;
+    if (api == null || device == null) {
+      throw const TraccarApiException(
+        'Your Traccar device is not available. Refresh and try again.',
+      );
+    }
+    busy = true;
+    lastError = null;
     notifyListeners();
+    try {
+      final updated = await api.uploadDeviceImage(device, bytes, contentType);
+      devices = devices
+          .map((item) => item.id == updated.id ? updated : item)
+          .toList(growable: false);
+      deviceImages = <int, Uint8List>{...deviceImages, updated.id: bytes};
+    } on Object catch (error) {
+      lastError = userFacingError(error);
+      rethrow;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadDeviceImages(List<TraccarDevice> currentDevices) async {
+    await Future.wait(currentDevices.map(_loadDeviceImage));
+  }
+
+  Future<void> _loadDeviceImage(
+    TraccarDevice device, {
+    bool force = false,
+  }) async {
+    if (!force && deviceImages.containsKey(device.id)) return;
+    final api = _api;
+    if (api == null || device.imageName == null) return;
+    try {
+      final bytes = await api.deviceImage(device);
+      if (bytes == null) return;
+      deviceImages = <int, Uint8List>{...deviceImages, device.id: bytes};
+      notifyListeners();
+    } on Object {
+      // A missing or inaccessible picture should fall back to initials.
+    }
   }
 
   Future<void> resetApp() async {
@@ -419,6 +548,7 @@ class AppState extends ChangeNotifier {
     liveConnected = false;
     devices = const [];
     positions = const {};
+    deviceImages = const {};
     namedPlaces = const [];
     lastError = null;
     phase = AppPhase.onboarding;

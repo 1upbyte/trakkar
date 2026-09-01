@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:trakkar/models/provisioning_config.dart';
+import 'package:trakkar/models/traccar_device.dart';
 import 'package:trakkar/services/traccar_api.dart';
 
 void main() {
@@ -119,4 +121,111 @@ void main() {
       ),
     );
   });
+
+  test(
+    'stores and reads friendly places as tagged circular geofences',
+    () async {
+      final methods = <String>[];
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/session') {
+          return http.Response(
+            '{}',
+            200,
+            headers: {'set-cookie': 'JSESSIONID=places'},
+          );
+        }
+        methods.add(request.method);
+        if (request.method == 'GET') {
+          return http.Response(
+            jsonEncode([
+              {
+                'id': 7,
+                'name': 'Home',
+                'area': 'CIRCLE (40.7 -74.0, 150)',
+                'attributes': {'trakkarNamedPlace': true},
+              },
+              {
+                'id': 8,
+                'name': 'Normal Traccar geofence',
+                'area': 'CIRCLE (1 2, 25)',
+                'attributes': <String, dynamic>{},
+              },
+            ]),
+            200,
+          );
+        }
+        if (request.method == 'POST') {
+          final body = jsonDecode(request.body) as Map;
+          expect(body['area'], 'CIRCLE (40.7 -74.0, 200.0)');
+          expect((body['attributes'] as Map)['trakkarNamedPlace'], isTrue);
+          return http.Response(
+            jsonEncode({...Map<String, dynamic>.from(body), 'id': 9}),
+            200,
+          );
+        }
+        expect(request.url.path, '/api/geofences/9');
+        return http.Response('', 204);
+      });
+      final api = TraccarApi(config: config, client: client);
+
+      await api.login();
+      final existing = await api.namedPlaces();
+      final created = await api.createNamedPlace(
+        name: 'Work',
+        latitude: 40.7,
+        longitude: -74,
+        radiusMeters: 200,
+      );
+      await api.deleteNamedPlace(created.serverId!);
+
+      expect(existing.single.name, 'Home');
+      expect(existing.single.serverBacked, isTrue);
+      expect(created.id, '9');
+      expect(methods, ['GET', 'POST', 'DELETE']);
+    },
+  );
+
+  test(
+    'uploads an avatar and saves the returned deviceImage attribute',
+    () async {
+      final imageBytes = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xD9]);
+      late Map<String, dynamic> updateBody;
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/session') {
+          return http.Response(
+            '{}',
+            200,
+            headers: {'set-cookie': 'JSESSIONID=image'},
+          );
+        }
+        if (request.url.path == '/api/devices/1/image') {
+          expect(request.headers['content-type'], startsWith('image/jpeg'));
+          expect(request.bodyBytes, imageBytes);
+          return http.Response('device.jpg', 200);
+        }
+        updateBody = Map<String, dynamic>.from(jsonDecode(request.body) as Map);
+        return http.Response(jsonEncode(updateBody), 200);
+      });
+      final api = TraccarApi(config: config, client: client);
+      final device = TraccarDevice.fromJson({
+        'id': 1,
+        'name': 'Pablo',
+        'uniqueId': 'pablo',
+        'attributes': {'existing': true},
+      });
+
+      await api.login();
+      final updated = await api.uploadDeviceImage(
+        device,
+        imageBytes,
+        'image/jpeg',
+      );
+
+      expect(updated.imageName, 'device.jpg');
+      expect(updateBody['attributes'], {
+        'existing': true,
+        'deviceImage': 'device.jpg',
+      });
+    },
+  );
 }

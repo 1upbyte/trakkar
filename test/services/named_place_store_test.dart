@@ -15,4 +15,18 @@ void main() {
     expect(NamedPlaceStore.nearest(const [home], 40.713, -74.006), same(home));
     expect(NamedPlaceStore.nearest(const [home], 40.72, -74.006), isNull);
   });
+
+  test('parses Traccar circle latitude, longitude, and radius', () {
+    final place = NamedPlace.fromGeofence({
+      'id': 42,
+      'name': 'Work',
+      'area': 'CIRCLE (40.7128 -74.006, 125.5)',
+    });
+
+    expect(place.id, '42');
+    expect(place.latitude, 40.7128);
+    expect(place.longitude, -74.006);
+    expect(place.radiusMeters, 125.5);
+    expect(place.serverBacked, isTrue);
+  });
 }

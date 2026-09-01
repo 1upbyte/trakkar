@@ -29,6 +29,16 @@ class TraccarDevice {
   final DateTime? lastUpdate;
   final Map<String, dynamic> raw;
 
+  Map<String, dynamic> get attributes => Map<String, dynamic>.from(
+    raw['attributes'] as Map? ?? const <String, dynamic>{},
+  );
+
+  String? get imageName {
+    final value = attributes['deviceImage'] as String?;
+    if (value == null || value.trim().isEmpty) return null;
+    return value.trim();
+  }
+
   TraccarDevice copyWith({String? name, String? status, DateTime? lastUpdate}) {
     return TraccarDevice(
       id: id,
@@ -47,6 +57,18 @@ class TraccarDevice {
       'id': id,
       'name': displayName,
       'uniqueId': uniqueId,
+    };
+  }
+
+  Map<String, dynamic> updateAttributesPayload(
+    Map<String, dynamic> updatedAttributes,
+  ) {
+    return <String, dynamic>{
+      ...raw,
+      'id': id,
+      'name': name,
+      'uniqueId': uniqueId,
+      'attributes': updatedAttributes,
     };
   }
 }

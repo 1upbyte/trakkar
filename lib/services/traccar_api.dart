@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/io.dart';
 
 import '../models/provisioning_config.dart';
+import '../models/named_place.dart';
 import '../models/traccar_device.dart';
 import '../models/traccar_position.dart';
 
@@ -112,6 +114,117 @@ class TraccarApi {
         .toList(growable: false);
   }
 
+  Future<List<NamedPlace>> namedPlaces() async {
+    final response = await _get('geofences');
+    final places = <NamedPlace>[];
+    for (final geofence in _decodeList(response)) {
+      final attributes = Map<String, dynamic>.from(
+        geofence['attributes'] as Map? ?? const <String, dynamic>{},
+      );
+      final marker = attributes['trakkarNamedPlace'];
+      if (marker != true && marker?.toString().toLowerCase() != 'true') {
+        continue;
+      }
+      try {
+        places.add(NamedPlace.fromGeofence(geofence));
+      } on FormatException {
+        // Ignore malformed tagged records without hiding other shared places.
+      }
+    }
+    return places;
+  }
+
+  Future<NamedPlace> createNamedPlace({
+    required String name,
+    required double latitude,
+    required double longitude,
+    required double radiusMeters,
+  }) async {
+    final draft = NamedPlace(
+      id: '0',
+      name: name,
+      latitude: latitude,
+      longitude: longitude,
+      radiusMeters: radiusMeters,
+    );
+    final response = await _sendJson(
+      'POST',
+      'geofences',
+      draft.toGeofencePayload(),
+      action: 'Saving the named place',
+    );
+    return NamedPlace.fromGeofence(_decodeObject(response));
+  }
+
+  Future<void> deleteNamedPlace(int id) async {
+    await _send(
+      http.Request('DELETE', _apiUri('geofences/$id')),
+      allowed: const <int>{204},
+      action: 'Deleting the named place',
+    );
+  }
+
+  Future<Uint8List?> deviceImage(TraccarDevice device) async {
+    final imageName = device.imageName;
+    if (imageName == null || !_safeMediaPart.hasMatch(device.uniqueId)) {
+      return null;
+    }
+    if (!_safeMediaPart.hasMatch(imageName)) return null;
+    final response = await _get(
+      'media/${device.uniqueId}/$imageName',
+      allowed: const <int>{200, 404},
+    );
+    return response.statusCode == 404 ? null : response.bodyBytes;
+  }
+
+  Future<TraccarDevice> uploadDeviceImage(
+    TraccarDevice device,
+    Uint8List bytes,
+    String contentType,
+  ) async {
+    const supported = <String>{
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+    };
+    if (!supported.contains(contentType)) {
+      throw const TraccarApiException(
+        'Choose a JPEG, PNG, GIF, or WebP profile picture.',
+      );
+    }
+    if (bytes.length > 500000) {
+      throw const TraccarApiException(
+        'The profile picture must be smaller than 500 KB.',
+      );
+    }
+    final request = http.Request('POST', _apiUri('devices/${device.id}/image'))
+      ..headers['Content-Type'] = contentType
+      ..bodyBytes = bytes;
+    final upload = await _send(
+      request,
+      allowed: const <int>{200},
+      action: 'Uploading the profile picture',
+    );
+    final fileName = upload.body.trim().replaceAll('"', '');
+    if (!_safeMediaPart.hasMatch(fileName)) {
+      throw const TraccarApiException(
+        'The server returned an invalid profile picture name.',
+      );
+    }
+    final attributes = <String, dynamic>{
+      ...device.attributes,
+      'deviceImage': fileName,
+    };
+    final update = await _sendJson(
+      'PUT',
+      'devices/${device.id}',
+      device.updateAttributesPayload(attributes),
+      action: 'Saving the profile picture',
+    );
+    return TraccarDevice.fromJson(_decodeObject(update));
+  }
+
   Future<String> reverseGeocode(double latitude, double longitude) async {
     final response = await _get(
       'server/geocode',
@@ -176,21 +289,28 @@ class TraccarApi {
   Future<http.Response> _sendJson(
     String method,
     String path,
-    Map<String, dynamic> body,
-  ) async {
-    _requireSession();
+    Map<String, dynamic> body, {
+    String action = 'Device update',
+  }) async {
     final request = http.Request(method, _apiUri(path))
-      ..headers.addAll(<String, String>{
-        'Cookie': _sessionCookie!,
-        'Content-Type': 'application/json',
-      })
+      ..headers.addAll(<String, String>{'Content-Type': 'application/json'})
       ..body = jsonEncode(body);
+    return _send(request, allowed: const <int>{200}, action: action);
+  }
+
+  Future<http.Response> _send(
+    http.Request request, {
+    required Set<int> allowed,
+    required String action,
+  }) async {
+    _requireSession();
+    request.headers['Cookie'] = _sessionCookie!;
     final streamed = await _guardRequest(
       () => _client.send(request).timeout(_requestTimeout),
     );
     final response = await http.Response.fromStream(streamed)
         .timeout(_requestTimeout);
-    _expect(response, <int>{200}, action: 'Device update');
+    _expect(response, allowed, action: action);
     return response;
   }
 
@@ -211,6 +331,8 @@ class TraccarApi {
     final httpUri = _apiUri('socket');
     return httpUri.replace(scheme: httpUri.scheme == 'https' ? 'wss' : 'ws');
   }
+
+  static final RegExp _safeMediaPart = RegExp(r'^[A-Za-z0-9._-]+$');
 
   void _requireSession() {
     if (_sessionCookie == null) {

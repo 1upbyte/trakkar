@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -18,8 +20,36 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final _mapController = MapController();
-  int? _selectedDeviceId;
-  final Map<int, Future<String>> _addressFutures = {};
+  vt.Style? _baseMapStyle;
+  Object? _baseMapError;
+  bool _centeredOnCurrentDevice = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadBaseMap());
+  }
+
+  Future<void> _loadBaseMap() async {
+    try {
+      final style = await const vt.StyleReader(
+        uri: 'https://tiles.openfreemap.org/styles/positron',
+      ).read();
+      if (!mounted) {
+        style.dispose();
+        return;
+      }
+      setState(() => _baseMapStyle = style);
+    } on Object catch (error) {
+      if (mounted) setState(() => _baseMapError = error);
+    }
+  }
+
+  @override
+  void dispose() {
+    _baseMapStyle?.dispose();
+    super.dispose();
+  }
 
   void _fitPositions(AppState state) {
     final points = state.positions.values
@@ -38,7 +68,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Future<void> _addPlace(LatLng point) async {
+  Future<bool> _addPlace(LatLng point) async {
     final name = TextEditingController();
     final radius = TextEditingController(text: '150');
     final result = await showDialog<bool>(
@@ -77,16 +107,59 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
     );
+    var saved = false;
     if ((result ?? false) && name.text.trim().isNotEmpty && mounted) {
-      await context.read<AppState>().addNamedPlace(
-        name: name.text,
-        latitude: point.latitude,
-        longitude: point.longitude,
-        radiusMeters: double.tryParse(radius.text) ?? 150,
-      );
+      try {
+        await context.read<AppState>().addNamedPlace(
+          name: name.text,
+          latitude: point.latitude,
+          longitude: point.longitude,
+          radiusMeters: double.tryParse(radius.text) ?? 150,
+        );
+        saved = true;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${name.text.trim()} is now shared with the account.',
+              ),
+            ),
+          );
+        }
+      } on Object {
+        if (mounted) {
+          final message =
+              context.read<AppState>().lastError ??
+              'The place could not be saved.';
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(message)));
+        }
+      }
     }
     name.dispose();
     radius.dispose();
+    return saved;
+  }
+
+  Future<void> _showPersonSheet(
+    TraccarDevice device,
+    TraccarPosition position,
+    AppState state,
+  ) async {
+    final address = state.reverseGeocode(position);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => _PersonSheet(
+        device: device,
+        position: position,
+        imageBytes: state.deviceImages[device.id],
+        address: address,
+        onNamePlace: () =>
+            _addPlace(LatLng(position.latitude, position.longitude)),
+      ),
+    );
   }
 
   @override
@@ -95,9 +168,30 @@ class _MapScreenState extends State<MapScreen> {
     final devicesById = <int, TraccarDevice>{
       for (final device in state.devices) device.id: device,
     };
-    final selectedPosition = state.positions[_selectedDeviceId];
-    final selectedDevice = devicesById[_selectedDeviceId];
-    final initialPosition = state.positions.values.firstOrNull;
+    final ownDevice = state.ownDevice;
+    final currentDevicePosition = ownDevice == null
+        ? null
+        : state.positions[ownDevice.id];
+    final initialPosition =
+        currentDevicePosition ?? state.positions.values.firstOrNull;
+    if (!_centeredOnCurrentDevice && currentDevicePosition != null) {
+      _centeredOnCurrentDevice = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _mapController.move(
+          LatLng(
+            currentDevicePosition.latitude,
+            currentDevicePosition.longitude,
+          ),
+          12,
+        );
+      });
+    }
+    final baseMapStyle = _baseMapStyle;
+    final attribution = baseMapStyle?.attributions
+        .map((item) => item.text)
+        .where((text) => text.isNotEmpty)
+        .join(' · ');
 
     return Stack(
       children: [
@@ -107,14 +201,27 @@ class _MapScreenState extends State<MapScreen> {
             initialCenter: initialPosition == null
                 ? const LatLng(20, 0)
                 : LatLng(initialPosition.latitude, initialPosition.longitude),
-            initialZoom: initialPosition == null ? 2.5 : 14,
+            initialZoom: initialPosition == null ? 2.5 : 12,
             onLongPress: (_, point) => unawaited(_addPlace(point)),
           ),
           children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.oneupbyte.trakkar',
-            ),
+            if (baseMapStyle != null)
+              vt.VectorTileLayer(
+                theme: baseMapStyle.theme,
+                tileProviders: baseMapStyle.providers,
+                rasterSources: baseMapStyle.rasterSources,
+                sprites: baseMapStyle.sprites,
+                // Positron omits POIs such as restaurants while retaining
+                // useful road and city labels.
+                showLabels: true,
+                concurrency: 2,
+                diskCacheMaximumSizeInBytes: 40 * 1024 * 1024,
+              )
+            else
+              const ColoredBox(
+                color: Color(0xFFE9ECE8),
+                child: SizedBox.expand(),
+              ),
             MarkerLayer(
               markers: state.namedPlaces
                   .map(
@@ -137,38 +244,42 @@ class _MapScreenState extends State<MapScreen> {
                   .toList(growable: false),
             ),
             MarkerLayer(
+              // Keep profile photos and their status badges screen-upright
+              // while the map rotates underneath them.
+              rotate: true,
               markers: state.positions.entries
                   .map((entry) {
                     final device = devicesById[entry.key];
                     final position = entry.value;
-                    final selected = entry.key == _selectedDeviceId;
                     return Marker(
                       point: LatLng(position.latitude, position.longitude),
-                      width: 138,
-                      height: 72,
-                      alignment: Alignment.topCenter,
+                      width: 126,
+                      height: 64,
                       child: GestureDetector(
-                        onTap: () {
-                          setState(() => _selectedDeviceId = entry.key);
-                          _mapController.move(
-                            LatLng(position.latitude, position.longitude),
-                            _mapController.camera.zoom,
-                          );
-                        },
-                        child: _PersonMarker(
+                        onTap: device == null
+                            ? null
+                            : () => unawaited(
+                                _showPersonSheet(device, position, state),
+                              ),
+                        child: _AvatarMarker(
                           name: device?.name ?? 'Unknown',
                           online: device?.status == 'online',
-                          selected: selected,
+                          position: position,
+                          imageBytes: device == null
+                              ? null
+                              : state.deviceImages[device.id],
                         ),
                       ),
                     );
                   })
                   .toList(growable: false),
             ),
-            const RichAttributionWidget(
+            RichAttributionWidget(
               showFlutterMapAttribution: false,
               attributions: [
-                TextSourceAttribution('OpenStreetMap contributors'),
+                TextSourceAttribution(
+                  attribution?.isNotEmpty ?? false ? attribution! : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
+                ),
               ],
             ),
           ],
@@ -181,6 +292,28 @@ class _MapScreenState extends State<MapScreen> {
             count: state.positions.length,
           ),
         ),
+        if (_baseMapError != null)
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 72,
+            left: 16,
+            right: 16,
+            child: Card(
+              child: ListTile(
+                leading: const Icon(Icons.map_outlined),
+                title: const Text('Map style unavailable'),
+                subtitle: const Text(
+                  'Check the connection and retry. Locations are still live.',
+                ),
+                trailing: TextButton(
+                  onPressed: () {
+                    setState(() => _baseMapError = null);
+                    unawaited(_loadBaseMap());
+                  },
+                  child: const Text('Retry'),
+                ),
+              ),
+            ),
+          ),
         Positioned(
           top: MediaQuery.paddingOf(context).top + 14,
           right: 16,
@@ -223,78 +356,117 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
-        if (selectedPosition != null && selectedDevice != null)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 16,
-            child: _DeviceCard(
-              device: selectedDevice,
-              position: selectedPosition,
-              address: _addressFutures.putIfAbsent(
-                selectedPosition.id,
-                () => state.reverseGeocode(selectedPosition),
-              ),
-              onClose: () => setState(() => _selectedDeviceId = null),
-            ),
-          ),
       ],
     );
   }
 }
 
-class _PersonMarker extends StatelessWidget {
-  const _PersonMarker({
+class _AvatarMarker extends StatelessWidget {
+  const _AvatarMarker({
     required this.name,
     required this.online,
-    required this.selected,
+    required this.position,
+    required this.imageBytes,
   });
 
   final String name;
   final bool online;
-  final bool selected;
+  final TraccarPosition position;
+  final Uint8List? imageBytes;
 
   @override
   Widget build(BuildContext context) {
-    final color = selected
-        ? Theme.of(context).colorScheme.tertiary
-        : Theme.of(context).colorScheme.primary;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    final showMotion = position.isMoving;
+    final speedMph = position.speedMph;
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: const [
-              BoxShadow(color: Color(0x22000000), blurRadius: 8),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  color: online ? const Color(0xFF36A269) : Colors.grey,
-                  shape: BoxShape.circle,
+        Positioned(
+          left: 35,
+          top: 4,
+          width: 56,
+          height: 56,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Theme.of(context).colorScheme.primaryContainer,
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x55000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 3),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
+              ],
+              image: imageBytes == null
+                  ? null
+                  : DecorationImage(
+                      image: MemoryImage(imageBytes!),
+                      fit: BoxFit.cover,
+                    ),
+            ),
+            alignment: Alignment.center,
+            child: imageBytes == null
+                ? Text(
+                    _initial(name),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  )
+                : null,
           ),
         ),
-        Icon(Icons.location_on_rounded, color: color, size: selected ? 40 : 34),
+        if (showMotion)
+          Positioned(
+            left: 86,
+            top: 5,
+            child: Semantics(
+              label:
+                  '${speedMph > 10 ? 'Driving' : 'Walking'}, '
+                  '${speedMph.round()} miles per hour',
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x33000000), blurRadius: 5),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      speedMph > 10 ? '🚗' : '🚶',
+                      style: const TextStyle(fontSize: 15),
+                    ),
+                    Text(
+                      '${speedMph.round()} mph',
+                      style: const TextStyle(
+                        fontSize: 8,
+                        height: 1,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        Positioned(
+          left: 78,
+          bottom: 3,
+          child: Container(
+            width: 15,
+            height: 15,
+            decoration: BoxDecoration(
+              color: online ? const Color(0xFF36A269) : Colors.grey,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -333,69 +505,83 @@ class _ConnectionPill extends StatelessWidget {
   }
 }
 
-class _DeviceCard extends StatelessWidget {
-  const _DeviceCard({
+class _PersonSheet extends StatelessWidget {
+  const _PersonSheet({
     required this.device,
     required this.position,
+    required this.imageBytes,
     required this.address,
-    required this.onClose,
+    required this.onNamePlace,
   });
 
   final TraccarDevice device;
   final TraccarPosition position;
+  final Uint8List? imageBytes;
   final Future<String> address;
-  final VoidCallback onClose;
+  final Future<bool> Function() onNamePlace;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 5,
+    return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 10, 16),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             CircleAvatar(
-              radius: 24,
+              radius: 38,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              child: Text(
-                device.name.characters.first.toUpperCase(),
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    device.name,
-                    style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 3),
-                  FutureBuilder<String>(
-                    future: address,
-                    builder: (context, snapshot) => Text(
-                      snapshot.data ??
-                          (snapshot.hasError
-                              ? 'Address unavailable'
-                              : 'Finding address…'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+              backgroundImage: imageBytes == null
+                  ? null
+                  : MemoryImage(imageBytes!),
+              child: imageBytes == null
+                  ? Text(
+                      _initial(device.name),
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    _positionSummary(position),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              device.name,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            FutureBuilder<String>(
+              future: address,
+              builder: (context, snapshot) => Text(
+                snapshot.data ??
+                    (snapshot.hasError
+                        ? 'Address unavailable'
+                        : 'Finding address…'),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
-            IconButton(onPressed: onClose, icon: const Icon(Icons.close)),
+            const SizedBox(height: 8),
+            Text(
+              _positionSummary(position),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: () async {
+                  final saved = await onNamePlace();
+                  if (saved && context.mounted) Navigator.pop(context);
+                },
+                icon: const Icon(Icons.add_location_alt_outlined),
+                label: const Text('Give this place a friendly name'),
+              ),
+            ),
           ],
         ),
       ),
@@ -408,6 +594,11 @@ class _DeviceCard extends StatelessWidget {
         ? 'Time unknown'
         : '${time.hour.toString().padLeft(2, '0')}:'
               '${time.minute.toString().padLeft(2, '0')}';
-    return '$clock  •  ${(position.speed * 1.852).round()} km/h';
+    return '$clock  •  ${position.speedMph.round()} mph';
   }
+}
+
+String _initial(String name) {
+  final clean = name.trim();
+  return clean.isEmpty ? '?' : clean.characters.first.toUpperCase();
 }

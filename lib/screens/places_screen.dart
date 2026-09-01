@@ -26,7 +26,7 @@ class PlacesScreen extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     'Long-press anywhere on the map to give that area a '
-                    'friendly local name.',
+                    'friendly name shared with everyone on this account.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -83,7 +83,8 @@ class PlacesScreen extends StatelessWidget {
                             builder: (context) => AlertDialog(
                               title: Text('Delete ${place.name}?'),
                               content: const Text(
-                                'This removes the name from this phone only.',
+                                'This removes the shared name for everyone on '
+                                'this Traccar account.',
                               ),
                               actions: [
                                 TextButton(
@@ -99,7 +100,19 @@ class PlacesScreen extends StatelessWidget {
                             ),
                           );
                           if (confirmed ?? false) {
-                            await state.deleteNamedPlace(place.id);
+                            try {
+                              await state.deleteNamedPlace(place.id);
+                            } on Object {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      state.lastError ?? 'The shared place could not be deleted.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
                           }
                         },
                         icon: const Icon(Icons.delete_outline),

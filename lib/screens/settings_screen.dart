@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
@@ -51,6 +54,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _pickProfilePicture() async {
+    try {
+      final selected = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 75,
+        requestFullMetadata: false,
+      );
+      if (selected == null || !mounted) return;
+      final bytes = await selected.readAsBytes();
+      if (!mounted) return;
+      final contentType = _imageContentType(bytes) ?? selected.mimeType;
+      if (contentType == null) {
+        throw const FormatException(
+          'Choose a JPEG, PNG, GIF, or WebP profile picture.',
+        );
+      }
+      await context.read<AppState>().updateProfilePicture(bytes, contentType);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile picture updated.')),
+        );
+      }
+    } on Object catch (error) {
+      if (!mounted) return;
+      final stateMessage = context.read<AppState>().lastError;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            stateMessage ??
+                (error is FormatException
+                    ? error.message
+                    : 'The profile picture could not be updated.'),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -73,9 +116,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Row(
                     children: [
-                      CircleAvatar(
-                        child: Text(
-                          state.firstName.characters.first.toUpperCase(),
+                      Semantics(
+                        button: true,
+                        label: 'Change profile picture',
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: state.busy ? null : _pickProfilePicture,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              CircleAvatar(
+                                radius: 30,
+                                backgroundImage:
+                                    state.ownDevice == null ||
+                                        state.deviceImages[state
+                                                .ownDevice!
+                                                .id] ==
+                                            null
+                                    ? null
+                                    : MemoryImage(
+                                        state.deviceImages[state
+                                            .ownDevice!
+                                            .id]!,
+                                      ),
+                                child:
+                                    state.ownDevice == null ||
+                                        state.deviceImages[state
+                                                .ownDevice!
+                                                .id] ==
+                                            null
+                                    ? Text(
+                                        state.firstName.characters.first
+                                            .toUpperCase(),
+                                        style: const TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                              Positioned(
+                                right: -3,
+                                bottom: -3,
+                                child: CircleAvatar(
+                                  radius: 11,
+                                  backgroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .primary,
+                                  child: const Icon(
+                                    Icons.edit,
+                                    size: 13,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -89,6 +185,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ?.copyWith(fontWeight: FontWeight.w800),
                             ),
                             Text('@${state.deviceUsername}'),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Tap the picture to change it',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
                           ],
                         ),
                       ),
@@ -276,5 +377,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
       GeocodingProvider.mapTiler => 'MapTiler',
       GeocodingProvider.custom => 'Custom HTTP endpoint',
     };
+  }
+
+  static String? _imageContentType(Uint8List bytes) {
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF) {
+      return 'image/jpeg';
+    }
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
+      return 'image/png';
+    }
+    if (bytes.length >= 6 && String.fromCharCodes(bytes.take(3)) == 'GIF') {
+      return 'image/gif';
+    }
+    if (bytes.length >= 12 &&
+        String.fromCharCodes(bytes.take(4)) == 'RIFF' &&
+        String.fromCharCodes(bytes.skip(8).take(4)) == 'WEBP') {
+      return 'image/webp';
+    }
+    return null;
   }
 }
