@@ -64,8 +64,9 @@ Traccar's official device-image endpoint.
 
 While Traccar reports a person in motion, their map bubble shows walking below
 10 mph or driving above 10 mph, together with the latest speed in mph. Motion
-uses the standard Traccar position attribute when available and ignores
-sub-1-mph GPS drift when it must fall back to speed alone. The official Traccar
+uses the standard Traccar position attribute when available and also requires
+at least 1 mph, preventing a delayed server motion state from leaving a badge
+visible at 0 mph. The official Traccar
 Client SDK is configured for 25-meter / 30-second movement updates and retains
 its stop detection to pause frequent GPS work while stationary.
 

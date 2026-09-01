@@ -22,7 +22,8 @@ void main() {
   });
 
   test('uses the standardized motion attribute when present', () {
-    expect(position(speed: 0, attributes: {'motion': true}).isMoving, isTrue);
+    expect(position(speed: 0, attributes: {'motion': true}).isMoving, isFalse);
+    expect(position(speed: 2, attributes: {'motion': true}).isMoving, isTrue);
     expect(
       position(speed: 20, attributes: {'motion': false}).isMoving,
       isFalse,

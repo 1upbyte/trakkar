@@ -47,14 +47,16 @@ class TraccarPosition {
 
   bool get isMoving {
     final value = attributes['motion'];
-    if (value is bool) return value;
-    if (value is num) return value != 0;
-    if (value is String) {
-      if (value.toLowerCase() == 'true') return true;
-      if (value.toLowerCase() == 'false') return false;
-    }
-    // Some protocols omit Traccar's standardized motion attribute. Avoid
-    // treating normal GPS drift as movement in that fallback case.
+    final serverSaysStopped = switch (value) {
+      bool value => !value,
+      num value => value == 0,
+      String value => value.toLowerCase() == 'false',
+      _ => false,
+    };
+    if (serverSaysStopped) return false;
+
+    // Traccar's motion state can remain true briefly after a person stops.
+    // Require meaningful speed as well so a 0 mph fix clears the UI badge.
     return speedMph >= 1;
   }
 }
