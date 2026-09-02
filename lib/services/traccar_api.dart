@@ -9,6 +9,7 @@ import '../models/provisioning_config.dart';
 import '../models/named_place.dart';
 import '../models/traccar_device.dart';
 import '../models/traccar_position.dart';
+import '../models/traccar_user.dart';
 
 class TraccarApiException implements Exception {
   const TraccarApiException(this.message, {this.statusCode});
@@ -27,10 +28,14 @@ class TraccarApi {
   final ProvisioningConfig config;
   final http.Client _client;
   String? _sessionCookie;
+  TraccarUser? _user;
 
   static const _requestTimeout = Duration(seconds: 15);
 
   bool get hasSession => _sessionCookie != null;
+
+  /// The signed-in manager user as returned by the session endpoint.
+  TraccarUser? get user => _user;
 
   Future<void> login() async {
     final response = await _guardRequest(
@@ -56,6 +61,33 @@ class TraccarApi {
       );
     }
     _sessionCookie = match.group(1);
+    _user = _tryDecodeUser(response);
+  }
+
+  /// Reloads the signed-in user, including its shared attributes.
+  Future<TraccarUser> session() async {
+    final response = await _get('session');
+    final user = TraccarUser.fromJson(_decodeObject(response));
+    _user = user;
+    return user;
+  }
+
+  /// Replaces the signed-in user's attributes while preserving every other
+  /// field. Traccar lets a user edit its own record, so shared app settings
+  /// such as map SDK keys can live there without a modified server.
+  Future<TraccarUser> updateUserAttributes(
+    TraccarUser user,
+    Map<String, dynamic> attributes,
+  ) async {
+    final response = await _sendJson(
+      'PUT',
+      'users/${user.id}',
+      user.updateAttributesPayload(attributes),
+      action: 'Saving shared settings',
+    );
+    final updated = TraccarUser.fromJson(_decodeObject(response));
+    if (_user?.id == updated.id) _user = updated;
+    return updated;
   }
 
   Future<List<TraccarDevice>> devices() async {
@@ -212,15 +244,23 @@ class TraccarApi {
         'The server returned an invalid profile picture name.',
       );
     }
-    final attributes = <String, dynamic>{
-      ...device.attributes,
-      'deviceImage': fileName,
-    };
+    return updateDeviceAttributes(
+      device,
+      <String, dynamic>{...device.attributes, 'deviceImage': fileName},
+      action: 'Saving the profile picture',
+    );
+  }
+
+  Future<TraccarDevice> updateDeviceAttributes(
+    TraccarDevice device,
+    Map<String, dynamic> attributes, {
+    String action = 'Device update',
+  }) async {
     final update = await _sendJson(
       'PUT',
       'devices/${device.id}',
       device.updateAttributesPayload(attributes),
-      action: 'Saving the profile picture',
+      action: action,
     );
     return TraccarDevice.fromJson(_decodeObject(update));
   }
@@ -350,6 +390,16 @@ class TraccarApi {
       throw const TraccarApiException(
         'The manager server returned an unexpected response.',
       );
+    }
+  }
+
+  static TraccarUser? _tryDecodeUser(http.Response response) {
+    try {
+      return TraccarUser.fromJson(_decodeObject(response));
+    } on Object {
+      // Older or proxied servers may return an empty body on sign in. The
+      // user is then loaded lazily through [session].
+      return null;
     }
   }
 

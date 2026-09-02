@@ -1,5 +1,6 @@
 import CoreLocation
 import Flutter
+import GoogleMaps
 import UIKit
 import TraccarClientSDK
 
@@ -7,6 +8,7 @@ import TraccarClientSDK
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var locationPermissionManager: CLLocationManager?
   private var trackingSupportChannel: FlutterMethodChannel?
+  private var mapSdkChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
@@ -56,6 +58,32 @@ import TraccarClientSDK
       }
     }
     trackingSupportChannel = channel
+
+    // The Google Maps key is stored on the Traccar server and handed over
+    // before the first map view is created, instead of being compiled in.
+    let mapChannel = FlutterMethodChannel(
+      name: "com.oneupbyte.trakkar/map-sdk",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    mapChannel.setMethodCallHandler { call, result in
+      DispatchQueue.main.async {
+        switch call.method {
+        case "setGoogleMapsApiKey":
+          guard
+            let arguments = call.arguments as? [String: Any],
+            let key = (arguments["key"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+            !key.isEmpty
+          else {
+            result(false)
+            return
+          }
+          result(GMSServices.provideAPIKey(key))
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+    }
+    mapSdkChannel = mapChannel
   }
 
   private func requestAlwaysLocationIfNeeded() {

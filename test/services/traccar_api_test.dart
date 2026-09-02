@@ -228,4 +228,115 @@ void main() {
       });
     },
   );
+
+  _sharedSettingsTests();
+}
+
+void _sharedSettingsTests() {
+  final config = ProvisioningConfig(
+    clientUrl: Uri(scheme: 'https', host: 'client.test'),
+    managerUrl: Uri(scheme: 'https', host: 'manager.test'),
+    managerUsername: 'manager',
+    managerPassword: 'password',
+  );
+
+  test('login captures the manager user from the session response', () async {
+    final client = MockClient((request) async {
+      if (request.url.path == '/api/session') {
+        return http.Response(
+          '{"id":5,"name":"Manager","email":"m@example.com",'
+          '"attributes":{"trakkarGoogleMapsApiKey":"g-key"}}',
+          200,
+          headers: {'set-cookie': 'JSESSIONID=abc; Path=/'},
+        );
+      }
+      return http.Response('', 404);
+    });
+    final api = TraccarApi(config: config, client: client);
+
+    await api.login();
+
+    expect(api.user?.id, 5);
+    expect(api.user?.attributes['trakkarGoogleMapsApiKey'], 'g-key');
+  });
+
+  test('updateUserAttributes PUTs the full user record', () async {
+    http.Request? putRequest;
+    final client = MockClient((request) async {
+      if (request.url.path == '/api/session') {
+        return http.Response(
+          '{"id":5,"name":"Manager","email":"m@example.com",'
+          '"readonly":false,"attributes":{"timezone":"UTC"}}',
+          200,
+          headers: {'set-cookie': 'JSESSIONID=abc'},
+        );
+      }
+      if (request.method == 'PUT' && request.url.path == '/api/users/5') {
+        putRequest = request;
+        return http.Response(request.body, 200);
+      }
+      return http.Response('', 404);
+    });
+    final api = TraccarApi(config: config, client: client);
+    await api.login();
+
+    final updated = await api.updateUserAttributes(api.user!, {
+      ...api.user!.attributes,
+      'trakkarMapTilerApiKey': 'mt-key',
+    });
+
+    final body = jsonDecode(putRequest!.body) as Map<String, dynamic>;
+    expect(putRequest!.headers['Cookie'], 'JSESSIONID=abc');
+    expect(body['id'], 5);
+    expect(body['readonly'], isFalse);
+    expect(body['attributes'], {
+      'timezone': 'UTC',
+      'trakkarMapTilerApiKey': 'mt-key',
+    });
+    expect(updated.attributes['trakkarMapTilerApiKey'], 'mt-key');
+    expect(api.user?.attributes['trakkarMapTilerApiKey'], 'mt-key');
+  });
+
+  test('updateDeviceAttributes preserves the device record', () async {
+    http.Request? putRequest;
+    final client = MockClient((request) async {
+      if (request.url.path == '/api/session') {
+        return http.Response(
+          '{}',
+          200,
+          headers: {'set-cookie': 'JSESSIONID=abc'},
+        );
+      }
+      if (request.method == 'PUT' && request.url.path == '/api/devices/3') {
+        putRequest = request;
+        return http.Response(request.body, 200);
+      }
+      return http.Response('', 404);
+    });
+    final api = TraccarApi(config: config, client: client);
+    await api.login();
+    final device = TraccarDevice.fromJson(const {
+      'id': 3,
+      'name': 'Pablo',
+      'uniqueId': 'pablo',
+      'status': 'online',
+      'groupId': 9,
+      'attributes': {'deviceImage': 'device.jpg'},
+    });
+
+    final updated = await api.updateDeviceAttributes(device, {
+      ...device.attributes,
+      TraccarDevice.watchUntilAttribute: 1234,
+    });
+
+    final body = jsonDecode(putRequest!.body) as Map<String, dynamic>;
+    expect(body['groupId'], 9);
+    expect(body['uniqueId'], 'pablo');
+    expect(body['attributes'], {
+      'deviceImage': 'device.jpg',
+      'trakkarWatchUntil': 1234,
+    });
+    expect(updated.imageName, 'device.jpg');
+    expect(updated.watchUntil?.millisecondsSinceEpoch, 1234);
+  });
 }

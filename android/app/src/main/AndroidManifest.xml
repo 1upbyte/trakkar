@@ -26,6 +26,14 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Build-time fallback for the Google Maps SDK key. Trakkar normally
+             applies the key at runtime from the Traccar manager account, which
+             works on Android 11+. Older Android versions read only this value,
+             set through GOOGLE_MAPS_API_KEY in android/local.properties or the
+             environment. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${GOOGLE_MAPS_API_KEY}" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

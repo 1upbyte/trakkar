@@ -1,5 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../models/map_api_keys.dart';
 import '../models/provisioning_config.dart';
 
 class CredentialStore {
@@ -10,8 +11,13 @@ class CredentialStore {
   static const _managerUrl = 'provisioning.managerUrl';
   static const _managerUsername = 'provisioning.managerUsername';
   static const _managerPassword = 'provisioning.managerPassword';
-  static const _geocodingKey = 'geocoding.apiKey';
-  static const _satelliteMapKey = 'map.satelliteApiKey';
+  static const _googleMapsKey = 'map.googleMapsApiKey';
+  static const _mapTilerKey = 'map.mapTilerApiKey';
+
+  // Keys written by earlier builds. They are read once for migration and
+  // deleted on reset.
+  static const _legacyGeocodingKey = 'geocoding.apiKey';
+  static const _legacySatelliteMapKey = 'map.satelliteApiKey';
 
   final FlutterSecureStorage _storage;
 
@@ -49,27 +55,33 @@ class CredentialStore {
     ]);
   }
 
-  Future<String> readGeocodingKey() async {
-    return await _storage.read(key: _geocodingKey) ?? '';
+  /// Local cache of the map SDK keys shared through the manager account.
+  /// The server copy is authoritative; this cache lets the map start before
+  /// the manager session is established.
+  Future<MapApiKeys> readMapKeys() async {
+    final legacySatellite = await _storage.read(key: _legacySatelliteMapKey);
+    return MapApiKeys(
+      googleMaps: await _storage.read(key: _googleMapsKey) ?? '',
+      mapTiler: await _storage.read(key: _mapTilerKey) ?? legacySatellite ?? '',
+    );
   }
 
-  Future<void> saveGeocodingKey(String value) async {
+  Future<void> saveMapKeys(MapApiKeys keys) async {
+    await Future.wait(<Future<void>>[
+      _writeOrDelete(_googleMapsKey, keys.googleMaps),
+      _writeOrDelete(_mapTilerKey, keys.mapTiler),
+      _storage.delete(key: _legacySatelliteMapKey),
+      _storage.delete(key: _legacyGeocodingKey),
+    ]);
+  }
+
+  Future<void> clearMapKeys() => saveMapKeys(const MapApiKeys());
+
+  Future<void> _writeOrDelete(String key, String value) async {
     if (value.trim().isEmpty) {
-      await _storage.delete(key: _geocodingKey);
+      await _storage.delete(key: key);
     } else {
-      await _storage.write(key: _geocodingKey, value: value.trim());
-    }
-  }
-
-  Future<String> readSatelliteMapKey() async {
-    return await _storage.read(key: _satelliteMapKey) ?? '';
-  }
-
-  Future<void> saveSatelliteMapKey(String value) async {
-    if (value.trim().isEmpty) {
-      await _storage.delete(key: _satelliteMapKey);
-    } else {
-      await _storage.write(key: _satelliteMapKey, value: value.trim());
+      await _storage.write(key: key, value: value.trim());
     }
   }
 }

@@ -33,6 +33,27 @@ class TraccarDevice {
     raw['attributes'] as Map? ?? const <String, dynamic>{},
   );
 
+  /// Marker attribute name written while a phone has the map open.
+  static const watchUntilAttribute = 'trakkarWatchUntil';
+
+  /// Epoch time until which this device's owner is actively watching the
+  /// map, or null when the attribute is absent or unreadable.
+  DateTime? get watchUntil {
+    final value = attributes[watchUntilAttribute];
+    final millis = switch (value) {
+      num value => value.toInt(),
+      String value => int.tryParse(value),
+      _ => null,
+    };
+    if (millis == null || millis <= 0) return null;
+    return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
+  }
+
+  bool isWatchingAt(DateTime now) {
+    final until = watchUntil;
+    return until != null && until.isAfter(now);
+  }
+
   String? get imageName {
     final value = attributes['deviceImage'] as String?;
     if (value == null || value.trim().isEmpty) return null;

@@ -3,15 +3,18 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'models/map_api_keys.dart';
 import 'models/map_style_option.dart';
 import 'models/named_place.dart';
 import 'models/provisioning_config.dart';
 import 'models/theme_preference.dart';
 import 'models/traccar_device.dart';
 import 'models/traccar_position.dart';
+import 'models/traccar_user.dart';
 import 'services/credential_store.dart';
+import 'services/live_watch.dart';
+import 'services/map_sdk_service.dart';
 import 'services/named_place_store.dart';
-import 'services/reverse_geocoder.dart';
 import 'services/traccar_api.dart';
 import 'services/tracker_service.dart';
 import 'user_facing_error.dart';
@@ -27,28 +30,43 @@ class AppState extends ChangeNotifier {
   AppState({
     CredentialStore? credentialStore,
     NamedPlaceStore? namedPlaceStore,
-    ReverseGeocoder? reverseGeocoder,
     TrackerService? trackerService,
+    MapSdkService? mapSdkService,
     SharedPreferencesAsync? preferences,
   }) : _credentialStore = credentialStore ?? CredentialStore(),
        _namedPlaceStore = namedPlaceStore ?? NamedPlaceStore(),
        _preferences = preferences ?? SharedPreferencesAsync(),
        _tracker = trackerService ?? TrackerService(),
-       _reverseGeocoder =
-           reverseGeocoder ??
-           ReverseGeocoder(credentialStore ?? CredentialStore());
+       _mapSdk = mapSdkService ?? MapSdkService() {
+    _liveWatch = LiveWatchCoordinator(
+      publishWatch: _publishWatch,
+      fetchDevices: _fetchDevicesForWatch,
+      sendPosition: _sendWatchedPosition,
+      ownUniqueId: () => deviceUsername,
+      onDevices: _applyPolledDevices,
+    );
+  }
 
   static const _firstNameKey = 'profile.firstName';
   static const _deviceUsernameKey = 'profile.deviceUsername';
   static const _trackingWantedKey = 'tracking.wanted';
   static const _mapStyleKey = 'map.style';
+  static const _satelliteWhenZoomedKey = 'map.satelliteWhenZoomed';
   static const _themePreferenceKey = 'appearance.theme';
+
+  // Preferences written by earlier builds that configured reverse geocoding
+  // on the phone. Address lookup is server-side only now.
+  static const _legacyPreferenceKeys = <String>[
+    'geocoding.provider',
+    'geocoding.customUrlTemplate',
+  ];
 
   final CredentialStore _credentialStore;
   final NamedPlaceStore _namedPlaceStore;
   final SharedPreferencesAsync _preferences;
   final TrackerService _tracker;
-  final ReverseGeocoder _reverseGeocoder;
+  final MapSdkService _mapSdk;
+  late final LiveWatchCoordinator _liveWatch;
 
   AppPhase phase = AppPhase.loading;
   ProvisioningConfig? pendingProvisioning;
@@ -69,9 +87,11 @@ class AppState extends ChangeNotifier {
   Map<int, TraccarPosition> positions = const {};
   Map<int, Uint8List> deviceImages = const {};
   List<NamedPlace> namedPlaces = const [];
-  GeocodingSettings geocodingSettings = const GeocodingSettings();
+  TraccarUser? managerUser;
   MapStyleOption mapStyle = MapStyleOption.positron;
-  String satelliteMapApiKey = '';
+  MapApiKeys mapApiKeys = const MapApiKeys();
+  bool satelliteWhenZoomed = true;
+  bool googleMapsKeyApplied = false;
   ThemePreference themePreference = ThemePreference.system;
 
   TraccarDevice? get ownDevice {
@@ -81,15 +101,25 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  /// People whose phone currently has the map open.
+  List<String> get watchers => _liveWatch.watchers;
+
+  /// True while this phone is advertising an open map to everyone else.
+  bool get mapVisible => _liveWatch.isWatching;
+
+  bool get googleMapsReady =>
+      mapApiKeys.googleMaps.isNotEmpty && googleMapsKeyApplied;
+
   Future<void> bootstrap() async {
     namedPlaces = await _namedPlaceStore.load();
-    geocodingSettings = await _reverseGeocoder.loadSettings();
     final savedMapStyle = await _preferences.getString(_mapStyleKey);
     mapStyle = MapStyleOption.values.firstWhere(
       (style) => style.name == savedMapStyle,
       orElse: () => MapStyleOption.positron,
     );
-    satelliteMapApiKey = await _credentialStore.readSatelliteMapKey();
+    satelliteWhenZoomed =
+        await _preferences.getBool(_satelliteWhenZoomedKey) ?? true;
+    mapApiKeys = await _credentialStore.readMapKeys();
     final savedTheme = await _preferences.getString(_themePreferenceKey);
     themePreference = ThemePreference.values.firstWhere(
       (preference) => preference.name == savedTheme,
@@ -100,6 +130,9 @@ class AppState extends ChangeNotifier {
     deviceUsername = await _preferences.getString(_deviceUsernameKey) ?? '';
     final trackingWanted =
         await _preferences.getBool(_trackingWantedKey) ?? true;
+    for (final key in _legacyPreferenceKeys) {
+      unawaited(_preferences.remove(key));
+    }
 
     if (provisioning == null || firstName.isEmpty || deviceUsername.isEmpty) {
       phase = AppPhase.onboarding;
@@ -109,6 +142,7 @@ class AppState extends ChangeNotifier {
 
     phase = AppPhase.ready;
     notifyListeners();
+    unawaited(_applyGoogleMapsKey());
     try {
       await _tracker.configure(
         serverUrl: provisioning!.clientUrl,
@@ -226,6 +260,7 @@ class AppState extends ChangeNotifier {
       pendingProvisioning = null;
       _api?.close();
       _api = api;
+      await _adoptSharedSettings(api.user);
 
       await _tracker.configure(
         serverUrl: config.clientUrl,
@@ -244,6 +279,7 @@ class AppState extends ChangeNotifier {
       await refreshTrackingHealth();
       await refresh();
       _connectLive();
+      _syncWatchPolling();
     } on DeviceConflictException {
       api.close();
       rethrow;
@@ -261,8 +297,51 @@ class AppState extends ChangeNotifier {
     final api = TraccarApi(config: config);
     await api.login();
     _api = api;
+    await _adoptSharedSettings(api.user);
     await refresh();
     _connectLive();
+    _syncWatchPolling();
+  }
+
+  /// Applies settings stored on the manager user, such as map SDK keys, and
+  /// refreshes the local cache so the next launch starts with them.
+  Future<void> _adoptSharedSettings(TraccarUser? user) async {
+    var current = user;
+    if (current == null) {
+      try {
+        current = await _api?.session();
+      } on Object {
+        current = null;
+      }
+    }
+    if (current == null) return;
+    managerUser = current;
+    final serverKeys = MapApiKeys.fromAttributes(current.attributes);
+    if (serverKeys.isEmpty) return;
+    final merged = mapApiKeys.mergedWith(serverKeys);
+    if (merged != mapApiKeys) {
+      mapApiKeys = merged;
+      await _credentialStore.saveMapKeys(merged);
+      notifyListeners();
+    }
+    await _applyGoogleMapsKey();
+  }
+
+  Future<void> _applyGoogleMapsKey() async {
+    if (mapApiKeys.googleMaps.isEmpty) {
+      googleMapsKeyApplied = false;
+      notifyListeners();
+      return;
+    }
+    try {
+      googleMapsKeyApplied = await _mapSdk.applyGoogleMapsKey(
+        mapApiKeys.googleMaps,
+      );
+    } on Object catch (error) {
+      googleMapsKeyApplied = false;
+      debugPrint('Google Maps key could not be applied: $error');
+    }
+    notifyListeners();
   }
 
   Future<void> refresh() async {
@@ -303,6 +382,7 @@ class AppState extends ChangeNotifier {
       namedPlaces = sharedPlaces;
       await _namedPlaceStore.save(namedPlaces);
       unawaited(_loadDeviceImages(devices));
+      unawaited(_liveWatch.observeDevices(devices));
       lastError = null;
     } on Object catch (error) {
       lastError = userFacingError(error);
@@ -352,6 +432,7 @@ class AppState extends ChangeNotifier {
         );
         unawaited(_loadDeviceImage(device, force: true));
       }
+      unawaited(_liveWatch.observeDevices(devices));
     }
     final positionPayloads = message['positions'] as List<dynamic>?;
     if (positionPayloads != null) {
@@ -374,6 +455,86 @@ class AppState extends ChangeNotifier {
     _reconnectTimer = Timer(const Duration(seconds: 5), _connectLive);
   }
 
+  // ---------------------------------------------------------------------
+  // Live watch: keep positions fresh while someone has the map open.
+  // ---------------------------------------------------------------------
+
+  /// Called by the home screen whenever the map tab is shown or hidden, and
+  /// when the app moves between foreground and background.
+  void setMapVisible(bool visible) {
+    _mapVisibleWanted = visible;
+    _applyMapVisibility();
+  }
+
+  bool _mapVisibleWanted = false;
+
+  /// Publishes the wanted visibility once a manager session exists. The home
+  /// screen can report the map as visible before sign-in completes.
+  void _applyMapVisibility() {
+    final canWatch = phase == AppPhase.ready && _api != null;
+    final target = _mapVisibleWanted && canWatch;
+    if (target == _liveWatch.isWatching) return;
+    unawaited(
+      _liveWatch.setWatching(target).then((_) {
+        if (phase != AppPhase.loading) notifyListeners();
+      }),
+    );
+  }
+
+  void _syncWatchPolling() {
+    if (phase == AppPhase.ready && _api != null && tracking) {
+      _liveWatch.startPolling();
+    } else {
+      _liveWatch.stopPolling();
+    }
+    _applyMapVisibility();
+  }
+
+  Future<void> _publishWatch(DateTime? until) async {
+    final api = _api;
+    final device = ownDevice;
+    if (api == null || device == null) return;
+    final attributes = device.attributes;
+    final current = device.watchUntil;
+    if (until == null) {
+      if (current == null) return;
+      attributes.remove(TraccarDevice.watchUntilAttribute);
+    } else {
+      attributes[TraccarDevice.watchUntilAttribute] =
+          until.toUtc().millisecondsSinceEpoch;
+    }
+    final updated = await api.updateDeviceAttributes(
+      device,
+      attributes,
+      action: 'Sharing map activity',
+    );
+    devices = devices
+        .map((item) => item.id == updated.id ? updated : item)
+        .toList(growable: false);
+  }
+
+  Future<List<TraccarDevice>> _fetchDevicesForWatch() async {
+    final api = _api;
+    if (api == null) throw const TraccarApiException('Manager is offline.');
+    return api.devices();
+  }
+
+  Future<bool> _sendWatchedPosition() async {
+    if (!tracking) return false;
+    return _tracker.sendNow();
+  }
+
+  void _applyPolledDevices(List<TraccarDevice> polled) {
+    final previousWatchers = watchers;
+    devices = polled;
+    unawaited(_loadDeviceImages(polled));
+    // Only repaint when something visible changed. The watch attribute
+    // itself churns every heartbeat.
+    if (!listEquals(previousWatchers, _liveWatch.watchers)) {
+      notifyListeners();
+    }
+  }
+
   Future<void> setTracking(bool enabled) async {
     busy = true;
     lastError = null;
@@ -393,6 +554,7 @@ class AppState extends ChangeNotifier {
       tracking = await _tracker.isTracking();
       await _preferences.setBool(_trackingWantedKey, tracking);
       await refreshTrackingHealth();
+      _syncWatchPolling();
     } on Object catch (error) {
       lastError = userFacingError(error);
     } finally {
@@ -432,6 +594,9 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Resolves a position to a friendly place, the address Traccar attached,
+  /// or the server's own reverse geocoder, in that order. The phone never
+  /// talks to a third-party geocoding service.
   Future<String> reverseGeocode(TraccarPosition position) async {
     final place = NamedPlaceStore.nearest(
       namedPlaces,
@@ -442,37 +607,66 @@ class AppState extends ChangeNotifier {
     if (position.address?.trim().isNotEmpty ?? false) return position.address!;
     final api = _api;
     if (api == null) throw const TraccarApiException('Manager is offline.');
-    return _reverseGeocoder.lookup(
-      latitude: position.latitude,
-      longitude: position.longitude,
-      settings: geocodingSettings,
-      api: api,
+    final address = await api.reverseGeocode(
+      position.latitude,
+      position.longitude,
     );
+    return address.isEmpty ? 'No address found' : address;
   }
 
-  Future<void> saveGeocodingSettings(GeocodingSettings settings) async {
-    await _reverseGeocoder.saveSettings(settings);
-    geocodingSettings = settings;
-    notifyListeners();
-  }
-
+  /// Saves the base map style and the shared SDK keys. Keys are written to
+  /// the manager user on the server so every phone on the account receives
+  /// them; the local cache is updated only after the server accepts them.
   Future<void> saveMapAppearance({
     required MapStyleOption style,
-    required String satelliteApiKey,
+    required MapApiKeys keys,
   }) async {
-    final cleanKey = satelliteApiKey.trim();
-    if (style.isSatellite && cleanKey.isEmpty) {
+    if (style.isGoogle && keys.googleMaps.isEmpty) {
       throw const FormatException(
-        'Satellite view requires a MapTiler API key.',
+        'Google Maps needs a Maps SDK API key. Add one below.',
       );
     }
-    await Future.wait(<Future<void>>[
-      _preferences.setString(_mapStyleKey, style.name),
-      _credentialStore.saveSatelliteMapKey(cleanKey),
-    ]);
+    if (style.isSatellite && keys.mapTiler.isEmpty) {
+      throw const FormatException(
+        'MapTiler satellite view requires a MapTiler API key.',
+      );
+    }
+    if (keys != mapApiKeys) {
+      await _saveSharedMapKeys(keys);
+    }
+    await _preferences.setString(_mapStyleKey, style.name);
     mapStyle = style;
-    satelliteMapApiKey = cleanKey;
     notifyListeners();
+    await _applyGoogleMapsKey();
+  }
+
+  Future<void> _saveSharedMapKeys(MapApiKeys keys) async {
+    final api = _api;
+    var user = managerUser ?? api?.user;
+    if (api != null && user == null) {
+      try {
+        user = await api.session();
+      } on Object {
+        user = null;
+      }
+    }
+    if (api == null || user == null) {
+      throw const TraccarApiException(
+        'Connect to the manager server before changing shared map keys.',
+      );
+    }
+    managerUser = await api.updateUserAttributes(
+      user,
+      keys.applyTo(user.attributes),
+    );
+    mapApiKeys = keys;
+    await _credentialStore.saveMapKeys(keys);
+  }
+
+  Future<void> setSatelliteWhenZoomed(bool enabled) async {
+    satelliteWhenZoomed = enabled;
+    notifyListeners();
+    await _preferences.setBool(_satelliteWhenZoomedKey, enabled);
   }
 
   Future<void> setThemePreference(ThemePreference preference) async {
@@ -603,7 +797,9 @@ class AppState extends ChangeNotifier {
     _liveSubscription = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    _api?.close();
+    _liveWatch.stopPolling();
+    _mapVisibleWanted = false;
+    final api = _api;
     _api = null;
     provisioning = null;
     pendingProvisioning = null;
@@ -615,8 +811,11 @@ class AppState extends ChangeNotifier {
     positions = const {};
     deviceImages = const {};
     namedPlaces = const [];
+    managerUser = null;
     mapStyle = MapStyleOption.positron;
-    satelliteMapApiKey = '';
+    mapApiKeys = const MapApiKeys();
+    satelliteWhenZoomed = true;
+    googleMapsKeyApplied = false;
     themePreference = ThemePreference.system;
     lastError = null;
     trackingHealth = const TrackingHealth.unchecked();
@@ -632,6 +831,8 @@ class AppState extends ChangeNotifier {
       }
     }
 
+    await attempt(() => _liveWatch.setWatching(false));
+    api?.close();
     await attempt(() => _tracker.stop().timeout(const Duration(seconds: 15)));
     await attempt(() async {
       await subscription?.cancel();
@@ -643,11 +844,13 @@ class AppState extends ChangeNotifier {
         _preferences.remove(_deviceUsernameKey),
         _preferences.remove(_trackingWantedKey),
         _preferences.remove(_mapStyleKey),
+        _preferences.remove(_satelliteWhenZoomedKey),
         _preferences.remove(_themePreferenceKey),
+        for (final key in _legacyPreferenceKeys) _preferences.remove(key),
         _namedPlaceStore.save(const []),
       ]),
     );
-    await attempt(() => _credentialStore.saveSatelliteMapKey(''));
+    await attempt(_credentialStore.clearMapKeys);
 
     if (resetError != null) {
       lastError =
@@ -660,8 +863,8 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _reconnectTimer?.cancel();
     unawaited(_liveSubscription?.cancel());
+    unawaited(_liveWatch.dispose());
     _api?.close();
-    _reverseGeocoder.close();
     super.dispose();
   }
 }

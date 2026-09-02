@@ -4,6 +4,18 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+fun googleMapsApiKey(): String {
+    val localProperties = java.util.Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { localProperties.load(it) }
+    }
+    return (project.findProperty("GOOGLE_MAPS_API_KEY") as String?)
+        ?: localProperties.getProperty("GOOGLE_MAPS_API_KEY")
+        ?: System.getenv("GOOGLE_MAPS_API_KEY")
+        ?: ""
+}
+
 android {
     namespace = "com.oneupbyte.trakkar"
     compileSdk = flutter.compileSdkVersion
@@ -27,6 +39,10 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Optional build-time Google Maps key. Runtime delivery from the
+        // Traccar server is preferred; see MainActivity.setGoogleMapsApiKey.
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = googleMapsApiKey()
     }
 
     buildTypes {

@@ -3,17 +3,21 @@
 ## Summary
 
 Trakkar does **not** require a fork of the official Traccar server for profile
-pictures or shared friendly place names.
+pictures, shared friendly place names, shared map SDK keys, or live map
+sharing.
 
-The official server has no user-profile/avatar field and no dedicated
-"friendly place" model. Trakkar maps those concepts onto two official server
-features instead:
+The official server has no user-profile/avatar field, no dedicated "friendly
+place" model, no app-settings store, and no presence signal. Trakkar maps
+those concepts onto official server features instead:
 
 - A person's profile picture is the image of their Traccar **device**. This is
   the correct scope for Trakkar because one app profile is represented by one
   device whose `uniqueId` is the Trakkar username.
 - A friendly place is an official circular **geofence** with a Trakkar marker
   in its attributes.
+- Map SDK keys are attributes on the manager **user** record.
+- "Somebody is looking at the map" is a timestamp attribute on that person's
+  **device** record, read by the other phones through ordinary polling.
 
 This keeps the server unmodified and makes both records visible to every
 Trakkar client logged in as the same manager user (or otherwise granted access
@@ -191,6 +195,105 @@ The standard socket primarily supplies device and position changes. Another
 phone sees a friendly-place change on its next refresh or app launch. If
 instant cross-client place editing is later required, implement the websocket
 event described below.
+
+## Shared map keys using user attributes
+
+### Canonical representation
+
+```json
+{
+  "id": 5,
+  "name": "Family manager",
+  "email": "manager@example.com",
+  "attributes": {
+    "trakkarGoogleMapsApiKey": "AIza...",
+    "trakkarMapTilerApiKey": "abc123"
+  }
+}
+```
+
+### Protocol
+
+1. `POST /api/session` returns the signed-in user including `attributes`.
+   `GET /api/session` reloads it.
+2. To change a key, send the **entire** user object back with the modified
+   `attributes` map using `PUT /api/users/{id}`. Every unknown field is
+   preserved verbatim, `password` is omitted so the stored hash is kept, and
+   an empty key removes the attribute.
+
+Traccar allows a user to update its own record unless the account is
+`readonly`. Changing `administrator`, `deviceLimit`, `userLimit`,
+`readonly`, `deviceReadonly`, `disabled`, `limitCommands`, `disableReports`,
+`fixedEmail`, or extending `expirationTime` requires an administrator, so the
+client never touches those fields. The action is written to the server's
+action log like any other edit.
+
+Keys are visible to anyone who can read that user record, which is the manager
+account itself and administrators. Restrict the Google key by application
+identity in Google Cloud so a leaked key cannot be reused elsewhere.
+
+## Live map sharing using a device attribute
+
+### Why not the websocket
+
+`/api/socket` pushes `devices` messages only when the server itself changes a
+device (status changes from `BaseProtocolDecoder`), and `positions` and
+`events` messages only when a device reports. A REST edit through
+`BaseObjectResource.update` invalidates caches but does not call
+`ConnectionManager.updateDevice`, so a phone cannot broadcast a signal to the
+others without a modified server. Positions cannot carry a tag either, because
+the official Traccar Client SDK only exposes an `alarm` field, and alarms
+create events and notifications.
+
+### Canonical representation
+
+```json
+{
+  "id": 12,
+  "name": "Pablo",
+  "uniqueId": "pablo",
+  "attributes": {
+    "deviceImage": "device.jpg",
+    "trakkarWatchUntil": 1893456000000
+  }
+}
+```
+
+`trakkarWatchUntil` is epoch milliseconds (UTC). A device whose value is in
+the future is "watching".
+
+### Protocol
+
+- **Watcher:** while the Map tab is visible in the foreground, `PUT
+  /api/devices/{ownDeviceId}` with `trakkarWatchUntil = now + 75 s` every
+  30 seconds, preserving every other field and attribute. When the map is
+  hidden, remove the attribute with the same request. A crash leaves at most
+  a 75-second stale window. The watcher also uploads its own position through
+  the SDK immediately.
+- **Everyone else:** `GET /api/devices` every 45 seconds while idle. If any
+  device other than the phone's own is watching, call the SDK's
+  `requestPosition()` (throttled to one call per 12 seconds) and poll every
+  15 seconds until no watcher remains. A watch attribute on the phone's own
+  device never counts.
+- Devices delivered by `/api/socket` and by a manual refresh are evaluated the
+  same way.
+
+Polling stops while tracking is disabled, and the client only writes its own
+device record. Because `PUT /api/devices` is an audited edit, expect one
+action-log line per heartbeat per watcher.
+
+### First-class alternative
+
+A custom server can replace this with a presence endpoint and a websocket
+event:
+
+```text
+POST /api/trakkar/presence   {"watching": true}
+{"trakkarPresence":[{"deviceId":12,"until":"2026-09-01T12:01:15Z"}]}
+```
+
+and, ideally, push a `positionSingle` command to each OsmAnd-protocol device
+so no client polling is needed.
 
 ## Optional first-class server implementation
 

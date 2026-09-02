@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gm;
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +12,12 @@ import '../app_state.dart';
 import '../models/map_style_option.dart';
 import '../models/traccar_device.dart';
 import '../models/traccar_position.dart';
+import 'map_marker_bitmaps.dart';
+
+/// Zoom levels that switch the base map to imagery, Life360 style. The gap
+/// between them prevents flicker while pinching around the threshold.
+const _imageryEnterZoom = 15.5;
+const _imageryExitZoom = 14.5;
 
 class MapScreen extends StatefulWidget {
   const MapScreen({required this.onPeopleTap, super.key});
@@ -22,29 +29,65 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  final _mapController = MapController();
+  MapController _mapController = MapController();
+  gm.GoogleMapController? _googleController;
+  final _markerBitmaps = MarkerBitmapCache();
   vt.Style? _baseMapStyle;
   Object? _baseMapError;
   MapStyleOption? _requestedMapStyle;
   int _styleLoadGeneration = 0;
   bool _centeredOnCurrentDevice = false;
+  bool _zoomedIn = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final requested = context.watch<AppState>().mapStyle;
     if (_requestedMapStyle != requested) {
+      final previous = _requestedMapStyle;
       _requestedMapStyle = requested;
+      if (previous != null && previous.isGoogle != requested.isGoogle) {
+        // A MapController binds to one FlutterMap instance. Swapping the
+        // rendering stack needs a fresh one; the Google controller is
+        // recreated by onMapCreated.
+        _mapController.dispose();
+        _mapController = MapController();
+        _googleController = null;
+      }
       unawaited(_loadBaseMap(requested));
+    }
+  }
+
+  /// Tracks whether the camera is close enough to switch to imagery.
+  void _onZoomChanged(double zoom) {
+    final zoomedIn = _zoomedIn
+        ? zoom >= _imageryExitZoom
+        : zoom >= _imageryEnterZoom;
+    if (zoomedIn != _zoomedIn && mounted) {
+      setState(() => _zoomedIn = zoomedIn);
+    }
+  }
+
+  void _moveTo(LatLng point, double zoom) {
+    if (_requestedMapStyle?.isGoogle ?? false) {
+      _googleController?.moveCamera(
+        gm.CameraUpdate.newLatLngZoom(
+          gm.LatLng(point.latitude, point.longitude),
+          zoom,
+        ),
+      );
+    } else {
+      _mapController.move(point, zoom);
     }
   }
 
   Future<void> _loadBaseMap(MapStyleOption requested) async {
     final generation = ++_styleLoadGeneration;
-    if (requested.isSatellite) {
+    if (requested.openFreeMapStyleUri == null) {
       _baseMapStyle?.dispose();
       _baseMapStyle = null;
       _baseMapError = null;
+      if (mounted) setState(() {});
       return;
     }
     try {
@@ -70,6 +113,8 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _baseMapStyle?.dispose();
+    _mapController.dispose();
+    _markerBitmaps.dispose();
     super.dispose();
   }
 
@@ -79,12 +124,25 @@ class _MapScreenState extends State<MapScreen> {
         .toList(growable: false);
     if (points.isEmpty) return;
     if (points.length == 1) {
-      _mapController.move(points.first, 15);
+      _moveTo(points.first, 15);
+      return;
+    }
+    final bounds = LatLngBounds.fromPoints(points);
+    if (state.mapStyle.isGoogle) {
+      _googleController?.animateCamera(
+        gm.CameraUpdate.newLatLngBounds(
+          gm.LatLngBounds(
+            southwest: gm.LatLng(bounds.south, bounds.west),
+            northeast: gm.LatLng(bounds.north, bounds.east),
+          ),
+          96,
+        ),
+      );
       return;
     }
     _mapController.fitCamera(
       CameraFit.bounds(
-        bounds: LatLngBounds.fromPoints(points),
+        bounds: bounds,
         padding: const EdgeInsets.fromLTRB(48, 120, 48, 180),
       ),
     );
@@ -200,7 +258,7 @@ class _MapScreenState extends State<MapScreen> {
       _centeredOnCurrentDevice = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _mapController.move(
+        _moveTo(
           LatLng(
             currentDevicePosition.latitude,
             currentDevicePosition.longitude,
@@ -209,118 +267,34 @@ class _MapScreenState extends State<MapScreen> {
         );
       });
     }
-    final baseMapStyle = _baseMapStyle;
     final selectedMapStyle = state.mapStyle;
+    final googleMissingKey = selectedMapStyle.isGoogle && !state.googleMapsReady;
     final satelliteMissingKey =
-        selectedMapStyle.isSatellite && state.satelliteMapApiKey.isEmpty;
-    final attribution = baseMapStyle?.attributions
-        .map((item) => item.text)
-        .where((text) => text.isNotEmpty)
-        .join(' · ');
+        selectedMapStyle.isSatellite && state.mapApiKeys.mapTiler.isEmpty;
+    final initialCenter = initialPosition == null
+        ? const LatLng(20, 0)
+        : LatLng(initialPosition.latitude, initialPosition.longitude);
+    final initialZoom = initialPosition == null ? 2.5 : 12.0;
 
     return Stack(
       children: [
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: initialPosition == null
-                ? const LatLng(20, 0)
-                : LatLng(initialPosition.latitude, initialPosition.longitude),
-            initialZoom: initialPosition == null ? 2.5 : 12,
-            onLongPress: (_, point) => unawaited(_addPlace(point)),
+        if (selectedMapStyle.isGoogle && !googleMissingKey)
+          _buildGoogleMap(
+            state,
+            devicesById,
+            initialCenter: initialCenter,
+            initialZoom: initialZoom,
+          )
+        else if (selectedMapStyle.isGoogle)
+          const ColoredBox(color: Color(0xFFE9ECE8), child: SizedBox.expand())
+        else
+          _buildFlutterMap(
+            state,
+            devicesById,
+            initialCenter: initialCenter,
+            initialZoom: initialZoom,
+            satelliteMissingKey: satelliteMissingKey,
           ),
-          children: [
-            if (selectedMapStyle.isSatellite && !satelliteMissingKey)
-              TileLayer(
-                urlTemplate:
-                    'https://api.maptiler.com/maps/satellite-v4/256/'
-                    '{z}/{x}/{y}.jpg?key=${state.satelliteMapApiKey}',
-                userAgentPackageName: 'com.oneupbyte.trakkar',
-                maxNativeZoom: 19,
-              )
-            else if (baseMapStyle != null)
-              vt.VectorTileLayer(
-                theme: baseMapStyle.theme,
-                tileProviders: baseMapStyle.providers,
-                rasterSources: baseMapStyle.rasterSources,
-                sprites: baseMapStyle.sprites,
-                // Positron omits POIs such as restaurants while retaining
-                // useful road and city labels.
-                showLabels: true,
-                concurrency: 2,
-                diskCacheMaximumSizeInBytes: 40 * 1024 * 1024,
-              )
-            else
-              const ColoredBox(
-                color: Color(0xFFE9ECE8),
-                child: SizedBox.expand(),
-              ),
-            MarkerLayer(
-              markers: state.namedPlaces
-                  .map(
-                    (place) => Marker(
-                      point: LatLng(place.latitude, place.longitude),
-                      width: 42,
-                      height: 42,
-                      child: Tooltip(
-                        message: place.name,
-                        child: Icon(
-                          Icons.bookmark_rounded,
-                          color: Theme.of(context).colorScheme.tertiary,
-                          shadows: const [
-                            Shadow(color: Colors.white, blurRadius: 5),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-            MarkerLayer(
-              // Keep profile photos and their status badges screen-upright
-              // while the map rotates underneath them.
-              rotate: true,
-              markers: state.positions.entries
-                  .map((entry) {
-                    final device = devicesById[entry.key];
-                    final position = entry.value;
-                    return Marker(
-                      point: LatLng(position.latitude, position.longitude),
-                      width: 126,
-                      height: 64,
-                      child: GestureDetector(
-                        onTap: device == null
-                            ? null
-                            : () => unawaited(
-                                _showPersonSheet(device, position, state),
-                              ),
-                        child: _AvatarMarker(
-                          name: device?.name ?? 'Unknown',
-                          online: device?.status == 'online',
-                          position: position,
-                          imageBytes: device == null
-                              ? null
-                              : state.deviceImages[device.id],
-                        ),
-                      ),
-                    );
-                  })
-                  .toList(growable: false),
-            ),
-            RichAttributionWidget(
-              showFlutterMapAttribution: false,
-              attributions: [
-                TextSourceAttribution(
-                  selectedMapStyle.isSatellite
-                      ? '© MapTiler · © OpenStreetMap contributors'
-                      : attribution?.isNotEmpty ?? false
-                      ? attribution!
-                      : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
-                ),
-              ],
-            ),
-          ],
-        ),
         Positioned(
           top: MediaQuery.paddingOf(context).top + 16,
           left: 16,
@@ -330,7 +304,7 @@ class _MapScreenState extends State<MapScreen> {
             onTap: widget.onPeopleTap,
           ),
         ),
-        if (_baseMapError != null || satelliteMissingKey)
+        if (_baseMapError != null || satelliteMissingKey || googleMissingKey)
           Positioned(
             top: MediaQuery.paddingOf(context).top + 72,
             left: 16,
@@ -339,16 +313,20 @@ class _MapScreenState extends State<MapScreen> {
               child: ListTile(
                 leading: const Icon(Icons.map_outlined),
                 title: Text(
-                  satelliteMissingKey
+                  googleMissingKey
+                      ? 'Google Maps key required'
+                      : satelliteMissingKey
                       ? 'Satellite API key required'
                       : 'Map style unavailable',
                 ),
                 subtitle: Text(
-                  satelliteMissingKey
+                  googleMissingKey
+                      ? 'Add a Google Maps SDK key in Settings. Locations are still live.'
+                      : satelliteMissingKey
                       ? 'Add a MapTiler key in Settings. Locations are still live.'
                       : 'Check the connection and retry. Locations are still live.',
                 ),
-                trailing: satelliteMissingKey
+                trailing: satelliteMissingKey || googleMissingKey
                     ? null
                     : TextButton(
                         onPressed: () {
@@ -403,6 +381,243 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
       ],
+    );
+  }
+  /// Vector (OpenFreeMap) or MapTiler raster map drawn by flutter_map.
+  Widget _buildFlutterMap(
+    AppState state,
+    Map<int, TraccarDevice> devicesById, {
+    required LatLng initialCenter,
+    required double initialZoom,
+    required bool satelliteMissingKey,
+  }) {
+    final baseMapStyle = _baseMapStyle;
+    final selectedMapStyle = state.mapStyle;
+    final mapTilerKey = state.mapApiKeys.mapTiler;
+    final attribution = baseMapStyle?.attributions
+        .map((item) => item.text)
+        .where((text) => text.isNotEmpty)
+        .join(' · ');
+    // Imagery is shown for the MapTiler satellite style, or on top of an
+    // OpenFreeMap style once the camera is zoomed in close enough.
+    final showImagery =
+        mapTilerKey.isNotEmpty &&
+        (selectedMapStyle.isSatellite ||
+            (state.satelliteWhenZoomed && _zoomedIn));
+
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: initialCenter,
+        initialZoom: initialZoom,
+        onLongPress: (_, point) => unawaited(_addPlace(point)),
+        onPositionChanged: (camera, _) => _onZoomChanged(camera.zoom),
+      ),
+      children: [
+        if (baseMapStyle != null && !selectedMapStyle.isSatellite)
+          vt.VectorTileLayer(
+            theme: baseMapStyle.theme,
+            tileProviders: baseMapStyle.providers,
+            rasterSources: baseMapStyle.rasterSources,
+            sprites: baseMapStyle.sprites,
+            // Positron omits POIs such as restaurants while retaining
+            // useful road and city labels.
+            showLabels: true,
+            concurrency: 2,
+            diskCacheMaximumSizeInBytes: 40 * 1024 * 1024,
+          )
+        else if (!showImagery)
+          const ColoredBox(color: Color(0xFFE9ECE8), child: SizedBox.expand()),
+        if (showImagery)
+          TileLayer(
+            urlTemplate:
+                'https://api.maptiler.com/maps/satellite-v4/256/'
+                '{z}/{x}/{y}.jpg?key=$mapTilerKey',
+            userAgentPackageName: 'com.oneupbyte.trakkar',
+            maxNativeZoom: 19,
+          ),
+        MarkerLayer(
+          markers: state.namedPlaces
+              .map(
+                (place) => Marker(
+                  point: LatLng(place.latitude, place.longitude),
+                  width: 42,
+                  height: 42,
+                  child: Tooltip(
+                    message: place.name,
+                    child: Icon(
+                      Icons.bookmark_rounded,
+                      color: Theme.of(context).colorScheme.tertiary,
+                      shadows: const [
+                        Shadow(color: Colors.white, blurRadius: 5),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+              .toList(growable: false),
+        ),
+        MarkerLayer(
+          // Keep profile photos and their status badges screen-upright
+          // while the map rotates underneath them.
+          rotate: true,
+          markers: state.positions.entries
+              .map((entry) {
+                final device = devicesById[entry.key];
+                final position = entry.value;
+                return Marker(
+                  point: LatLng(position.latitude, position.longitude),
+                  width: 126,
+                  height: 64,
+                  child: GestureDetector(
+                    onTap: device == null
+                        ? null
+                        : () => unawaited(
+                            _showPersonSheet(device, position, state),
+                          ),
+                    child: _AvatarMarker(
+                      name: device?.name ?? 'Unknown',
+                      online: device?.status == 'online',
+                      position: position,
+                      imageBytes: device == null
+                          ? null
+                          : state.deviceImages[device.id],
+                    ),
+                  ),
+                );
+              })
+              .toList(growable: false),
+        ),
+        RichAttributionWidget(
+          showFlutterMapAttribution: false,
+          attributions: [
+            TextSourceAttribution(
+              showImagery
+                  ? '© MapTiler · © OpenStreetMap contributors'
+                  : attribution?.isNotEmpty ?? false
+                  ? attribution!
+                  : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  gm.MapType _googleMapType(AppState state) {
+    final imagery = state.satelliteWhenZoomed && _zoomedIn;
+    return switch (state.mapStyle) {
+      MapStyleOption.googleSatellite => gm.MapType.satellite,
+      MapStyleOption.googleHybrid => gm.MapType.hybrid,
+      MapStyleOption.googleTerrain =>
+        imagery ? gm.MapType.hybrid : gm.MapType.terrain,
+      _ => imagery ? gm.MapType.hybrid : gm.MapType.normal,
+    };
+  }
+
+  /// Native Google Maps SDK map. Profile bubbles are rendered to bitmaps
+  /// because native markers cannot host Flutter widgets.
+  Widget _buildGoogleMap(
+    AppState state,
+    Map<int, TraccarDevice> devicesById, {
+    required LatLng initialCenter,
+    required double initialZoom,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final brightness = Theme.of(context).brightness;
+    final mapType = _googleMapType(state);
+    void refresh() {
+      if (mounted) setState(() {});
+    }
+
+    final placeKey = 'place:${brightness.name}';
+    _markerBitmaps.ensure(
+      placeKey,
+      () => _markerBitmaps.renderPlaceIcon(
+        colors: colors,
+        pixelRatio: pixelRatio,
+      ),
+      refresh,
+    );
+    final placeIcon = _markerBitmaps[placeKey];
+
+    final markers = <gm.Marker>{
+      if (placeIcon != null)
+        for (final place in state.namedPlaces)
+          gm.Marker(
+            markerId: gm.MarkerId('place:${place.id}'),
+            position: gm.LatLng(place.latitude, place.longitude),
+            icon: placeIcon,
+            anchor: const Offset(0.5, 0.5),
+            zIndexInt: 1,
+            infoWindow: gm.InfoWindow(title: place.name),
+          ),
+    };
+    for (final entry in state.positions.entries) {
+      final device = devicesById[entry.key];
+      final position = entry.value;
+      final imageBytes = device == null ? null : state.deviceImages[device.id];
+      final name = device?.name ?? 'Unknown';
+      final online = device?.status == 'online';
+      final moving = position.isMoving;
+      final speed = position.speedMph.round();
+      final key =
+          'person:${entry.key}:${identityHashCode(imageBytes)}:$online:'
+          '$moving:$speed:${brightness.name}:${_initial(name)}';
+      _markerBitmaps.ensure(
+        key,
+        () => _markerBitmaps.renderAvatar(
+          deviceId: entry.key,
+          initial: _initial(name),
+          online: online,
+          moving: moving,
+          speedMph: position.speedMph,
+          imageBytes: imageBytes,
+          colors: colors,
+          pixelRatio: pixelRatio,
+        ),
+        refresh,
+      );
+      final icon = _markerBitmaps[key];
+      if (icon == null) continue;
+      markers.add(
+        gm.Marker(
+          markerId: gm.MarkerId('person:${entry.key}'),
+          position: gm.LatLng(position.latitude, position.longitude),
+          icon: icon,
+          anchor: const Offset(0.5, 0.5),
+          zIndexInt: 2,
+          consumeTapEvents: true,
+          onTap: device == null
+              ? null
+              : () => unawaited(_showPersonSheet(device, position, state)),
+        ),
+      );
+    }
+
+    return gm.GoogleMap(
+      initialCameraPosition: gm.CameraPosition(
+        target: gm.LatLng(initialCenter.latitude, initialCenter.longitude),
+        zoom: initialZoom,
+      ),
+      mapType: mapType,
+      style: mapType == gm.MapType.normal
+          ? (brightness == Brightness.dark
+                ? googleMapsDarkStyle
+                : googleMapsLightStyle)
+          : null,
+      markers: markers,
+      myLocationEnabled: false,
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
+      mapToolbarEnabled: false,
+      compassEnabled: true,
+      buildingsEnabled: false,
+      onMapCreated: (controller) => _googleController = controller,
+      onCameraMove: (camera) => _onZoomChanged(camera.zoom),
+      onLongPress: (point) =>
+          unawaited(_addPlace(LatLng(point.latitude, point.longitude))),
     );
   }
 }

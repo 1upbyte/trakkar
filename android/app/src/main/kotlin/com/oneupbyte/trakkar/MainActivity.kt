@@ -3,6 +3,7 @@ package com.oneupbyte.trakkar
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Bundle
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -32,6 +33,51 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.oneupbyte.trakkar/map-sdk",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setGoogleMapsApiKey" -> {
+                    val key = call.argument<String>("key")?.trim().orEmpty()
+                    result.success(key.isNotEmpty() && setGoogleMapsApiKey(key))
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    /**
+     * Delivers a Google Maps SDK key at runtime.
+     *
+     * The Maps SDK reads `com.google.android.geo.API_KEY` from the
+     * application's manifest meta-data when the first map is created. There is
+     * no public runtime setter, so the meta-data bundle is updated in place on
+     * every ApplicationInfo instance the SDK can observe. Android 11 and later
+     * cache ApplicationInfo per process, so the change is visible to the SDK;
+     * older versions hand out fresh copies and fall back to the build-time
+     * manifest placeholder instead.
+     */
+    private fun setGoogleMapsApiKey(key: String): Boolean {
+        var applied = false
+        val infos = mutableListOf(applicationContext.applicationInfo, applicationInfo)
+        try {
+            infos += packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+        } catch (_: PackageManager.NameNotFoundException) {
+            // Unreachable for the running package, but never fatal.
+        }
+        for (info in infos) {
+            val metaData = info.metaData ?: Bundle().also { info.metaData = it }
+            metaData.putString(GOOGLE_MAPS_KEY_META, key)
+            metaData.remove(LEGACY_GOOGLE_MAPS_KEY_META)
+            applied = true
+        }
+        return applied
+    }
+
+    private companion object {
+        const val GOOGLE_MAPS_KEY_META = "com.google.android.geo.API_KEY"
+        const val LEGACY_GOOGLE_MAPS_KEY_META = "com.google.android.maps.v2.API_KEY"
     }
 
     private fun trackingHealth(): Map<String, Boolean> {

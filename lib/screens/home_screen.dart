@@ -16,21 +16,39 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _index = 0;
+  bool _foreground = true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<AppState>().refreshTrackingHealth();
+      if (!mounted) return;
+      context.read<AppState>().refreshTrackingHealth();
+      _publishMapVisibility();
     });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted) {
+    if (!mounted) return;
+    _foreground = state == AppLifecycleState.resumed;
+    if (_foreground) {
       context.read<AppState>().refreshTrackingHealth();
     }
+    _publishMapVisibility();
+  }
+
+  /// The map counts as "open" only while the app is in the foreground and
+  /// the Map tab is selected. Everyone else's phone uses that signal to send
+  /// fresh positions.
+  void _publishMapVisibility() {
+    context.read<AppState>().setMapVisible(_foreground && _index == 0);
+  }
+
+  void _selectTab(int value) {
+    setState(() => _index = value);
+    _publishMapVisibility();
   }
 
   @override
@@ -48,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           IndexedStack(
             index: _index,
             children: [
-              MapScreen(onPeopleTap: () => setState(() => _index = 1)),
+              MapScreen(onPeopleTap: () => _selectTab(1)),
               const PeopleScreen(),
               const PlacesScreen(),
               const SettingsScreen(),
@@ -76,7 +94,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
+        onDestinationSelected: _selectTab,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.map_outlined),
