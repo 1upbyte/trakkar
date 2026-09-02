@@ -58,9 +58,20 @@ People appear as screen-upright profile-picture circles without permanent name
 labels, even when the map is rotated. The default view centers on this phone's
 device position at a neighborhood zoom. The OpenFreeMap Positron vector style
 keeps useful road and city context but omits restaurant, shop, and other POI
-labels. Tap a picture to open a bottom sheet with the person's name and current
-address. A user can change their own picture from Settings; the image uses
-Traccar's official device-image endpoint.
+labels. Settings can switch between OpenFreeMap Positron, Bright, Liberty,
+Dark, and Fiord. OpenFreeMap does not provide satellite imagery, so the
+Satellite option uses MapTiler's `satellite-v4` tiles and a separate API key
+stored in secure device storage. Tap a picture to open a bottom sheet with the
+person's name and current address. A user can change their own picture from
+Settings; the image uses Traccar's official device-image endpoint.
+
+The people-count pill on the map and the People navigation tab open a live list
+of every device shared with the manager account. Each row displays a matching
+friendly place first; reverse geocoding runs only when no named place covers the
+position. Devices that have not reported a position remain visible in the list.
+
+The app theme defaults to the phone's system appearance. Settings can override
+it with Light or Dark, and the preference is stored on the device.
 
 While Traccar reports a person in motion, their map bubble shows walking below
 10 mph or driving above 10 mph, together with the latest speed in mph. Motion

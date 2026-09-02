@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import 'map_screen.dart';
+import 'people_screen.dart';
 import 'places_screen.dart';
 import 'settings_screen.dart';
 
@@ -46,7 +47,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         children: [
           IndexedStack(
             index: _index,
-            children: const [MapScreen(), PlacesScreen(), SettingsScreen()],
+            children: [
+              MapScreen(onPeopleTap: () => setState(() => _index = 1)),
+              const PeopleScreen(),
+              const PlacesScreen(),
+              const SettingsScreen(),
+            ],
           ),
           if (state.trackingHealth.hasWarning || state.lastError != null)
             Positioned(
@@ -58,7 +64,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 children: [
                   if (state.trackingHealth.hasWarning)
                     _TrackingHealthBanner(state: state),
-                  if (state.trackingHealth.hasWarning && state.lastError != null)
+                  if (state.trackingHealth.hasWarning &&
+                      state.lastError != null)
                     const SizedBox(height: 8),
                   if (state.lastError != null)
                     _ErrorBanner(message: state.lastError!),
@@ -75,6 +82,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             icon: Icon(Icons.map_outlined),
             selectedIcon: Icon(Icons.map_rounded),
             label: 'Map',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.group_outlined),
+            selectedIcon: Icon(Icons.group_rounded),
+            label: 'People',
           ),
           NavigationDestination(
             icon: Icon(Icons.bookmark_border_rounded),
@@ -101,7 +113,8 @@ class _TrackingHealthBanner extends StatelessWidget {
     final health = state.trackingHealth;
     final details = <String>[
       if (health.needsLocation) 'set Location to Always / Allow all the time',
-      if (health.needsBattery) 'set battery use to Unrestricted / Not optimized',
+      if (health.needsBattery)
+        'set battery use to Unrestricted / Not optimized',
     ];
     return Material(
       color: Theme.of(context).colorScheme.errorContainer,

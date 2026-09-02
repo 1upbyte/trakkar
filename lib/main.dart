@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'models/theme_preference.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 
@@ -19,42 +20,50 @@ class TrakkarApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Consumer<AppState>(
+      builder: (context, state, _) => MaterialApp(
+        title: 'trakkar',
+        debugShowCheckedModeBanner: false,
+        theme: _theme(Brightness.light),
+        darkTheme: _theme(Brightness.dark),
+        themeMode: switch (state.themePreference) {
+          ThemePreference.system => ThemeMode.system,
+          ThemePreference.light => ThemeMode.light,
+          ThemePreference.dark => ThemeMode.dark,
+        },
+        home: switch (state.phase) {
+          AppPhase.loading => const _LoadingScreen(),
+          AppPhase.onboarding => const OnboardingScreen(),
+          AppPhase.ready => const HomeScreen(),
+        },
+      ),
+    );
+  }
+
+  ThemeData _theme(Brightness brightness) {
     const seed = Color(0xFF126E68);
-    return MaterialApp(
-      title: 'trakkar',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: seed,
-          brightness: Brightness.light,
-          surface: const Color(0xFFF7F9F8),
-        ),
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF4F7F6),
-        cardTheme: const CardThemeData(
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(22)),
-          ),
-        ),
-        inputDecorationTheme: const InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
-            borderSide: BorderSide.none,
-          ),
+    final colors = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: brightness,
+    );
+    return ThemeData(
+      colorScheme: colors,
+      useMaterial3: true,
+      scaffoldBackgroundColor: colors.surface,
+      cardTheme: const CardThemeData(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(22)),
         ),
       ),
-      home: Consumer<AppState>(
-        builder: (context, state, _) {
-          return switch (state.phase) {
-            AppPhase.loading => const _LoadingScreen(),
-            AppPhase.onboarding => const OnboardingScreen(),
-            AppPhase.ready => const HomeScreen(),
-          };
-        },
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: colors.surfaceContainerHighest,
+        border: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderSide: BorderSide.none,
+        ),
       ),
     );
   }

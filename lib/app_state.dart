@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'models/map_style_option.dart';
 import 'models/named_place.dart';
 import 'models/provisioning_config.dart';
+import 'models/theme_preference.dart';
 import 'models/traccar_device.dart';
 import 'models/traccar_position.dart';
 import 'services/credential_store.dart';
@@ -39,6 +41,8 @@ class AppState extends ChangeNotifier {
   static const _firstNameKey = 'profile.firstName';
   static const _deviceUsernameKey = 'profile.deviceUsername';
   static const _trackingWantedKey = 'tracking.wanted';
+  static const _mapStyleKey = 'map.style';
+  static const _themePreferenceKey = 'appearance.theme';
 
   final CredentialStore _credentialStore;
   final NamedPlaceStore _namedPlaceStore;
@@ -66,6 +70,9 @@ class AppState extends ChangeNotifier {
   Map<int, Uint8List> deviceImages = const {};
   List<NamedPlace> namedPlaces = const [];
   GeocodingSettings geocodingSettings = const GeocodingSettings();
+  MapStyleOption mapStyle = MapStyleOption.positron;
+  String satelliteMapApiKey = '';
+  ThemePreference themePreference = ThemePreference.system;
 
   TraccarDevice? get ownDevice {
     for (final device in devices) {
@@ -77,6 +84,17 @@ class AppState extends ChangeNotifier {
   Future<void> bootstrap() async {
     namedPlaces = await _namedPlaceStore.load();
     geocodingSettings = await _reverseGeocoder.loadSettings();
+    final savedMapStyle = await _preferences.getString(_mapStyleKey);
+    mapStyle = MapStyleOption.values.firstWhere(
+      (style) => style.name == savedMapStyle,
+      orElse: () => MapStyleOption.positron,
+    );
+    satelliteMapApiKey = await _credentialStore.readSatelliteMapKey();
+    final savedTheme = await _preferences.getString(_themePreferenceKey);
+    themePreference = ThemePreference.values.firstWhere(
+      (preference) => preference.name == savedTheme,
+      orElse: () => ThemePreference.system,
+    );
     provisioning = await _credentialStore.readProvisioning();
     firstName = await _preferences.getString(_firstNameKey) ?? '';
     deviceUsername = await _preferences.getString(_deviceUsernameKey) ?? '';
@@ -438,6 +456,39 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> saveMapAppearance({
+    required MapStyleOption style,
+    required String satelliteApiKey,
+  }) async {
+    final cleanKey = satelliteApiKey.trim();
+    if (style.isSatellite && cleanKey.isEmpty) {
+      throw const FormatException(
+        'Satellite view requires a MapTiler API key.',
+      );
+    }
+    await Future.wait(<Future<void>>[
+      _preferences.setString(_mapStyleKey, style.name),
+      _credentialStore.saveSatelliteMapKey(cleanKey),
+    ]);
+    mapStyle = style;
+    satelliteMapApiKey = cleanKey;
+    notifyListeners();
+  }
+
+  Future<void> setThemePreference(ThemePreference preference) async {
+    themePreference = preference;
+    notifyListeners();
+    await _preferences.setString(_themePreferenceKey, preference.name);
+  }
+
+  String? friendlyPlaceFor(TraccarPosition position) {
+    return NamedPlaceStore.nearest(
+      namedPlaces,
+      position.latitude,
+      position.longitude,
+    )?.name;
+  }
+
   Future<void> addNamedPlace({
     required String name,
     required double latitude,
@@ -564,6 +615,9 @@ class AppState extends ChangeNotifier {
     positions = const {};
     deviceImages = const {};
     namedPlaces = const [];
+    mapStyle = MapStyleOption.positron;
+    satelliteMapApiKey = '';
+    themePreference = ThemePreference.system;
     lastError = null;
     trackingHealth = const TrackingHealth.unchecked();
     phase = AppPhase.onboarding;
@@ -578,9 +632,7 @@ class AppState extends ChangeNotifier {
       }
     }
 
-    await attempt(
-      () => _tracker.stop().timeout(const Duration(seconds: 15)),
-    );
+    await attempt(() => _tracker.stop().timeout(const Duration(seconds: 15)));
     await attempt(() async {
       await subscription?.cancel();
     });
@@ -590,9 +642,12 @@ class AppState extends ChangeNotifier {
         _preferences.remove(_firstNameKey),
         _preferences.remove(_deviceUsernameKey),
         _preferences.remove(_trackingWantedKey),
+        _preferences.remove(_mapStyleKey),
+        _preferences.remove(_themePreferenceKey),
         _namedPlaceStore.save(const []),
       ]),
     );
+    await attempt(() => _credentialStore.saveSatelliteMapKey(''));
 
     if (resetError != null) {
       lastError =

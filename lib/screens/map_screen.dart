@@ -8,11 +8,14 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../models/map_style_option.dart';
 import '../models/traccar_device.dart';
 import '../models/traccar_position.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({required this.onPeopleTap, super.key});
+
+  final VoidCallback onPeopleTap;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -22,26 +25,45 @@ class _MapScreenState extends State<MapScreen> {
   final _mapController = MapController();
   vt.Style? _baseMapStyle;
   Object? _baseMapError;
+  MapStyleOption? _requestedMapStyle;
+  int _styleLoadGeneration = 0;
   bool _centeredOnCurrentDevice = false;
 
   @override
-  void initState() {
-    super.initState();
-    unawaited(_loadBaseMap());
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final requested = context.watch<AppState>().mapStyle;
+    if (_requestedMapStyle != requested) {
+      _requestedMapStyle = requested;
+      unawaited(_loadBaseMap(requested));
+    }
   }
 
-  Future<void> _loadBaseMap() async {
+  Future<void> _loadBaseMap(MapStyleOption requested) async {
+    final generation = ++_styleLoadGeneration;
+    if (requested.isSatellite) {
+      _baseMapStyle?.dispose();
+      _baseMapStyle = null;
+      _baseMapError = null;
+      return;
+    }
     try {
-      final style = await const vt.StyleReader(
-        uri: 'https://tiles.openfreemap.org/styles/positron',
-      ).read();
-      if (!mounted) {
+      final style = await vt.StyleReader(uri: requested.openFreeMapStyleUri!)
+          .read();
+      if (!mounted || generation != _styleLoadGeneration) {
         style.dispose();
         return;
       }
-      setState(() => _baseMapStyle = style);
+      final previous = _baseMapStyle;
+      setState(() {
+        _baseMapStyle = style;
+        _baseMapError = null;
+      });
+      previous?.dispose();
     } on Object catch (error) {
-      if (mounted) setState(() => _baseMapError = error);
+      if (mounted && generation == _styleLoadGeneration) {
+        setState(() => _baseMapError = error);
+      }
     }
   }
 
@@ -188,6 +210,9 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
     final baseMapStyle = _baseMapStyle;
+    final selectedMapStyle = state.mapStyle;
+    final satelliteMissingKey =
+        selectedMapStyle.isSatellite && state.satelliteMapApiKey.isEmpty;
     final attribution = baseMapStyle?.attributions
         .map((item) => item.text)
         .where((text) => text.isNotEmpty)
@@ -205,7 +230,15 @@ class _MapScreenState extends State<MapScreen> {
             onLongPress: (_, point) => unawaited(_addPlace(point)),
           ),
           children: [
-            if (baseMapStyle != null)
+            if (selectedMapStyle.isSatellite && !satelliteMissingKey)
+              TileLayer(
+                urlTemplate:
+                    'https://api.maptiler.com/maps/satellite-v4/256/'
+                    '{z}/{x}/{y}.jpg?key=${state.satelliteMapApiKey}',
+                userAgentPackageName: 'com.oneupbyte.trakkar',
+                maxNativeZoom: 19,
+              )
+            else if (baseMapStyle != null)
               vt.VectorTileLayer(
                 theme: baseMapStyle.theme,
                 tileProviders: baseMapStyle.providers,
@@ -278,7 +311,11 @@ class _MapScreenState extends State<MapScreen> {
               showFlutterMapAttribution: false,
               attributions: [
                 TextSourceAttribution(
-                  attribution?.isNotEmpty ?? false ? attribution! : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
+                  selectedMapStyle.isSatellite
+                      ? '© MapTiler · © OpenStreetMap contributors'
+                      : attribution?.isNotEmpty ?? false
+                      ? attribution!
+                      : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
                 ),
               ],
             ),
@@ -289,10 +326,11 @@ class _MapScreenState extends State<MapScreen> {
           left: 16,
           child: _ConnectionPill(
             connected: state.liveConnected,
-            count: state.positions.length,
+            count: state.devices.length,
+            onTap: widget.onPeopleTap,
           ),
         ),
-        if (_baseMapError != null)
+        if (_baseMapError != null || satelliteMissingKey)
           Positioned(
             top: MediaQuery.paddingOf(context).top + 72,
             left: 16,
@@ -300,17 +338,25 @@ class _MapScreenState extends State<MapScreen> {
             child: Card(
               child: ListTile(
                 leading: const Icon(Icons.map_outlined),
-                title: const Text('Map style unavailable'),
-                subtitle: const Text(
-                  'Check the connection and retry. Locations are still live.',
+                title: Text(
+                  satelliteMissingKey
+                      ? 'Satellite API key required'
+                      : 'Map style unavailable',
                 ),
-                trailing: TextButton(
-                  onPressed: () {
-                    setState(() => _baseMapError = null);
-                    unawaited(_loadBaseMap());
-                  },
-                  child: const Text('Retry'),
+                subtitle: Text(
+                  satelliteMissingKey
+                      ? 'Add a MapTiler key in Settings. Locations are still live.'
+                      : 'Check the connection and retry. Locations are still live.',
                 ),
+                trailing: satelliteMissingKey
+                    ? null
+                    : TextButton(
+                        onPressed: () {
+                          setState(() => _baseMapError = null);
+                          unawaited(_loadBaseMap(selectedMapStyle));
+                        },
+                        child: const Text('Retry'),
+                      ),
               ),
             ),
           ),
@@ -390,7 +436,10 @@ class _AvatarMarker extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Theme.of(context).colorScheme.primaryContainer,
-              border: Border.all(color: Colors.white, width: 3),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.surface,
+                width: 3,
+              ),
               boxShadow: const [
                 BoxShadow(
                   color: Color(0x55000000),
@@ -428,7 +477,7 @@ class _AvatarMarker extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(10),
                   boxShadow: const [
                     BoxShadow(color: Color(0x33000000), blurRadius: 5),
@@ -443,11 +492,14 @@ class _AvatarMarker extends StatelessWidget {
                     ),
                     Text(
                       '${speedMph.round()} mph',
-                      style: const TextStyle(
-                        fontSize: 8,
-                        height: 1,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style:
+                          const TextStyle(
+                            fontSize: 8,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                          ).copyWith(
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
                     ),
                   ],
                 ),
@@ -463,7 +515,10 @@ class _AvatarMarker extends StatelessWidget {
             decoration: BoxDecoration(
               color: online ? const Color(0xFF36A269) : Colors.grey,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.surface,
+                width: 2,
+              ),
             ),
           ),
         ),
@@ -473,32 +528,43 @@ class _AvatarMarker extends StatelessWidget {
 }
 
 class _ConnectionPill extends StatelessWidget {
-  const _ConnectionPill({required this.connected, required this.count});
+  const _ConnectionPill({
+    required this.connected,
+    required this.count,
+    required this.onTap,
+  });
   final bool connected;
   final int count;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(18),
       elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: connected ? const Color(0xFF36A269) : Colors.orange,
-                shape: BoxShape.circle,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: connected ? const Color(0xFF36A269) : Colors.orange,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
-            const SizedBox(width: 7),
-            Text('$count ${count == 1 ? 'person' : 'people'}'),
-          ],
+              const SizedBox(width: 7),
+              Text('$count ${count == 1 ? 'person' : 'people'}'),
+              const SizedBox(width: 3),
+              const Icon(Icons.chevron_right_rounded, size: 18),
+            ],
+          ),
         ),
       ),
     );

@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../models/map_style_option.dart';
+import '../models/theme_preference.dart';
 import '../services/reverse_geocoder.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -17,7 +19,9 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _apiKeyController = TextEditingController();
   final _templateController = TextEditingController();
+  final _satelliteMapKeyController = TextEditingController();
   GeocodingProvider? _provider;
+  MapStyleOption? _mapStyle;
   bool _seeded = false;
 
   @override
@@ -28,6 +32,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _provider = settings.provider;
       _apiKeyController.text = settings.apiKey;
       _templateController.text = settings.customUrlTemplate;
+      final state = context.read<AppState>();
+      _mapStyle = state.mapStyle;
+      _satelliteMapKeyController.text = state.satelliteMapApiKey;
       _seeded = true;
     }
   }
@@ -36,6 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _apiKeyController.dispose();
     _templateController.dispose();
+    _satelliteMapKeyController.dispose();
     super.dispose();
   }
 
@@ -51,6 +59,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Reverse geocoding settings saved.')),
       );
+    }
+  }
+
+  Future<void> _saveMapAppearance() async {
+    try {
+      await context.read<AppState>().saveMapAppearance(
+        style: _mapStyle ?? MapStyleOption.positron,
+        satelliteApiKey: _satelliteMapKeyController.text,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Map appearance saved.')));
+      }
+    } on FormatException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
     }
   }
 
@@ -98,6 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final provider = _provider ?? GeocodingProvider.traccarServer;
+    final mapStyle = _mapStyle ?? MapStyleOption.positron;
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
@@ -221,6 +249,104 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             },
                       icon: const Icon(Icons.my_location_rounded),
                       label: const Text('Send a position now'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Appearance',
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Theme'),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<ThemePreference>(
+                      segments: ThemePreference.values
+                          .map(
+                            (preference) => ButtonSegment(
+                              value: preference,
+                              label: Text(preference.label),
+                            ),
+                          )
+                          .toList(growable: false),
+                      selected: {state.themePreference},
+                      onSelectionChanged: (selection) {
+                        state.setThemePreference(selection.single);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'System follows your phone’s light or dark appearance.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Map appearance',
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'OpenFreeMap provides vector street styles. Satellite imagery '
+            'uses MapTiler and requires an API key.',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                children: [
+                  DropdownButtonFormField<MapStyleOption>(
+                    initialValue: mapStyle,
+                    decoration: const InputDecoration(labelText: 'Map style'),
+                    items: MapStyleOption.values
+                        .map(
+                          (style) => DropdownMenuItem(
+                            value: style,
+                            child: Text(style.label),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) => setState(() => _mapStyle = value),
+                  ),
+                  if (mapStyle.isSatellite) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _satelliteMapKeyController,
+                      obscureText: true,
+                      autocorrect: false,
+                      decoration: const InputDecoration(
+                        labelText: 'MapTiler API key',
+                        prefixIcon: Icon(Icons.key_outlined),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _saveMapAppearance,
+                      child: const Text('Save map appearance'),
                     ),
                   ),
                 ],
