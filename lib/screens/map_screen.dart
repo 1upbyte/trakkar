@@ -20,9 +20,10 @@ const _maxMapZoom = 21.0;
 const _personFocusZoom = 18.0;
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({required this.onPeopleTap, super.key});
+  const MapScreen({required this.onPeopleTap, required this.visible, super.key});
 
   final VoidCallback onPeopleTap;
+  final bool visible;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -48,6 +49,14 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     unawaited(_loadBaseMap());
+  }
+
+  @override
+  void didUpdateWidget(covariant MapScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.visible && !widget.visible) {
+      _personSheetController?.close();
+    }
   }
 
   Future<void> _loadBaseMap() async {
@@ -783,9 +792,6 @@ class _PersonSheet extends StatelessWidget {
             CircleAvatar(
               radius: 38,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              backgroundImage: imageBytes == null
-                  ? null
-                  : MemoryImage(imageBytes!),
               child: imageBytes == null
                   ? Text(
                       _initial(device.name),
@@ -794,7 +800,17 @@ class _PersonSheet extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                       ),
                     )
-                  : null,
+                  : ClipOval(
+                      child: Image.memory(
+                        imageBytes!,
+                        width: 76,
+                        height: 76,
+                        fit: BoxFit.contain,
+                        alignment: Alignment.center,
+                        filterQuality: FilterQuality.high,
+                        gaplessPlayback: true,
+                      ),
+                    ),
             ),
             const SizedBox(height: 14),
             Text(

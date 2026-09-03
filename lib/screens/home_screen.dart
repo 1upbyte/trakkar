@@ -71,62 +71,71 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    return Scaffold(
-      body: Stack(
-        children: [
-          IndexedStack(
-            index: _index,
-            children: [
-              MapScreen(onPeopleTap: () => _selectDestination(1)),
-              const PeopleScreen(),
-              const PlacesScreen(),
-              const SettingsScreen(),
-            ],
-          ),
-          if (state.trackingHealth.hasWarning || state.lastError != null)
-            Positioned(
-              top: MediaQuery.paddingOf(context).top + 8,
-              left: 16,
-              right: 16,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (state.trackingHealth.hasWarning)
-                    _TrackingHealthBanner(state: state),
-                  if (state.trackingHealth.hasWarning &&
-                      state.lastError != null)
-                    const SizedBox(height: 8),
-                  if (state.lastError != null)
-                    _ErrorBanner(message: state.lastError!),
-                ],
-              ),
+    return PopScope(
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _index != 0) _selectDestination(0);
+      },
+      child: Scaffold(
+        body: Stack(
+          children: [
+            IndexedStack(
+              index: _index,
+              children: [
+                MapScreen(
+                  visible: _index == 0,
+                  onPeopleTap: () => _selectDestination(1),
+                ),
+                const PeopleScreen(),
+                const PlacesScreen(),
+                const SettingsScreen(),
+              ],
             ),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: _selectDestination,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.map_outlined),
-            selectedIcon: Icon(Icons.map_rounded),
-            label: 'Map',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.group_outlined),
-            selectedIcon: Icon(Icons.group_rounded),
-            label: 'People',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bookmark_border_rounded),
-            selectedIcon: Icon(Icons.bookmark_rounded),
-            label: 'Places',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune_rounded),
-            label: 'Settings',
-          ),
-        ],
+            if (state.trackingHealth.hasWarning || state.lastError != null)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 8,
+                left: 16,
+                right: 16,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (state.trackingHealth.hasWarning)
+                      _TrackingHealthBanner(state: state),
+                    if (state.trackingHealth.hasWarning &&
+                        state.lastError != null)
+                      const SizedBox(height: 8),
+                    if (state.lastError != null)
+                      _ErrorBanner(message: state.lastError!),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: _selectDestination,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.map_outlined),
+              selectedIcon: Icon(Icons.map_rounded),
+              label: 'Map',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.group_outlined),
+              selectedIcon: Icon(Icons.group_rounded),
+              label: 'People',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.bookmark_border_rounded),
+              selectedIcon: Icon(Icons.bookmark_rounded),
+              label: 'Places',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.tune_rounded),
+              label: 'Settings',
+            ),
+          ],
+        ),
       ),
     );
   }

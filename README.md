@@ -72,8 +72,8 @@ through 21. The MapTiler key comes from the Traccar server attribute
 clustered into overlapping profile previews; tapping a cluster spreads its
 members apart, and tapping a person centers and zooms the map before opening a
 low, draggable details sheet that does not block the map. A user can change
-their own picture from Settings; the image uses Traccar's official device-image
-endpoint.
+their own picture from Settings; the app applies an on-device square crop before
+using Traccar's official device-image endpoint.
 
 The people-count pill on the map and the People navigation tab open a live list
 of every device shared with the manager account. Each row displays a matching

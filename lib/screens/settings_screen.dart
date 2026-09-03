@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -33,15 +34,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final selected = await ImagePicker().pickImage(
         source: ImageSource.gallery,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 75,
         requestFullMetadata: false,
       );
       if (selected == null || !mounted) return;
-      final bytes = await selected.readAsBytes();
+      final colors = Theme.of(context).colorScheme;
+      final lightSystemBars =
+          ThemeData.estimateBrightnessForColor(colors.surface) ==
+          Brightness.light;
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: selected.path,
+        maxWidth: 512,
+        maxHeight: 512,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 82,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop profile picture',
+            toolbarColor: colors.surface,
+            toolbarWidgetColor: colors.onSurface,
+            activeControlsWidgetColor: colors.primary,
+            statusBarLight: lightSystemBars,
+            navBarLight: lightSystemBars,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: 'Crop profile picture',
+            doneButtonTitle: 'Use photo',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+          ),
+          WebUiSettings(context: context),
+        ],
+      );
+      if (cropped == null || !mounted) return;
+      final bytes = await cropped.readAsBytes();
       if (!mounted) return;
-      final contentType = _imageContentType(bytes) ?? selected.mimeType;
+      final contentType = _imageContentType(bytes);
       if (contentType == null) {
         throw const FormatException(
           'Choose a JPEG, PNG, GIF, or WebP profile picture.',
