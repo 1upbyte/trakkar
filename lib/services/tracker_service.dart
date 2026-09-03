@@ -7,6 +7,7 @@ class TrackingHealth {
   const TrackingHealth({
     required this.checked,
     required this.locationAlways,
+    required this.activityRecognitionOkay,
     required this.batteryOptimizationOkay,
     required this.batteryOptimizationRelevant,
   });
@@ -14,6 +15,7 @@ class TrackingHealth {
   const TrackingHealth.unchecked()
     : checked = false,
       locationAlways = true,
+      activityRecognitionOkay = true,
       batteryOptimizationOkay = true,
       batteryOptimizationRelevant = false;
 
@@ -21,6 +23,8 @@ class TrackingHealth {
     return TrackingHealth(
       checked: true,
       locationAlways: map['locationAlways'] == true,
+      // Older iOS bridges do not return this Android-only field.
+      activityRecognitionOkay: map['activityRecognitionOkay'] != false,
       batteryOptimizationOkay: map['batteryOptimizationOkay'] == true,
       batteryOptimizationRelevant: map['batteryOptimizationRelevant'] == true,
     );
@@ -28,13 +32,15 @@ class TrackingHealth {
 
   final bool checked;
   final bool locationAlways;
+  final bool activityRecognitionOkay;
   final bool batteryOptimizationOkay;
   final bool batteryOptimizationRelevant;
 
   bool get needsLocation => checked && !locationAlways;
+  bool get needsActivity => checked && !activityRecognitionOkay;
   bool get needsBattery =>
       checked && batteryOptimizationRelevant && !batteryOptimizationOkay;
-  bool get hasWarning => needsLocation || needsBattery;
+  bool get hasWarning => needsLocation || needsActivity || needsBattery;
 }
 
 class TrackerService {
@@ -54,8 +60,8 @@ class TrackerService {
       serverUrl: serverUrl.toString(),
       deviceId: deviceId,
       location: const LocationConfig(
-        distanceMeters: 25,
-        intervalSeconds: 30,
+        distanceMeters: 75,
+        intervalSeconds: 120,
         stopDetection: true,
       ),
       buffer: true,
@@ -85,6 +91,7 @@ class TrackerService {
       return const TrackingHealth(
         checked: true,
         locationAlways: true,
+        activityRecognitionOkay: true,
         batteryOptimizationOkay: true,
         batteryOptimizationRelevant: false,
       );

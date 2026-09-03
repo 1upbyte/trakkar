@@ -37,6 +37,7 @@ import TraccarClientSDK
           let status = CLLocationManager().authorizationStatus
           result([
             "locationAlways": status == .authorizedAlways,
+            "activityRecognitionOkay": true,
             "batteryOptimizationOkay": true,
             "batteryOptimizationRelevant": false,
           ])

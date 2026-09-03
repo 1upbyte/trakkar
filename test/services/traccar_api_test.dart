@@ -58,6 +58,32 @@ void main() {
     },
   );
 
+  test('loads the MapTiler key from server attributes', () async {
+    final client = MockClient((request) async {
+      if (request.url.path == '/api/session') {
+        return http.Response(
+          '{}',
+          200,
+          headers: {'set-cookie': 'JSESSIONID=config'},
+        );
+      }
+      expect(request.url.path, '/api/server');
+      expect(request.headers['Cookie'], 'JSESSIONID=config');
+      return http.Response(
+        jsonEncode({
+          'id': 1,
+          'attributes': {'trakkarMapTilerKey': ' server-key '},
+        }),
+        200,
+      );
+    });
+    final api = TraccarApi(config: config, client: client);
+
+    await api.login();
+
+    expect(await api.mapTilerApiKey(), 'server-key');
+  });
+
   test('findDevice falls back when all=true is not permitted', () async {
     var deviceRequests = 0;
     final client = MockClient((request) async {

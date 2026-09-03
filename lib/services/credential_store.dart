@@ -10,8 +10,6 @@ class CredentialStore {
   static const _managerUrl = 'provisioning.managerUrl';
   static const _managerUsername = 'provisioning.managerUsername';
   static const _managerPassword = 'provisioning.managerPassword';
-  static const _geocodingKey = 'geocoding.apiKey';
-  static const _satelliteMapKey = 'map.satelliteApiKey';
 
   final FlutterSecureStorage _storage;
 
@@ -47,29 +45,5 @@ class CredentialStore {
       _storage.delete(key: _managerUsername),
       _storage.delete(key: _managerPassword),
     ]);
-  }
-
-  Future<String> readGeocodingKey() async {
-    return await _storage.read(key: _geocodingKey) ?? '';
-  }
-
-  Future<void> saveGeocodingKey(String value) async {
-    if (value.trim().isEmpty) {
-      await _storage.delete(key: _geocodingKey);
-    } else {
-      await _storage.write(key: _geocodingKey, value: value.trim());
-    }
-  }
-
-  Future<String> readSatelliteMapKey() async {
-    return await _storage.read(key: _satelliteMapKey) ?? '';
-  }
-
-  Future<void> saveSatelliteMapKey(String value) async {
-    if (value.trim().isEmpty) {
-      await _storage.delete(key: _satelliteMapKey);
-    } else {
-      await _storage.write(key: _satelliteMapKey, value: value.trim());
-    }
   }
 }

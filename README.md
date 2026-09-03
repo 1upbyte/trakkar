@@ -50,20 +50,30 @@ cookie returned by Traccar.
 
 ## Map and place names
 
-The app loads initial state from `GET /api/devices`, `GET /api/positions`, and
-`GET /api/geofences`, then consumes live `devices` and `positions` updates from
-`/api/socket`.
+The app loads initial state from `GET /api/devices`, `GET /api/positions`,
+`GET /api/geofences`, and `GET /api/server`, then consumes live `devices` and
+`positions` updates from `/api/socket` while the app is visible. The manager
+socket closes in the background and reconnects on resume; repeated failures use
+an exponential backoff capped at five minutes. While the map tab is visible and
+the app is in the foreground, this phone asks the tracking SDK for a fresh
+position every 30 seconds and polls all server positions every 15 seconds.
+Polling stops when the map is hidden or the app leaves the foreground. Normal
+background tracking uses a 120-second/75-metre request with stop detection.
 
 People appear as screen-upright profile-picture circles without permanent name
 labels, even when the map is rotated. The default view centers on this phone's
 device position at a neighborhood zoom. The OpenFreeMap Positron vector style
 keeps useful road and city context but omits restaurant, shop, and other POI
-labels. Settings can switch between OpenFreeMap Positron, Bright, Liberty,
-Dark, and Fiord. OpenFreeMap does not provide satellite imagery, so the
-Satellite option uses MapTiler's `satellite-v4` tiles and a separate API key
-stored in secure device storage. Tap a picture to open a bottom sheet with the
-person's name and current address. A user can change their own picture from
-Settings; the image uses Traccar's official device-image endpoint.
+labels. At zoom 20 and above, the default-on satellite setting overlays
+MapTiler `satellite-v4` 512-pixel HiDPI tiles. Satellite tiles are cached for 90
+days with a 512 MB cache limit, and map interaction is limited to zoom levels 2
+through 21. The MapTiler key comes from the Traccar server attribute
+`trakkarMapTilerKey` and is held only in memory by the client. Nearby people are
+clustered into overlapping profile previews; tapping a cluster spreads its
+members apart, and tapping a person centers and zooms the map before opening a
+low, draggable details sheet that does not block the map. A user can change
+their own picture from Settings; the image uses Traccar's official device-image
+endpoint.
 
 The people-count pill on the map and the People navigation tab open a live list
 of every device shared with the manager account. Each row displays a matching
@@ -74,11 +84,12 @@ The app theme defaults to the phone's system appearance. Settings can override
 it with Light or Dark, and the preference is stored on the device.
 
 While Traccar reports a person in motion, their map bubble shows walking below
-10 mph or driving above 10 mph, together with the latest speed in mph. Motion
-uses the standard Traccar position attribute when available and also requires
-at least 1 mph, preventing a delayed server motion state from leaving a badge
-visible at 0 mph. The official Traccar
-Client SDK is configured for 25-meter / 30-second movement updates and retains
+10 mph or driving at 10 mph and above, together with the latest speed in mph.
+After driving begins, the car indicator remains until a full minute of newly
+reported sub-10 mph speed has elapsed, preventing short stops and GPS jitter
+from flipping the icon. Motion uses the standard Traccar position attribute
+when available and also requires at least 1 mph. The official Traccar
+Client SDK is configured for 75-metre / 120-second movement updates and retains
 its stop detection to pause frequent GPS work while stationary.
 
 Use the bottom sheet or long-press the map to create a named place and choose
@@ -91,14 +102,10 @@ The exact unmodified-server protocol, migration behavior, security rules, and
 an optional first-class server design are documented in
 [`SERVER-MODS.md`](SERVER-MODS.md).
 
-Reverse geocoding can use:
-
-- the configured Traccar server;
-- Geoapify with an API key;
-- MapTiler with an API key;
-- a custom URL template containing `{lat}`, `{lon}`, and optionally `{key}`.
-
-API keys are kept in secure device storage.
+Reverse geocoding is configured entirely on the Traccar server. The client has
+no provider or API-key controls and only calls Traccar's authenticated
+`GET /api/server/geocode` endpoint. See `SERVER-MODS.md` for server-side key
+configuration.
 
 ## Platform requirements
 
@@ -118,10 +125,11 @@ continues to be performed exclusively by the Traccar SDK.
 
 While signed in, Trakkar checks the settings required for reliable background
 tracking whenever the app opens or returns from system settings. A red banner
-links to location settings when iOS is not set to Always or Android is not set
-to Allow all the time. On Android 6 and newer it also links to the system battery
-optimization list until Trakkar is exempt. iOS has no equivalent per-app battery
-optimization exemption, so no non-actionable battery warning is shown there.
+links to permission settings when iOS is not set to Always, Android is not set
+to Allow all the time, or Android's Physical activity permission is missing.
+On Android 6 and newer it also links to the system battery optimization list
+until Trakkar is exempt. iOS has no equivalent per-app battery optimization
+exemption, so no non-actionable battery warning is shown there.
 
 ## Build and verify
 

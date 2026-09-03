@@ -16,25 +16,54 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _index = 0;
+  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
+  AppState? _appState;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<AppState>().refreshTrackingHealth();
+      if (!mounted) return;
+      final state = context.read<AppState>();
+      state.setAppForeground(true);
+      state.refreshTrackingHealth();
+      state.setMapForeground(true);
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _appState = context.read<AppState>();
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lifecycleState = state;
+    _appState?.setAppForeground(state == AppLifecycleState.resumed);
+    _syncMapForeground();
     if (state == AppLifecycleState.resumed && mounted) {
       context.read<AppState>().refreshTrackingHealth();
     }
   }
 
+  void _syncMapForeground() {
+    _appState?.setMapForeground(
+      _index == 0 && _lifecycleState == AppLifecycleState.resumed,
+    );
+  }
+
+  void _selectDestination(int value) {
+    if (_index == value) return;
+    setState(() => _index = value);
+    _syncMapForeground();
+  }
+
   @override
   void dispose() {
+    _appState?.setMapForeground(false);
+    _appState?.setAppForeground(false);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -48,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           IndexedStack(
             index: _index,
             children: [
-              MapScreen(onPeopleTap: () => setState(() => _index = 1)),
+              MapScreen(onPeopleTap: () => _selectDestination(1)),
               const PeopleScreen(),
               const PlacesScreen(),
               const SettingsScreen(),
@@ -76,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
+        onDestinationSelected: _selectDestination,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.map_outlined),
@@ -113,6 +142,7 @@ class _TrackingHealthBanner extends StatelessWidget {
     final health = state.trackingHealth;
     final details = <String>[
       if (health.needsLocation) 'set Location to Always / Allow all the time',
+      if (health.needsActivity) 'allow the Physical activity permission',
       if (health.needsBattery)
         'set battery use to Unrestricted / Not optimized',
     ];
@@ -149,10 +179,10 @@ class _TrackingHealthBanner extends StatelessWidget {
               spacing: 6,
               runSpacing: 2,
               children: [
-                if (health.needsLocation)
+                if (health.needsLocation || health.needsActivity)
                   TextButton(
                     onPressed: state.openLocationSettings,
-                    child: const Text('Location settings'),
+                    child: const Text('Permission settings'),
                   ),
                 if (health.needsBattery)
                   TextButton(

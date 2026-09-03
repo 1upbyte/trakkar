@@ -22,8 +22,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
     final key =
         '${position.deviceId}:'
         '${position.latitude.toStringAsFixed(4)}:'
-        '${position.longitude.toStringAsFixed(4)}:'
-        '${state.geocodingSettings.provider.name}';
+        '${position.longitude.toStringAsFixed(4)}';
     return _addressCache.putIfAbsent(key, () => state.reverseGeocode(position));
   }
 

@@ -3,15 +3,14 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'models/map_style_option.dart';
 import 'models/named_place.dart';
 import 'models/provisioning_config.dart';
 import 'models/theme_preference.dart';
 import 'models/traccar_device.dart';
 import 'models/traccar_position.dart';
 import 'services/credential_store.dart';
+import 'services/driving_status_tracker.dart';
 import 'services/named_place_store.dart';
-import 'services/reverse_geocoder.dart';
 import 'services/traccar_api.dart';
 import 'services/tracker_service.dart';
 import 'user_facing_error.dart';
@@ -27,28 +26,24 @@ class AppState extends ChangeNotifier {
   AppState({
     CredentialStore? credentialStore,
     NamedPlaceStore? namedPlaceStore,
-    ReverseGeocoder? reverseGeocoder,
     TrackerService? trackerService,
     SharedPreferencesAsync? preferences,
   }) : _credentialStore = credentialStore ?? CredentialStore(),
        _namedPlaceStore = namedPlaceStore ?? NamedPlaceStore(),
        _preferences = preferences ?? SharedPreferencesAsync(),
-       _tracker = trackerService ?? TrackerService(),
-       _reverseGeocoder =
-           reverseGeocoder ??
-           ReverseGeocoder(credentialStore ?? CredentialStore());
+       _tracker = trackerService ?? TrackerService();
 
   static const _firstNameKey = 'profile.firstName';
   static const _deviceUsernameKey = 'profile.deviceUsername';
   static const _trackingWantedKey = 'tracking.wanted';
-  static const _mapStyleKey = 'map.style';
+  static const _satelliteAutoKey = 'map.satelliteAutoAtStreetZoom';
   static const _themePreferenceKey = 'appearance.theme';
 
   final CredentialStore _credentialStore;
   final NamedPlaceStore _namedPlaceStore;
   final SharedPreferencesAsync _preferences;
   final TrackerService _tracker;
-  final ReverseGeocoder _reverseGeocoder;
+  final DrivingStatusTracker _drivingStatus = DrivingStatusTracker();
 
   AppPhase phase = AppPhase.loading;
   ProvisioningConfig? pendingProvisioning;
@@ -56,6 +51,14 @@ class AppState extends ChangeNotifier {
   TraccarApi? _api;
   StreamSubscription<Map<String, dynamic>>? _liveSubscription;
   Timer? _reconnectTimer;
+  Timer? _mapPollTimer;
+  Timer? _drivingExpiryTimer;
+  bool _appForeground = true;
+  bool _mapForeground = false;
+  bool _mapPollInFlight = false;
+  int _liveGeneration = 0;
+  int _reconnectAttempts = 0;
+  DateTime? _lastForegroundSend;
 
   String firstName = '';
   String deviceUsername = '';
@@ -69,9 +72,8 @@ class AppState extends ChangeNotifier {
   Map<int, TraccarPosition> positions = const {};
   Map<int, Uint8List> deviceImages = const {};
   List<NamedPlace> namedPlaces = const [];
-  GeocodingSettings geocodingSettings = const GeocodingSettings();
-  MapStyleOption mapStyle = MapStyleOption.positron;
-  String satelliteMapApiKey = '';
+  bool satelliteAutoAtStreetZoom = true;
+  String mapTilerApiKey = '';
   ThemePreference themePreference = ThemePreference.system;
 
   TraccarDevice? get ownDevice {
@@ -83,13 +85,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> bootstrap() async {
     namedPlaces = await _namedPlaceStore.load();
-    geocodingSettings = await _reverseGeocoder.loadSettings();
-    final savedMapStyle = await _preferences.getString(_mapStyleKey);
-    mapStyle = MapStyleOption.values.firstWhere(
-      (style) => style.name == savedMapStyle,
-      orElse: () => MapStyleOption.positron,
-    );
-    satelliteMapApiKey = await _credentialStore.readSatelliteMapKey();
+    satelliteAutoAtStreetZoom =
+        await _preferences.getBool(_satelliteAutoKey) ?? true;
     final savedTheme = await _preferences.getString(_themePreferenceKey);
     themePreference = ThemePreference.values.firstWhere(
       (preference) => preference.name == savedTheme,
@@ -276,12 +273,14 @@ class AppState extends ChangeNotifier {
         api.devices(),
         api.positions(),
         api.namedPlaces(),
+        _loadMapTilerKey(api),
       ]);
       devices = results[0] as List<TraccarDevice>;
       positions = <int, TraccarPosition>{
         for (final position in results[1] as List<TraccarPosition>)
           position.deviceId: position,
       };
+      _recordDrivingStatus(positions.values);
       var sharedPlaces = results[2] as List<NamedPlace>;
       for (final local in cachedLocalPlaces) {
         final alreadyExists = sharedPlaces.any(
@@ -301,6 +300,7 @@ class AppState extends ChangeNotifier {
         }
       }
       namedPlaces = sharedPlaces;
+      mapTilerApiKey = results[3] as String;
       await _namedPlaceStore.save(namedPlaces);
       unawaited(_loadDeviceImages(devices));
       lastError = null;
@@ -310,27 +310,146 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _connectLive() {
+  Future<String> _loadMapTilerKey(TraccarApi api) async {
+    try {
+      return await api.mapTilerApiKey();
+    } on Object {
+      // Map configuration must not prevent devices and positions from loading
+      // on older or restricted Traccar installations.
+      return mapTilerApiKey;
+    }
+  }
+
+  bool isDriving(TraccarPosition position) =>
+      _drivingStatus.isDriving(position);
+
+  void _recordDrivingStatus(Iterable<TraccarPosition> latest) {
+    _drivingStatus.record(latest);
+    _drivingExpiryTimer?.cancel();
+    final delay = _drivingStatus.timeUntilNextExpiry;
+    if (delay == null) return;
+    _drivingExpiryTimer = Timer(delay + const Duration(milliseconds: 10), () {
+      _recordDrivingStatus(const <TraccarPosition>[]);
+      notifyListeners();
+    });
+  }
+
+  /// Keeps the shared map fresh while it is the visible foreground screen.
+  /// Traccar's socket is still the low-latency path; this poll repairs missed
+  /// socket events and makes the map useful when a device reports slowly.
+  void setMapForeground(bool visible) {
+    if (_mapForeground == visible) return;
+    _mapForeground = visible;
+    _mapPollTimer?.cancel();
+    _mapPollTimer = null;
+    if (!visible || phase != AppPhase.ready) return;
+
+    unawaited(_pollMapPositions(sendOwnPosition: true));
+    _mapPollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      unawaited(_pollMapPositions());
+    });
+  }
+
+  /// The manager socket is useful only while the UI is visible. Background
+  /// location uploads are owned by the native tracking SDK and continue after
+  /// this socket is closed.
+  void setAppForeground(bool visible) {
+    if (_appForeground == visible) return;
+    _appForeground = visible;
+    if (!visible) {
+      _disconnectLive();
+      return;
+    }
+
+    _reconnectAttempts = 0;
+    if (phase == AppPhase.ready && _api != null) {
+      _connectLive();
+    }
+  }
+
+  Future<void> _pollMapPositions({bool sendOwnPosition = false}) async {
+    if (!_mapForeground || _mapPollInFlight) return;
     final api = _api;
     if (api == null) return;
+    _mapPollInFlight = true;
+    try {
+      if (sendOwnPosition ||
+          _lastForegroundSend == null ||
+          DateTime.now().difference(_lastForegroundSend!) >=
+              const Duration(seconds: 30)) {
+        _lastForegroundSend = DateTime.now();
+        try {
+          await _tracker.sendNow();
+        } on Object {
+          // A failed upload must not prevent the server-position poll. The
+          // normal tracking health UI handles persistent SDK problems.
+        }
+      }
+      final latest = await api.positions();
+      positions = <int, TraccarPosition>{
+        ...positions,
+        for (final position in latest) position.deviceId: position,
+      };
+      _recordDrivingStatus(latest);
+      lastError = null;
+      notifyListeners();
+    } on Object catch (error) {
+      lastError = userFacingError(error);
+      notifyListeners();
+    } finally {
+      _mapPollInFlight = false;
+    }
+  }
+
+  void _connectLive() {
+    final api = _api;
+    if (api == null || !_appForeground || phase != AppPhase.ready) return;
     _reconnectTimer?.cancel();
-    unawaited(_liveSubscription?.cancel());
+    _reconnectTimer = null;
+    final previous = _liveSubscription;
+    _liveSubscription = null;
+    unawaited(previous?.cancel());
+    final generation = ++_liveGeneration;
     _liveSubscription = api.liveUpdates().listen(
-      _handleLiveUpdate,
+      (message) {
+        if (generation != _liveGeneration || !_appForeground) return;
+        _reconnectAttempts = 0;
+        _handleLiveUpdate(message);
+      },
       onError: (Object error) {
-        liveConnected = false;
-        lastError = 'Live updates disconnected. ${userFacingError(error)}';
-        notifyListeners();
-        _scheduleReconnect();
+        _handleLiveDisconnect(generation, error: error);
       },
       onDone: () {
-        liveConnected = false;
-        notifyListeners();
-        _scheduleReconnect();
+        _handleLiveDisconnect(generation);
       },
     );
     liveConnected = true;
     notifyListeners();
+  }
+
+  void _handleLiveDisconnect(int generation, {Object? error}) {
+    if (generation != _liveGeneration) return;
+    _liveSubscription = null;
+    liveConnected = false;
+    if (error != null) {
+      lastError = 'Live updates disconnected. ${userFacingError(error)}';
+    }
+    notifyListeners();
+    _scheduleReconnect();
+  }
+
+  void _disconnectLive() {
+    _liveGeneration += 1;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnectAttempts = 0;
+    final subscription = _liveSubscription;
+    _liveSubscription = null;
+    unawaited(subscription?.cancel());
+    if (liveConnected) {
+      liveConnected = false;
+      notifyListeners();
+    }
   }
 
   void _handleLiveUpdate(Map<String, dynamic> message) {
@@ -356,22 +475,31 @@ class AppState extends ChangeNotifier {
     final positionPayloads = message['positions'] as List<dynamic>?;
     if (positionPayloads != null) {
       final updated = Map<int, TraccarPosition>.from(positions);
+      final latest = <TraccarPosition>[];
       for (final payload in positionPayloads) {
         final position = TraccarPosition.fromJson(
           Map<String, dynamic>.from(payload as Map),
         );
         updated[position.deviceId] = position;
+        latest.add(position);
       }
       positions = updated;
+      _recordDrivingStatus(latest);
     }
     liveConnected = true;
     notifyListeners();
   }
 
   void _scheduleReconnect() {
-    if (phase != AppPhase.ready || _api == null) return;
+    if (!_appForeground || phase != AppPhase.ready || _api == null) return;
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 5), _connectLive);
+    final exponent = _reconnectAttempts > 6 ? 6 : _reconnectAttempts;
+    final calculatedSeconds = 5 * (1 << exponent);
+    final delay = Duration(
+      seconds: calculatedSeconds > 300 ? 300 : calculatedSeconds,
+    );
+    _reconnectAttempts += 1;
+    _reconnectTimer = Timer(delay, _connectLive);
   }
 
   Future<void> setTracking(bool enabled) async {
@@ -442,36 +570,16 @@ class AppState extends ChangeNotifier {
     if (position.address?.trim().isNotEmpty ?? false) return position.address!;
     final api = _api;
     if (api == null) throw const TraccarApiException('Manager is offline.');
-    return _reverseGeocoder.lookup(
-      latitude: position.latitude,
-      longitude: position.longitude,
-      settings: geocodingSettings,
-      api: api,
-    );
-  }
-
-  Future<void> saveGeocodingSettings(GeocodingSettings settings) async {
-    await _reverseGeocoder.saveSettings(settings);
-    geocodingSettings = settings;
-    notifyListeners();
+    // Provider credentials and provider selection stay on the server. The
+    // client only uses Traccar's authenticated geocode endpoint.
+    return api.reverseGeocode(position.latitude, position.longitude);
   }
 
   Future<void> saveMapAppearance({
-    required MapStyleOption style,
-    required String satelliteApiKey,
+    required bool satelliteAutoAtStreetZoom,
   }) async {
-    final cleanKey = satelliteApiKey.trim();
-    if (style.isSatellite && cleanKey.isEmpty) {
-      throw const FormatException(
-        'Satellite view requires a MapTiler API key.',
-      );
-    }
-    await Future.wait(<Future<void>>[
-      _preferences.setString(_mapStyleKey, style.name),
-      _credentialStore.saveSatelliteMapKey(cleanKey),
-    ]);
-    mapStyle = style;
-    satelliteMapApiKey = cleanKey;
+    await _preferences.setBool(_satelliteAutoKey, satelliteAutoAtStreetZoom);
+    this.satelliteAutoAtStreetZoom = satelliteAutoAtStreetZoom;
     notifyListeners();
   }
 
@@ -603,6 +711,17 @@ class AppState extends ChangeNotifier {
     _liveSubscription = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _mapPollTimer?.cancel();
+    _mapPollTimer = null;
+    _drivingExpiryTimer?.cancel();
+    _drivingExpiryTimer = null;
+    _drivingStatus.clear();
+    _appForeground = false;
+    _mapForeground = false;
+    _mapPollInFlight = false;
+    _liveGeneration += 1;
+    _reconnectAttempts = 0;
+    _lastForegroundSend = null;
     _api?.close();
     _api = null;
     provisioning = null;
@@ -615,8 +734,8 @@ class AppState extends ChangeNotifier {
     positions = const {};
     deviceImages = const {};
     namedPlaces = const [];
-    mapStyle = MapStyleOption.positron;
-    satelliteMapApiKey = '';
+    satelliteAutoAtStreetZoom = true;
+    mapTilerApiKey = '';
     themePreference = ThemePreference.system;
     lastError = null;
     trackingHealth = const TrackingHealth.unchecked();
@@ -642,13 +761,11 @@ class AppState extends ChangeNotifier {
         _preferences.remove(_firstNameKey),
         _preferences.remove(_deviceUsernameKey),
         _preferences.remove(_trackingWantedKey),
-        _preferences.remove(_mapStyleKey),
+        _preferences.remove(_satelliteAutoKey),
         _preferences.remove(_themePreferenceKey),
         _namedPlaceStore.save(const []),
       ]),
     );
-    await attempt(() => _credentialStore.saveSatelliteMapKey(''));
-
     if (resetError != null) {
       lastError =
           'Some local data could not be cleared. Please try resetting again.';
@@ -658,10 +775,12 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _liveGeneration += 1;
     _reconnectTimer?.cancel();
     unawaited(_liveSubscription?.cancel());
     _api?.close();
-    _reverseGeocoder.close();
+    _mapPollTimer?.cancel();
+    _drivingExpiryTimer?.cancel();
     super.dispose();
   }
 }

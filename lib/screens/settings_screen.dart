@@ -5,9 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
-import '../models/map_style_option.dart';
 import '../models/theme_preference.dart';
-import '../services/reverse_geocoder.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -17,67 +15,17 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _apiKeyController = TextEditingController();
-  final _templateController = TextEditingController();
-  final _satelliteMapKeyController = TextEditingController();
-  GeocodingProvider? _provider;
-  MapStyleOption? _mapStyle;
-  bool _seeded = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_seeded) {
-      final settings = context.read<AppState>().geocodingSettings;
-      _provider = settings.provider;
-      _apiKeyController.text = settings.apiKey;
-      _templateController.text = settings.customUrlTemplate;
-      final state = context.read<AppState>();
-      _mapStyle = state.mapStyle;
-      _satelliteMapKeyController.text = state.satelliteMapApiKey;
-      _seeded = true;
-    }
-  }
-
-  @override
-  void dispose() {
-    _apiKeyController.dispose();
-    _templateController.dispose();
-    _satelliteMapKeyController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveGeocoding() async {
-    await context.read<AppState>().saveGeocodingSettings(
-      GeocodingSettings(
-        provider: _provider ?? GeocodingProvider.traccarServer,
-        apiKey: _apiKeyController.text,
-        customUrlTemplate: _templateController.text,
-      ),
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reverse geocoding settings saved.')),
-      );
-    }
-  }
+  bool? _satelliteAutoAtStreetZoom;
 
   Future<void> _saveMapAppearance() async {
-    try {
-      await context.read<AppState>().saveMapAppearance(
-        style: _mapStyle ?? MapStyleOption.positron,
-        satelliteApiKey: _satelliteMapKeyController.text,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Map appearance saved.')));
-      }
-    } on FormatException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
-      }
+    final state = context.read<AppState>();
+    await state.saveMapAppearance(
+      satelliteAutoAtStreetZoom:
+          _satelliteAutoAtStreetZoom ?? state.satelliteAutoAtStreetZoom,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Map appearance saved.')));
     }
   }
 
@@ -124,8 +72,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final provider = _provider ?? GeocodingProvider.traccarServer;
-    final mapStyle = _mapStyle ?? MapStyleOption.positron;
+    final satelliteAuto =
+        _satelliteAutoAtStreetZoom ?? state.satelliteAutoAtStreetZoom;
+    final ownImage = state.ownDevice == null
+        ? null
+        : state.deviceImages[state.ownDevice!.id];
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
@@ -135,7 +86,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: Theme.of(context).textTheme.headlineMedium
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 24),
+          Text(
+            'Account',
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(18),
@@ -155,27 +112,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             children: [
                               CircleAvatar(
                                 radius: 30,
-                                backgroundImage:
-                                    state.ownDevice == null ||
-                                        state.deviceImages[state
-                                                .ownDevice!
-                                                .id] ==
-                                            null
+                                backgroundImage: ownImage == null
                                     ? null
-                                    : MemoryImage(
-                                        state.deviceImages[state
-                                            .ownDevice!
-                                            .id]!,
-                                      ),
-                                child:
-                                    state.ownDevice == null ||
-                                        state.deviceImages[state
-                                                .ownDevice!
-                                                .id] ==
-                                            null
+                                    : MemoryImage(ownImage),
+                                child: ownImage == null
                                     ? Text(
-                                        state.firstName.characters.first
-                                            .toUpperCase(),
+                                        _initial(state.firstName),
                                         style: const TextStyle(
                                           fontSize: 22,
                                           fontWeight: FontWeight.w800,
@@ -304,126 +246,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'OpenFreeMap provides vector street styles. Satellite imagery '
-            'uses MapTiler and requires an API key.',
+            'The map uses streets until it is almost fully zoomed in, then '
+            'switches to high-resolution MapTiler satellite imagery.',
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  DropdownButtonFormField<MapStyleOption>(
-                    initialValue: mapStyle,
-                    decoration: const InputDecoration(labelText: 'Map style'),
-                    items: MapStyleOption.values
-                        .map(
-                          (style) => DropdownMenuItem(
-                            value: style,
-                            child: Text(style.label),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (value) => setState(() => _mapStyle = value),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('Satellite at street level'),
+                  subtitle: const Text(
+                    'Show satellite imagery automatically when zoomed in.',
                   ),
-                  if (mapStyle.isSatellite) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _satelliteMapKeyController,
-                      obscureText: true,
-                      autocorrect: false,
-                      decoration: const InputDecoration(
-                        labelText: 'MapTiler API key',
-                        prefixIcon: Icon(Icons.key_outlined),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  SizedBox(
+                  value: satelliteAuto,
+                  onChanged: (value) =>
+                      setState(() => _satelliteAutoAtStreetZoom = value),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                  child: SizedBox(
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: _saveMapAppearance,
                       child: const Text('Save map appearance'),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Reverse geocoding',
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Named places always take priority. These settings resolve other '
-            'coordinates into street addresses.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  DropdownButtonFormField<GeocodingProvider>(
-                    initialValue: provider,
-                    decoration: const InputDecoration(labelText: 'Provider'),
-                    items: GeocodingProvider.values
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(_providerLabel(value)),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (value) => setState(() => _provider = value),
-                  ),
-                  if (provider != GeocodingProvider.traccarServer) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _apiKeyController,
-                      obscureText: true,
-                      autocorrect: false,
-                      decoration: InputDecoration(
-                        labelText: provider == GeocodingProvider.custom
-                            ? 'API key (optional)'
-                            : 'API key',
-                        prefixIcon: const Icon(Icons.key_outlined),
-                      ),
-                    ),
-                  ],
-                  if (provider == GeocodingProvider.custom) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _templateController,
-                      autocorrect: false,
-                      minLines: 2,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: 'URL template',
-                        helperText: 'Use {lat}, {lon}, and optionally {key}',
-                        alignLabelWithHint: true,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _saveGeocoding,
-                      child: const Text('Save geocoding settings'),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 24),
@@ -496,13 +348,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  static String _providerLabel(GeocodingProvider provider) {
-    return switch (provider) {
-      GeocodingProvider.traccarServer => 'Traccar server',
-      GeocodingProvider.geoapify => 'Geoapify',
-      GeocodingProvider.mapTiler => 'MapTiler',
-      GeocodingProvider.custom => 'Custom HTTP endpoint',
-    };
+  static String _initial(String name) {
+    final clean = name.trim();
+    return clean.isEmpty ? '?' : clean.characters.first.toUpperCase();
   }
 
   static String? _imageContentType(Uint8List bytes) {

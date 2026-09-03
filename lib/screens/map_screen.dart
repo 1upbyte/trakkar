@@ -1,16 +1,23 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
-import '../models/map_style_option.dart';
 import '../models/traccar_device.dart';
 import '../models/traccar_position.dart';
+
+const _streetStyleUri = 'https://tiles.openfreemap.org/styles/positron';
+const _satelliteZoom = 20.0;
+const _minMapZoom = 2.0;
+const _maxMapZoom = 21.0;
+const _personFocusZoom = 18.0;
 
 class MapScreen extends StatefulWidget {
   const MapScreen({required this.onPeopleTap, super.key});
@@ -25,32 +32,28 @@ class _MapScreenState extends State<MapScreen> {
   final _mapController = MapController();
   vt.Style? _baseMapStyle;
   Object? _baseMapError;
-  MapStyleOption? _requestedMapStyle;
-  int _styleLoadGeneration = 0;
   bool _centeredOnCurrentDevice = false;
+  double _zoom = 12;
+  PersistentBottomSheetController? _personSheetController;
+
+  late final NetworkTileProvider _satelliteTileProvider = NetworkTileProvider(
+    cachingProvider: BuiltInMapCachingProvider.getOrCreateInstance(
+      maxCacheSize: 512 * 1024 * 1024,
+      overrideFreshAge: const Duration(days: 90),
+      tileKeyGenerator: _satelliteCacheKey,
+    ),
+  );
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final requested = context.watch<AppState>().mapStyle;
-    if (_requestedMapStyle != requested) {
-      _requestedMapStyle = requested;
-      unawaited(_loadBaseMap(requested));
-    }
+  void initState() {
+    super.initState();
+    unawaited(_loadBaseMap());
   }
 
-  Future<void> _loadBaseMap(MapStyleOption requested) async {
-    final generation = ++_styleLoadGeneration;
-    if (requested.isSatellite) {
-      _baseMapStyle?.dispose();
-      _baseMapStyle = null;
-      _baseMapError = null;
-      return;
-    }
+  Future<void> _loadBaseMap() async {
     try {
-      final style = await vt.StyleReader(uri: requested.openFreeMapStyleUri!)
-          .read();
-      if (!mounted || generation != _styleLoadGeneration) {
+      final style = await vt.StyleReader(uri: _streetStyleUri).read();
+      if (!mounted) {
         style.dispose();
         return;
       }
@@ -61,14 +64,13 @@ class _MapScreenState extends State<MapScreen> {
       });
       previous?.dispose();
     } on Object catch (error) {
-      if (mounted && generation == _styleLoadGeneration) {
-        setState(() => _baseMapError = error);
-      }
+      if (mounted) setState(() => _baseMapError = error);
     }
   }
 
   @override
   void dispose() {
+    _personSheetController?.close();
     _baseMapStyle?.dispose();
     super.dispose();
   }
@@ -163,25 +165,53 @@ class _MapScreenState extends State<MapScreen> {
     return saved;
   }
 
-  Future<void> _showPersonSheet(
+  void _showPersonSheet(
     TraccarDevice device,
     TraccarPosition position,
     AppState state,
-  ) async {
+  ) {
     final address = state.reverseGeocode(position);
-    await showModalBottomSheet<void>(
+    _personSheetController?.close();
+    late final PersistentBottomSheetController controller;
+    controller = showBottomSheet(
       context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) => _PersonSheet(
-        device: device,
-        position: position,
-        imageBytes: state.deviceImages[device.id],
-        address: address,
-        onNamePlace: () =>
-            _addPlace(LatLng(position.latitude, position.longitude)),
+      enableDrag: false,
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => DraggableScrollableSheet(
+        initialChildSize: 0.28,
+        minChildSize: 0.20,
+        maxChildSize: 0.72,
+        expand: false,
+        builder: (context, scrollController) => _PersonSheet(
+          device: device,
+          position: position,
+          imageBytes: state.deviceImages[device.id],
+          address: address,
+          scrollController: scrollController,
+          onNamePlace: () =>
+              _addPlace(LatLng(position.latitude, position.longitude)),
+        ),
       ),
     );
+    _personSheetController = controller;
+    unawaited(
+      controller.closed.whenComplete(() {
+        if (identical(_personSheetController, controller)) {
+          _personSheetController = null;
+        }
+      }),
+    );
+  }
+
+  void _focusPerson(
+    TraccarDevice device,
+    TraccarPosition position,
+    AppState state,
+  ) {
+    final point = LatLng(position.latitude, position.longitude);
+    _mapController.move(point, math.max(_zoom, _personFocusZoom));
+    _showPersonSheet(device, position, state);
   }
 
   @override
@@ -210,9 +240,14 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
     final baseMapStyle = _baseMapStyle;
-    final selectedMapStyle = state.mapStyle;
+    final showSatellite =
+        state.satelliteAutoAtStreetZoom &&
+        _zoom >= _satelliteZoom &&
+        state.mapTilerApiKey.isNotEmpty;
     final satelliteMissingKey =
-        selectedMapStyle.isSatellite && state.satelliteMapApiKey.isEmpty;
+        state.satelliteAutoAtStreetZoom &&
+        _zoom >= _satelliteZoom &&
+        state.mapTilerApiKey.isEmpty;
     final attribution = baseMapStyle?.attributions
         .map((item) => item.text)
         .where((text) => text.isNotEmpty)
@@ -227,18 +262,18 @@ class _MapScreenState extends State<MapScreen> {
                 ? const LatLng(20, 0)
                 : LatLng(initialPosition.latitude, initialPosition.longitude),
             initialZoom: initialPosition == null ? 2.5 : 12,
+            minZoom: _minMapZoom,
+            maxZoom: _maxMapZoom,
+            onPositionChanged: (camera, _) {
+              final wasSatelliteZoom = _zoom >= _satelliteZoom;
+              final isSatelliteZoom = camera.zoom >= _satelliteZoom;
+              _zoom = camera.zoom;
+              if (wasSatelliteZoom != isSatelliteZoom) setState(() {});
+            },
             onLongPress: (_, point) => unawaited(_addPlace(point)),
           ),
           children: [
-            if (selectedMapStyle.isSatellite && !satelliteMissingKey)
-              TileLayer(
-                urlTemplate:
-                    'https://api.maptiler.com/maps/satellite-v4/256/'
-                    '{z}/{x}/{y}.jpg?key=${state.satelliteMapApiKey}',
-                userAgentPackageName: 'com.oneupbyte.trakkar',
-                maxNativeZoom: 19,
-              )
-            else if (baseMapStyle != null)
+            if (baseMapStyle != null)
               vt.VectorTileLayer(
                 theme: baseMapStyle.theme,
                 tileProviders: baseMapStyle.providers,
@@ -255,6 +290,24 @@ class _MapScreenState extends State<MapScreen> {
                 color: Color(0xFFE9ECE8),
                 child: SizedBox.expand(),
               ),
+            // Keep this layer mounted so its long-lived HTTP client remains
+            // reusable as the user crosses the satellite zoom threshold.
+            TileLayer(
+              urlTemplate:
+                  'https://api.maptiler.com/maps/satellite-v4/'
+                  '{z}/{x}/{y}@2x.jpg?key=${state.mapTilerApiKey}',
+              userAgentPackageName: 'com.oneupbyte.trakkar',
+              tileProvider: _satelliteTileProvider,
+              minZoom:
+                  state.satelliteAutoAtStreetZoom &&
+                      state.mapTilerApiKey.isNotEmpty
+                  ? _satelliteZoom
+                  : _maxMapZoom + 1,
+              tileDimension: 512,
+              zoomOffset: -1,
+              maxNativeZoom: 21,
+              maxZoom: _maxMapZoom,
+            ),
             MarkerLayer(
               markers: state.namedPlaces
                   .map(
@@ -276,42 +329,67 @@ class _MapScreenState extends State<MapScreen> {
                   )
                   .toList(growable: false),
             ),
-            MarkerLayer(
-              // Keep profile photos and their status badges screen-upright
-              // while the map rotates underneath them.
-              rotate: true,
-              markers: state.positions.entries
-                  .map((entry) {
-                    final device = devicesById[entry.key];
-                    final position = entry.value;
-                    return Marker(
-                      point: LatLng(position.latitude, position.longitude),
-                      width: 126,
-                      height: 64,
-                      child: GestureDetector(
-                        onTap: device == null
-                            ? null
-                            : () => unawaited(
-                                _showPersonSheet(device, position, state),
-                              ),
-                        child: _AvatarMarker(
-                          name: device?.name ?? 'Unknown',
-                          online: device?.status == 'online',
-                          position: position,
-                          imageBytes: device == null
+            MarkerClusterLayerWidget(
+              options: MarkerClusterLayerOptions(
+                rotate: true,
+                maxClusterRadius: 60,
+                maxZoom: _maxMapZoom,
+                disableClusteringAtZoom: 22,
+                zoomToBoundsOnClick: false,
+                spiderfyCluster: true,
+                spiderfyCircleRadius: 72,
+                showPolygon: false,
+                markerChildBehavior: true,
+                size: const Size(72, 54),
+                markers: state.positions.entries
+                    .map((entry) {
+                      final device = devicesById[entry.key];
+                      final position = entry.value;
+                      return Marker(
+                        key: ValueKey(entry.key),
+                        point: LatLng(position.latitude, position.longitude),
+                        width: 126,
+                        height: 64,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: device == null
                               ? null
-                              : state.deviceImages[device.id],
+                              : () => _focusPerson(device, position, state),
+                          child: _AvatarMarker(
+                            name: device?.name ?? 'Unknown',
+                            online: device?.status == 'online',
+                            driving: state.isDriving(position),
+                            position: position,
+                            imageBytes: device == null
+                                ? null
+                                : state.deviceImages[device.id],
+                          ),
                         ),
+                      );
+                    })
+                    .toList(growable: false),
+                builder: (context, markers) {
+                  final people = <_ClusterPerson>[];
+                  for (final marker in markers) {
+                    final key = marker.key;
+                    if (key is! ValueKey<int>) continue;
+                    final device = devicesById[key.value];
+                    people.add(
+                      _ClusterPerson(
+                        name: device?.name ?? 'Unknown',
+                        imageBytes: state.deviceImages[key.value],
                       ),
                     );
-                  })
-                  .toList(growable: false),
+                  }
+                  return _ClusterMarker(people: people);
+                },
+              ),
             ),
             RichAttributionWidget(
               showFlutterMapAttribution: false,
               attributions: [
                 TextSourceAttribution(
-                  selectedMapStyle.isSatellite
+                  showSatellite
                       ? '© MapTiler · © OpenStreetMap contributors'
                       : attribution?.isNotEmpty ?? false
                       ? attribution!
@@ -340,12 +418,12 @@ class _MapScreenState extends State<MapScreen> {
                 leading: const Icon(Icons.map_outlined),
                 title: Text(
                   satelliteMissingKey
-                      ? 'Satellite API key required'
+                      ? 'Satellite imagery is not configured'
                       : 'Map style unavailable',
                 ),
                 subtitle: Text(
                   satelliteMissingKey
-                      ? 'Add a MapTiler key in Settings. Locations are still live.'
+                      ? 'Add trakkarMapTilerKey to the Traccar server attributes.'
                       : 'Check the connection and retry. Locations are still live.',
                 ),
                 trailing: satelliteMissingKey
@@ -353,7 +431,7 @@ class _MapScreenState extends State<MapScreen> {
                     : TextButton(
                         onPressed: () {
                           setState(() => _baseMapError = null);
-                          unawaited(_loadBaseMap(selectedMapStyle));
+                          unawaited(_loadBaseMap());
                         },
                         child: const Text('Retry'),
                       ),
@@ -411,18 +489,20 @@ class _AvatarMarker extends StatelessWidget {
   const _AvatarMarker({
     required this.name,
     required this.online,
+    required this.driving,
     required this.position,
     required this.imageBytes,
   });
 
   final String name;
   final bool online;
+  final bool driving;
   final TraccarPosition position;
   final Uint8List? imageBytes;
 
   @override
   Widget build(BuildContext context) {
-    final showMotion = position.isMoving;
+    final showMotion = driving || position.isMoving;
     final speedMph = position.speedMph;
     return Stack(
       clipBehavior: Clip.none,
@@ -472,7 +552,7 @@ class _AvatarMarker extends StatelessWidget {
             top: 5,
             child: Semantics(
               label:
-                  '${speedMph > 10 ? 'Driving' : 'Walking'}, '
+                  '${driving ? 'Driving' : 'Walking'}, '
                   '${speedMph.round()} miles per hour',
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
@@ -487,7 +567,7 @@ class _AvatarMarker extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      speedMph > 10 ? '🚗' : '🚶',
+                      driving ? '🚗' : '🚶',
                       style: const TextStyle(fontSize: 15),
                     ),
                     Text(
@@ -525,6 +605,94 @@ class _AvatarMarker extends StatelessWidget {
       ],
     );
   }
+}
+
+class _ClusterMarker extends StatelessWidget {
+  const _ClusterMarker({required this.people});
+
+  final List<_ClusterPerson> people;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final visible = people.take(3).toList(growable: false);
+    final totalWidth = 38.0 + math.max(0, visible.length - 1) * 17;
+    final start = (72 - totalWidth) / 2;
+    return Semantics(
+      button: true,
+      label: '${people.length} people nearby. Tap to spread them out.',
+      child: SizedBox(
+        width: 72,
+        height: 54,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (var index = 0; index < visible.length; index++)
+              Positioned(
+                left: start + index * 17,
+                top: 5,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: colors.primaryContainer,
+                    border: Border.all(color: colors.surface, width: 2),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x44000000), blurRadius: 5),
+                    ],
+                    image: visible[index].imageBytes == null
+                        ? null
+                        : DecorationImage(
+                            image: MemoryImage(visible[index].imageBytes!),
+                            fit: BoxFit.cover,
+                          ),
+                  ),
+                  child: visible[index].imageBytes == null
+                      ? Text(
+                          _initial(visible[index].name),
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        )
+                      : null,
+                ),
+              ),
+            if (people.length > visible.length)
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: colors.surface, width: 2),
+                  ),
+                  child: Text(
+                    '+${people.length - visible.length}',
+                    style: TextStyle(
+                      color: colors.onPrimary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClusterPerson {
+  const _ClusterPerson({required this.name, required this.imageBytes});
+
+  final String name;
+  final Uint8List? imageBytes;
 }
 
 class _ConnectionPill extends StatelessWidget {
@@ -577,6 +745,7 @@ class _PersonSheet extends StatelessWidget {
     required this.position,
     required this.imageBytes,
     required this.address,
+    required this.scrollController,
     required this.onNamePlace,
   });
 
@@ -584,16 +753,33 @@ class _PersonSheet extends StatelessWidget {
   final TraccarPosition position;
   final Uint8List? imageBytes;
   final Future<String> address;
+  final ScrollController scrollController;
   final Future<bool> Function() onNamePlace;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      elevation: 8,
+      clipBehavior: Clip.antiAlias,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: SafeArea(
+        top: false,
+        child: ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
           children: [
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             CircleAvatar(
               radius: 38,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
@@ -667,4 +853,16 @@ class _PersonSheet extends StatelessWidget {
 String _initial(String name) {
   final clean = name.trim();
   return clean.isEmpty ? '?' : clean.characters.first.toUpperCase();
+}
+
+String _satelliteCacheKey(String url) {
+  try {
+    final uri = Uri.parse(url);
+    final query = Map<String, String>.from(uri.queryParameters)..remove('key');
+    return BuiltInMapCachingProvider.uuidTileKeyGenerator(
+      uri.replace(queryParameters: query.isEmpty ? null : query).toString(),
+    );
+  } on FormatException {
+    return BuiltInMapCachingProvider.uuidTileKeyGenerator(url);
+  }
 }

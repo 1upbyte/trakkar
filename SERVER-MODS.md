@@ -38,6 +38,25 @@ a path prefix work as well.
 Production deployments should use HTTPS. The client endpoint used by the
 official Traccar Client SDK is separate from this manager REST endpoint.
 
+## Server-side API keys
+
+Third-party provider keys are server configuration, not per-phone settings.
+
+- Configure reverse geocoding through Traccar's normal server geocoder
+  settings. Trakkar calls only `GET /api/server/geocode`; it never receives or
+  stores that provider's key.
+- Store the MapTiler key in the Traccar server object's custom attributes under
+  `trakkarMapTilerKey`. An administrator can update the Server record through
+  the Traccar UI or `PUT /api/server`, preserving all other server fields and
+  attributes. Trakkar reads this value from `GET /api/server` after signing in
+  and keeps it in memory only.
+
+MapTiler tiles are requested directly by the phone, so this key is not a
+server-side secret even though the server is its source of truth. Restrict the
+key by allowed app/origin and API scope in MapTiler. A deployment that requires
+the key never to reach clients must add an authenticated tile-proxy endpoint
+and configure equivalent caching there.
+
 ## Profile pictures using official device images
 
 ### Data ownership

@@ -8,18 +8,20 @@ void main() {
   test('tracking health reports each actionable platform issue', () {
     final health = TrackingHealth.fromMap(const {
       'locationAlways': false,
+      'activityRecognitionOkay': false,
       'batteryOptimizationOkay': false,
       'batteryOptimizationRelevant': true,
     });
 
     expect(health.checked, isTrue);
     expect(health.needsLocation, isTrue);
+    expect(health.needsActivity, isTrue);
     expect(health.needsBattery, isTrue);
     expect(health.hasWarning, isTrue);
   });
 
   test(
-    'configures frequent SDK updates while retaining stop detection',
+    'configures battery-conscious SDK updates with stop detection',
     () async {
       const channel = MethodChannel('traccar_client_sdk');
       final calls = <MethodCall>[];
@@ -41,8 +43,8 @@ void main() {
       expect(calls.map((call) => call.method), ['init', 'setConfig']);
       final config = Map<String, dynamic>.from(calls.last.arguments as Map);
       final location = Map<String, dynamic>.from(config['location'] as Map);
-      expect(location['distanceMeters'], 25);
-      expect(location['intervalSeconds'], 30);
+      expect(location['distanceMeters'], 75);
+      expect(location['intervalSeconds'], 120);
       expect(location['stopDetection'], isTrue);
     },
   );

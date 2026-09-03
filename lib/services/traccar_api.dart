@@ -114,6 +114,18 @@ class TraccarApi {
         .toList(growable: false);
   }
 
+  /// Loads the MapTiler key from Traccar's server-level attributes. Keeping
+  /// the value there gives every signed-in Trakkar client the same setting and
+  /// avoids persisting third-party API keys on phones.
+  Future<String> mapTilerApiKey() async {
+    final response = await _get('server');
+    final server = _decodeObject(response);
+    final attributes = Map<String, dynamic>.from(
+      server['attributes'] as Map? ?? const <String, dynamic>{},
+    );
+    return (attributes['trakkarMapTilerKey'] as String? ?? '').trim();
+  }
+
   Future<List<NamedPlace>> namedPlaces() async {
     final response = await _get('geofences');
     final places = <NamedPlace>[];

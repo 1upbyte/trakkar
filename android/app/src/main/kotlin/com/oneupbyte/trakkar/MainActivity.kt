@@ -43,6 +43,9 @@ class MainActivity : FlutterActivity() {
         val backgroundGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
             checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED
+        val activityRecognitionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) ==
+                PackageManager.PERMISSION_GRANTED
         val batteryRelevant = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
         val batteryOkay = !batteryRelevant ||
             (getSystemService(POWER_SERVICE) as PowerManager)
@@ -50,6 +53,7 @@ class MainActivity : FlutterActivity() {
 
         return mapOf(
             "locationAlways" to (foregroundGranted && backgroundGranted),
+            "activityRecognitionOkay" to activityRecognitionGranted,
             "batteryOptimizationOkay" to batteryOkay,
             "batteryOptimizationRelevant" to batteryRelevant,
         )
