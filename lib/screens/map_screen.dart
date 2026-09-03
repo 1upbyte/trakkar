@@ -20,7 +20,11 @@ const _maxMapZoom = 21.0;
 const _personFocusZoom = 18.0;
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({required this.onPeopleTap, required this.visible, super.key});
+  const MapScreen({
+    required this.onPeopleTap,
+    required this.visible,
+    super.key,
+  });
 
   final VoidCallback onPeopleTap;
   final bool visible;
@@ -35,6 +39,8 @@ class _MapScreenState extends State<MapScreen> {
   Object? _baseMapError;
   bool _centeredOnCurrentDevice = false;
   double _zoom = 12;
+  bool _drawingPlace = false;
+  final List<LatLng> _draftBoundary = <LatLng>[];
   PersistentBottomSheetController? _personSheetController;
 
   late final NetworkTileProvider _satelliteTileProvider = NetworkTileProvider(
@@ -56,6 +62,12 @@ class _MapScreenState extends State<MapScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.visible && !widget.visible) {
       _personSheetController?.close();
+      if (_drawingPlace) {
+        setState(() {
+          _drawingPlace = false;
+          _draftBoundary.clear();
+        });
+      }
     }
   }
 
@@ -174,6 +186,78 @@ class _MapScreenState extends State<MapScreen> {
     return saved;
   }
 
+  void _startDrawingPlace() {
+    _personSheetController?.close();
+    setState(() {
+      _drawingPlace = true;
+      _draftBoundary.clear();
+    });
+  }
+
+  void _cancelDrawingPlace() {
+    setState(() {
+      _drawingPlace = false;
+      _draftBoundary.clear();
+    });
+  }
+
+  Future<void> _finishDrawingPlace() async {
+    if (_draftBoundary.length < 3) return;
+    final name = TextEditingController();
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Name this place'),
+        content: TextField(
+          controller: name,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(labelText: 'Place name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final cleanName = name.text.trim();
+    name.dispose();
+    if (!(save ?? false) || cleanName.isEmpty || !mounted) return;
+
+    final boundary = List<LatLng>.unmodifiable(_draftBoundary);
+    final latitude =
+        boundary.fold<double>(0, (total, point) => total + point.latitude) /
+        boundary.length;
+    final longitude =
+        boundary.fold<double>(0, (total, point) => total + point.longitude) /
+        boundary.length;
+    try {
+      await context.read<AppState>().addNamedPlace(
+        name: cleanName,
+        latitude: latitude,
+        longitude: longitude,
+        boundary: boundary,
+      );
+      if (!mounted) return;
+      _cancelDrawingPlace();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$cleanName is now shared with the account.')),
+      );
+    } on Object {
+      if (!mounted) return;
+      final message =
+          context.read<AppState>().lastError ?? 'The place could not be saved.';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
   void _showPersonSheet(
     TraccarDevice device,
     TraccarPosition position,
@@ -261,6 +345,7 @@ class _MapScreenState extends State<MapScreen> {
         .map((item) => item.text)
         .where((text) => text.isNotEmpty)
         .join(' · ');
+    final placeColor = Theme.of(context).colorScheme.tertiary;
 
     return Stack(
       children: [
@@ -273,13 +358,18 @@ class _MapScreenState extends State<MapScreen> {
             initialZoom: initialPosition == null ? 2.5 : 12,
             minZoom: _minMapZoom,
             maxZoom: _maxMapZoom,
+            onTap: _drawingPlace
+                ? (_, point) => setState(() => _draftBoundary.add(point))
+                : null,
             onPositionChanged: (camera, _) {
               final wasSatelliteZoom = _zoom >= _satelliteZoom;
               final isSatelliteZoom = camera.zoom >= _satelliteZoom;
               _zoom = camera.zoom;
               if (wasSatelliteZoom != isSatelliteZoom) setState(() {});
             },
-            onLongPress: (_, point) => unawaited(_addPlace(point)),
+            onLongPress: _drawingPlace
+                ? null
+                : (_, point) => unawaited(_addPlace(point)),
           ),
           children: [
             if (baseMapStyle != null)
@@ -317,6 +407,66 @@ class _MapScreenState extends State<MapScreen> {
               maxNativeZoom: 21,
               maxZoom: _maxMapZoom,
             ),
+            CircleLayer(
+              circles: state.namedPlaces
+                  .where((place) => !place.isPolygon)
+                  .map(
+                    (place) => CircleMarker(
+                      point: LatLng(place.latitude, place.longitude),
+                      radius: place.radiusMeters,
+                      useRadiusInMeter: true,
+                      color: placeColor.withValues(alpha: 0.16),
+                      borderColor: placeColor,
+                      borderStrokeWidth: 2,
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+            PolygonLayer(
+              polygons: <Polygon>[
+                ...state.namedPlaces
+                    .where((place) => place.isPolygon)
+                    .map(
+                      (place) => Polygon(
+                        points: place.boundary,
+                        color: placeColor.withValues(alpha: 0.16),
+                        borderColor: placeColor,
+                        borderStrokeWidth: 2,
+                      ),
+                    ),
+                if (_draftBoundary.length >= 3)
+                  Polygon(
+                    points: _draftBoundary,
+                    color: placeColor.withValues(alpha: 0.22),
+                    borderColor: placeColor,
+                    borderStrokeWidth: 3,
+                  ),
+              ],
+            ),
+            if (_draftBoundary.length >= 2)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: _draftBoundary,
+                    color: placeColor,
+                    strokeWidth: 3,
+                  ),
+                ],
+              ),
+            if (_draftBoundary.isNotEmpty)
+              CircleLayer(
+                circles: _draftBoundary
+                    .map(
+                      (point) => CircleMarker(
+                        point: point,
+                        radius: 6,
+                        color: Theme.of(context).colorScheme.surface,
+                        borderColor: placeColor,
+                        borderStrokeWidth: 3,
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
             MarkerLayer(
               markers: state.namedPlaces
                   .map(
@@ -327,7 +477,7 @@ class _MapScreenState extends State<MapScreen> {
                       child: Tooltip(
                         message: place.name,
                         child: Icon(
-                          Icons.bookmark_rounded,
+                          Icons.location_on_rounded,
                           color: Theme.of(context).colorScheme.tertiary,
                           shadows: const [
                             Shadow(color: Colors.white, blurRadius: 5),
@@ -408,15 +558,16 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ],
         ),
-        Positioned(
-          top: MediaQuery.paddingOf(context).top + 16,
-          left: 16,
-          child: _ConnectionPill(
-            connected: state.liveConnected,
-            count: state.devices.length,
-            onTap: widget.onPeopleTap,
+        if (!_drawingPlace)
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 16,
+            left: 16,
+            child: _ConnectionPill(
+              connected: state.liveConnected,
+              count: state.devices.length,
+              onTap: widget.onPeopleTap,
+            ),
           ),
-        ),
         if (_baseMapError != null || satelliteMissingKey)
           Positioned(
             top: MediaQuery.paddingOf(context).top + 72,
@@ -447,27 +598,87 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
-        Positioned(
-          top: MediaQuery.paddingOf(context).top + 14,
-          right: 16,
-          child: Column(
-            children: [
-              FloatingActionButton.small(
-                heroTag: 'refreshMap',
-                onPressed: state.refresh,
-                tooltip: 'Refresh positions',
-                child: const Icon(Icons.refresh),
-              ),
-              const SizedBox(height: 10),
-              FloatingActionButton.small(
-                heroTag: 'fitMap',
-                onPressed: () => _fitPositions(state),
-                tooltip: 'Show everyone',
-                child: const Icon(Icons.zoom_out_map_rounded),
-              ),
-            ],
+        if (!_drawingPlace)
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 14,
+            right: 16,
+            child: Column(
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'refreshMap',
+                  onPressed: state.refresh,
+                  tooltip: 'Refresh positions',
+                  child: const Icon(Icons.refresh),
+                ),
+                const SizedBox(height: 10),
+                FloatingActionButton.small(
+                  heroTag: 'fitMap',
+                  onPressed: () => _fitPositions(state),
+                  tooltip: 'Show everyone',
+                  child: const Icon(Icons.zoom_out_map_rounded),
+                ),
+                const SizedBox(height: 10),
+                FloatingActionButton.small(
+                  heroTag: 'drawPlace',
+                  onPressed: _startDrawingPlace,
+                  tooltip: 'Draw a place',
+                  child: const Icon(Icons.gesture_rounded),
+                ),
+              ],
+            ),
           ),
-        ),
+        if (_drawingPlace)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 18,
+            child: Card(
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 10, 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _draftBoundary.length < 3
+                          ? 'Tap at least 3 corners of the place'
+                          : 'Tap to add more corners, or finish the shape',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    Text('${_draftBoundary.length} corners added'),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: _cancelDrawingPlace,
+                          child: const Text('Cancel'),
+                        ),
+                        IconButton(
+                          tooltip: 'Undo last corner',
+                          onPressed: _draftBoundary.isEmpty
+                              ? null
+                              : () => setState(() {
+                                  _draftBoundary.removeLast();
+                                }),
+                          icon: const Icon(Icons.undo_rounded),
+                        ),
+                        const Spacer(),
+                        FilledButton.icon(
+                          onPressed: _draftBoundary.length < 3
+                              ? null
+                              : () => unawaited(_finishDrawingPlace()),
+                          icon: const Icon(Icons.check_rounded),
+                          label: const Text('Finish'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         if (state.positions.isEmpty)
           Center(
             child: Card(

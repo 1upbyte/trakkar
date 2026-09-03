@@ -99,7 +99,7 @@ class _BrandMark extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary,
+        color: const Color(0xFF126E68),
         borderRadius: BorderRadius.circular(size * .3),
       ),
       child: Icon(Icons.near_me_rounded, color: Colors.white, size: size * .5),

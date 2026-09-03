@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models/named_place.dart';
@@ -295,6 +296,7 @@ class AppState extends ChangeNotifier {
             latitude: local.latitude,
             longitude: local.longitude,
             radiusMeters: local.radiusMeters,
+            boundary: local.boundary,
           );
           sharedPlaces = <NamedPlace>[...sharedPlaces, migrated];
         }
@@ -602,6 +604,7 @@ class AppState extends ChangeNotifier {
     required double latitude,
     required double longitude,
     double radiusMeters = 150,
+    List<LatLng> boundary = const <LatLng>[],
   }) async {
     final api = _api;
     final cleanName = name.trim();
@@ -613,7 +616,11 @@ class AppState extends ChangeNotifier {
     if (cleanName.isEmpty) {
       throw const FormatException('Enter a place name.');
     }
-    if (!radiusMeters.isFinite || radiusMeters < 10 || radiusMeters > 10000) {
+    if (boundary.isNotEmpty && boundary.length < 3) {
+      throw const FormatException('Draw at least 3 corners for the place.');
+    }
+    if (boundary.isEmpty &&
+        (!radiusMeters.isFinite || radiusMeters < 10 || radiusMeters > 10000)) {
       throw const FormatException(
         'Radius must be between 10 and 10,000 meters.',
       );
@@ -624,6 +631,7 @@ class AppState extends ChangeNotifier {
         latitude: latitude,
         longitude: longitude,
         radiusMeters: radiusMeters,
+        boundary: boundary,
       );
       namedPlaces = <NamedPlace>[...namedPlaces, place];
       await _namedPlaceStore.save(namedPlaces);

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:trakkar/models/provisioning_config.dart';
 import 'package:trakkar/models/traccar_device.dart';
 import 'package:trakkar/services/traccar_api.dart';
@@ -210,6 +211,37 @@ void main() {
       expect(methods, ['GET', 'POST', 'DELETE']);
     },
   );
+
+  test('stores a drawn place as a tagged polygon geofence', () async {
+    late Map<String, dynamic> requestBody;
+    final client = MockClient((request) async {
+      if (request.url.path == '/api/session') {
+        return http.Response(
+          '{}',
+          200,
+          headers: {'set-cookie': 'JSESSIONID=polygon'},
+        );
+      }
+      requestBody = Map<String, dynamic>.from(jsonDecode(request.body) as Map);
+      return http.Response(jsonEncode({...requestBody, 'id': 10}), 200);
+    });
+    final api = TraccarApi(config: config, client: client);
+
+    await api.login();
+    final created = await api.createNamedPlace(
+      name: 'Park',
+      latitude: 40.05,
+      longitude: -73.95,
+      radiusMeters: 150,
+      boundary: const [LatLng(40, -74), LatLng(40, -73.9), LatLng(40.1, -73.9)],
+    );
+
+    expect(
+      requestBody['area'],
+      'POLYGON ((40.0 -74.0, 40.0 -73.9, 40.1 -73.9, 40.0 -74.0))',
+    );
+    expect(created.isPolygon, isTrue);
+  });
 
   test(
     'uploads an avatar and saves the returned deviceImage attribute',

@@ -126,8 +126,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               label: 'People',
             ),
             NavigationDestination(
-              icon: Icon(Icons.bookmark_border_rounded),
-              selectedIcon: Icon(Icons.bookmark_rounded),
+              icon: Icon(Icons.place_outlined),
+              selectedIcon: Icon(Icons.place_rounded),
               label: 'Places',
             ),
             NavigationDestination(

@@ -25,8 +25,8 @@ class PlacesScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Long-press anywhere on the map to give that area a '
-                    'friendly name shared with everyone on this account.',
+                    'Long-press the map to add a circular place, or use Draw '
+                    'place to trace its boundary.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -42,7 +42,7 @@ class PlacesScreen extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.bookmarks_outlined, size: 54),
+                    Icon(Icons.map_outlined, size: 54),
                     SizedBox(height: 12),
                     Text('No named places yet'),
                   ],
@@ -62,7 +62,7 @@ class PlacesScreen extends StatelessWidget {
                       contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
                       leading: CircleAvatar(
                         child: Icon(
-                          Icons.bookmark_rounded,
+                          Icons.place_rounded,
                           color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
@@ -71,9 +71,11 @@ class PlacesScreen extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
-                        '${place.latitude.toStringAsFixed(5)}, '
-                        '${place.longitude.toStringAsFixed(5)}  •  '
-                        '${place.radiusMeters.round()} m',
+                        place.isPolygon
+                            ? 'Drawn area  •  ${place.boundary.length} corners'
+                            : '${place.latitude.toStringAsFixed(5)}, '
+                                  '${place.longitude.toStringAsFixed(5)}  •  '
+                                  '${place.radiusMeters.round()} m',
                       ),
                       trailing: IconButton(
                         tooltip: 'Delete place',

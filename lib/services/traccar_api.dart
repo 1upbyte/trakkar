@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
 import 'package:web_socket_channel/io.dart';
 
 import '../models/provisioning_config.dart';
@@ -151,6 +152,7 @@ class TraccarApi {
     required double latitude,
     required double longitude,
     required double radiusMeters,
+    List<LatLng> boundary = const <LatLng>[],
   }) async {
     final draft = NamedPlace(
       id: '0',
@@ -158,6 +160,7 @@ class TraccarApi {
       latitude: latitude,
       longitude: longitude,
       radiusMeters: radiusMeters,
+      boundary: boundary,
     );
     final response = await _sendJson(
       'POST',

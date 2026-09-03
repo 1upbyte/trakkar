@@ -43,16 +43,47 @@ class NamedPlaceStore {
     NamedPlace? closest;
     var closestMeters = double.infinity;
     for (final place in places) {
+      if (place.isPolygon &&
+          !_polygonContains(place.boundary, latitude, longitude)) {
+        continue;
+      }
       final meters = distance.as(
         LengthUnit.Meter,
         LatLng(latitude, longitude),
         LatLng(place.latitude, place.longitude),
       );
-      if (meters <= place.radiusMeters && meters < closestMeters) {
+      if ((place.isPolygon || meters <= place.radiusMeters) &&
+          meters < closestMeters) {
         closest = place;
         closestMeters = meters;
       }
     }
     return closest;
+  }
+
+  static bool _polygonContains(
+    List<LatLng> boundary,
+    double latitude,
+    double longitude,
+  ) {
+    var inside = false;
+    for (
+      var index = 0, previous = boundary.length - 1;
+      index < boundary.length;
+      previous = index++
+    ) {
+      final currentPoint = boundary[index];
+      final previousPoint = boundary[previous];
+      final crosses =
+          (currentPoint.latitude > latitude) !=
+              (previousPoint.latitude > latitude) &&
+          longitude <
+              (previousPoint.longitude - currentPoint.longitude) *
+                      (latitude - currentPoint.latitude) /
+                      (previousPoint.latitude - currentPoint.latitude) +
+                  currentPoint.longitude;
+      if (crosses) inside = !inside;
+    }
+    return inside;
   }
 }
