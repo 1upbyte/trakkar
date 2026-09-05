@@ -43,9 +43,12 @@ void main() {
       expect(calls.map((call) => call.method), ['init', 'setConfig']);
       final config = Map<String, dynamic>.from(calls.last.arguments as Map);
       final location = Map<String, dynamic>.from(config['location'] as Map);
-      expect(location['distanceMeters'], 75);
-      expect(location['intervalSeconds'], 120);
+      expect(location['accuracy'], 'MEDIUM');
+      expect(location['distanceMeters'], 100);
+      expect(location['intervalSeconds'], 600);
       expect(location['stopDetection'], isTrue);
+      expect(location['stopTimeoutSeconds'], 120);
+      expect(location['stationaryRadiusMeters'], 100);
     },
   );
 }

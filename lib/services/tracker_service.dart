@@ -60,9 +60,12 @@ class TrackerService {
       serverUrl: serverUrl.toString(),
       deviceId: deviceId,
       location: const LocationConfig(
-        distanceMeters: 75,
-        intervalSeconds: 120,
+        accuracy: Accuracy.medium,
+        distanceMeters: 100,
+        intervalSeconds: 600,
         stopDetection: true,
+        stopTimeoutSeconds: 120,
+        stationaryRadiusMeters: 100,
       ),
       buffer: true,
       notification: const NotificationConfig(

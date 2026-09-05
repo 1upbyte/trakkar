@@ -71,11 +71,10 @@ class PlacesScreen extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
-                        place.isPolygon
-                            ? 'Drawn area  •  ${place.boundary.length} corners'
-                            : '${place.latitude.toStringAsFixed(5)}, '
+                        '${place.isPolygon ? 'Drawn area  •  ${place.boundary.length} corners' : '${place.latitude.toStringAsFixed(5)}, '
                                   '${place.longitude.toStringAsFixed(5)}  •  '
-                                  '${place.radiusMeters.round()} m',
+                                  '${place.radiusMeters.round()} m'}\n'
+                        'Exit alerts ${place.notifyOnExit ? 'on' : 'off'}',
                       ),
                       trailing: IconButton(
                         tooltip: 'Delete place',

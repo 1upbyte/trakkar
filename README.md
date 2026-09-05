@@ -58,7 +58,9 @@ an exponential backoff capped at five minutes. While the map tab is visible and
 the app is in the foreground, this phone asks the tracking SDK for a fresh
 position every 30 seconds and polls all server positions every 15 seconds.
 Polling stops when the map is hidden or the app leaves the foreground. Normal
-background tracking uses a 120-second/75-metre request with stop detection.
+background tracking uses a 10-minute/100-metre request. After two stationary
+minutes the SDK pauses frequent GPS work and monitors a 100-metre stationary
+region so leaving it wakes tracking again.
 
 People appear as screen-upright profile-picture circles without permanent name
 labels, even when the map is rotated. The default view centers on this phone's
@@ -89,14 +91,24 @@ After driving begins, the car indicator remains until a full minute of newly
 reported sub-10 mph speed has elapsed, preventing short stops and GPS jitter
 from flipping the icon. Motion uses the standard Traccar position attribute
 when available and also requires at least 1 mph. The official Traccar
-Client SDK is configured for 75-metre / 120-second movement updates and retains
-its stop detection to pause frequent GPS work while stationary.
+Client SDK is configured for 100-metre / 10-minute movement updates and retains
+its stop detection to pause frequent GPS work while stationary. The visible
+map still requests a fresh position every 30 seconds.
 
 Use the bottom sheet or long-press the map to create a named place and choose
 its radius. These names are tagged circular Traccar geofences, so every app
 signed into the same manager account sees them after refresh. A local cache is
 used only for offline display. Friendly names take priority over
 reverse-geocoded addresses.
+
+Tagged named places are linked to every device available to the manager
+account. Trakkar creates one tagged `geofenceExit` notification using Traccar's
+default `web` notificator and links it to those devices. Missing links are
+repaired on refresh, including for places created by earlier app versions.
+While Trakkar is visible, received exit events appear as dismissible in-app
+alerts. To deliver alerts while the app is closed, edit the generated
+notification in Traccar and add a server-configured delivery channel such as
+email or Firebase push.
 
 The exact unmodified-server protocol, migration behavior, security rules, and
 an optional first-class server design are documented in

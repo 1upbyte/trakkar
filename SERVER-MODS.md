@@ -147,7 +147,8 @@ A Trakkar friendly place is a circular Traccar geofence with this payload:
   "calendarId": 0,
   "attributes": {
     "trakkarNamedPlace": true,
-    "trakkarSchemaVersion": 1
+    "trakkarSchemaVersion": 3,
+    "trakkarNotifyOnExit": true
   }
 }
 ```
@@ -173,10 +174,19 @@ An unmodified server associates a newly created geofence with the creating
 user. Every Trakkar installation signed in as that user will load it. Standard
 Traccar permissions can expose it to other users as usual.
 
-Trakkar deliberately does not create device-geofence permission links. Those
-links are needed for geofence entry/exit monitoring and notifications, not for
-friendly-name lookup, and creating them would unexpectedly change monitoring
-behavior.
+Trakkar creates device-geofence permission links for tagged named places where
+`attributes.trakkarNotifyOnExit` is not `false`. A missing attribute is treated
+as enabled so places created by earlier releases gain exit monitoring after a
+refresh. It also creates and reuses one `geofenceExit` notification tagged with
+`attributes.trakkarNamedPlaceExitNotification == true`, initially configured
+with the default `web` notificator, and links that notification to every device
+available to the manager account. These links are reconciled idempotently on
+refresh.
+
+The `web` notificator delivers events to visible clients through Traccar's
+socket. Background delivery requires an administrator to add a configured
+channel such as mail or Firebase to the generated notification. Trakkar does
+not embed deployment-specific SMTP or Firebase credentials.
 
 ### Address resolution
 

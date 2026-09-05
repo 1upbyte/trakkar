@@ -30,6 +30,8 @@ class TraccarApi {
   String? _sessionCookie;
 
   static const _requestTimeout = Duration(seconds: 15);
+  static const _namedPlaceExitNotificationMarker =
+      'trakkarNamedPlaceExitNotification';
 
   bool get hasSession => _sessionCookie != null;
 
@@ -176,6 +178,92 @@ class TraccarApi {
       http.Request('DELETE', _apiUri('geofences/$id')),
       allowed: const <int>{204},
       action: 'Deleting the named place',
+    );
+  }
+
+  /// Ensures tagged named places generate server-side exit events for every
+  /// account device and that those events reach Traccar's web notification
+  /// channel. The operation is idempotent so it can safely run after refresh.
+  Future<void> ensureNamedPlaceExitMonitoring({
+    required Iterable<NamedPlace> places,
+    required Iterable<TraccarDevice> devices,
+  }) async {
+    final monitoredPlaceIds = places
+        .where((place) => place.notifyOnExit)
+        .map((place) => place.serverId)
+        .whereType<int>()
+        .toSet();
+    final deviceIds = devices.map((device) => device.id).toSet();
+    if (monitoredPlaceIds.isEmpty || deviceIds.isEmpty) return;
+
+    // A device/geofence link is what makes Traccar calculate enter/exit
+    // events. Establish these first so event history still works even if the
+    // account cannot create a delivery notification.
+    for (final deviceId in deviceIds) {
+      final linkedGeofences = await _linkedIds('geofences', deviceId);
+      for (final geofenceId in monitoredPlaceIds.difference(linkedGeofences)) {
+        await _linkPermission(<String, int>{
+          'deviceId': deviceId,
+          'geofenceId': geofenceId,
+        });
+      }
+    }
+
+    final notificationId = await _ensureNamedPlaceExitNotification();
+    for (final deviceId in deviceIds) {
+      final linkedNotifications = await _linkedIds('notifications', deviceId);
+      if (!linkedNotifications.contains(notificationId)) {
+        await _linkPermission(<String, int>{
+          'deviceId': deviceId,
+          'notificationId': notificationId,
+        });
+      }
+    }
+  }
+
+  Future<Set<int>> _linkedIds(String resource, int deviceId) async {
+    final response = await _get(
+      resource,
+      query: <String, String>{'deviceId': deviceId.toString()},
+    );
+    return _decodeList(response)
+        .map((item) => (item['id'] as num).toInt())
+        .toSet();
+  }
+
+  Future<int> _ensureNamedPlaceExitNotification() async {
+    final response = await _get('notifications');
+    for (final notification in _decodeList(response)) {
+      final attributes = Map<String, dynamic>.from(
+        notification['attributes'] as Map? ?? const <String, dynamic>{},
+      );
+      final marker = attributes[_namedPlaceExitNotificationMarker];
+      if (marker == true || marker?.toString().toLowerCase() == 'true') {
+        return (notification['id'] as num).toInt();
+      }
+    }
+
+    final created = await _sendJson('POST', 'notifications', <String, dynamic>{
+      'id': 0,
+      'type': 'geofenceExit',
+      'description': 'Trakkar named place exits',
+      'always': true,
+      'commandId': 0,
+      'notificators': 'web',
+      'calendarId': 0,
+      'attributes': <String, dynamic>{_namedPlaceExitNotificationMarker: true},
+    }, action: 'Creating named-place exit notifications');
+    return (_decodeObject(created)['id'] as num).toInt();
+  }
+
+  Future<void> _linkPermission(Map<String, int> permission) async {
+    final request = http.Request('POST', _apiUri('permissions'))
+      ..headers['Content-Type'] = 'application/json'
+      ..body = jsonEncode(permission);
+    await _send(
+      request,
+      allowed: const <int>{204},
+      action: 'Enabling named-place exit notifications',
     );
   }
 
