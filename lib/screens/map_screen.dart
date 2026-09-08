@@ -29,11 +29,15 @@ class MapScreen extends StatefulWidget {
   const MapScreen({
     required this.onPeopleTap,
     required this.visible,
+    this.placeCreationRequest = 0,
+    this.autoPlace = false,
     super.key,
   });
 
   final VoidCallback onPeopleTap;
   final bool visible;
+  final int placeCreationRequest;
+  final bool autoPlace;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -89,6 +93,9 @@ class _MapScreenState extends State<MapScreen>
   @override
   void didUpdateWidget(covariant MapScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.placeCreationRequest != oldWidget.placeCreationRequest) {
+      _startDrawingPlace(auto: widget.autoPlace);
+    }
     if (oldWidget.visible && !widget.visible) {
       _buildingRefresh?.cancel();
       _buildingSession++;
@@ -638,33 +645,8 @@ class _MapScreenState extends State<MapScreen>
                 maxNativeZoom: 21,
                 maxZoom: _maxMapZoom,
               ),
-              CircleLayer(
-                circles: state.namedPlaces
-                    .where((place) => !place.isPolygon)
-                    .map(
-                      (place) => CircleMarker(
-                        point: LatLng(place.latitude, place.longitude),
-                        radius: place.radiusMeters,
-                        useRadiusInMeter: true,
-                        color: placeColor.withValues(alpha: 0.16),
-                        borderColor: placeColor,
-                        borderStrokeWidth: 2,
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
               PolygonLayer(
                 polygons: <Polygon>[
-                  ...state.namedPlaces
-                      .where((place) => place.isPolygon)
-                      .map(
-                        (place) => Polygon(
-                          points: place.boundary,
-                          color: placeColor.withValues(alpha: 0.16),
-                          borderColor: placeColor,
-                          borderStrokeWidth: 2,
-                        ),
-                      ),
                   if (_draftBoundary.length >= 3)
                     Polygon(
                       points: _draftBoundary,
@@ -712,16 +694,33 @@ class _MapScreenState extends State<MapScreen>
                     .map(
                       (place) => Marker(
                         point: LatLng(place.latitude, place.longitude),
-                        width: 42,
-                        height: 42,
-                        child: Tooltip(
-                          message: place.name,
-                          child: Icon(
-                            Icons.location_on_rounded,
-                            color: Theme.of(context).colorScheme.tertiary,
-                            shadows: const [
-                              Shadow(color: Colors.white, blurRadius: 5),
-                            ],
+                        width: 160,
+                        height: 44,
+                        rotate: true,
+                        child: GestureDetector(
+                          onTap: () => _showPlaceSheet(place),
+                          child: Center(
+                            child: Text(
+                              place.name,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: state.darkMap
+                                    ? Colors.white
+                                    : const Color(0xFF454B50),
+                                shadows: [
+                                  Shadow(
+                                    color: state.darkMap
+                                        ? Colors.black
+                                        : Colors.white,
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -857,20 +856,6 @@ class _MapScreenState extends State<MapScreen>
                   onPressed: () => _fitPositions(state),
                   tooltip: 'Show everyone',
                   child: const Icon(Icons.zoom_out_map_rounded),
-                ),
-                const SizedBox(height: 10),
-                FloatingActionButton.small(
-                  heroTag: 'drawPlace',
-                  onPressed: _startDrawingPlace,
-                  tooltip: 'Draw a place',
-                  child: const Icon(Icons.gesture_rounded),
-                ),
-                const SizedBox(height: 10),
-                FloatingActionButton.small(
-                  heroTag: 'autoPlace',
-                  onPressed: () => _startDrawingPlace(auto: true),
-                  tooltip: 'Auto: select buildings',
-                  child: const Text('Auto'),
                 ),
               ],
             ),

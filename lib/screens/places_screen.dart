@@ -4,9 +4,10 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 
 class PlacesScreen extends StatelessWidget {
-  const PlacesScreen({this.selectedPlaceId, super.key});
+  const PlacesScreen({this.selectedPlaceId, this.onAdd, super.key});
 
   final String? selectedPlaceId;
+  final ValueChanged<bool>? onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -30,15 +31,34 @@ class PlacesScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Named places',
-                    style: Theme.of(context).textTheme.headlineMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Named places',
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      if (onAdd != null)
+                        PopupMenuButton<bool>(
+                          tooltip: 'Add place',
+                          onSelected: onAdd,
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: true, child: Text('Auto')),
+                            PopupMenuItem(value: false, child: Text('Manual')),
+                          ],
+                          child: const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Text('Add'),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Long-press the map to add a circular place, or use Draw '
-                    'place to trace its boundary or Auto to select buildings.',
+                    'Add a place automatically by selecting buildings, or manually '
+                    'by tracing its boundary on the map.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),

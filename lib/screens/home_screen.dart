@@ -16,6 +16,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _index = 0;
+  int _placeCreationRequest = 0;
+  bool _autoPlace = false;
   AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
   AppState? _appState;
 
@@ -84,10 +86,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               children: [
                 MapScreen(
                   visible: _index == 0,
+                  placeCreationRequest: _placeCreationRequest,
+                  autoPlace: _autoPlace,
                   onPeopleTap: () => _selectDestination(1),
                 ),
                 const PeopleScreen(),
-                const PlacesScreen(),
+                PlacesScreen(
+                  onAdd: (auto) {
+                    setState(() {
+                      _autoPlace = auto;
+                      _placeCreationRequest++;
+                      _index = 0;
+                    });
+                    _syncMapForeground();
+                  },
+                ),
                 const SettingsScreen(),
               ],
             ),
