@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../widgets/location_label.dart';
 import '../models/traccar_device.dart';
 import '../models/traccar_position.dart';
 
@@ -23,7 +24,12 @@ class _PeopleScreenState extends State<PeopleScreen> {
         '${position.deviceId}:'
         '${position.latitude.toStringAsFixed(4)}:'
         '${position.longitude.toStringAsFixed(4)}';
-    return _addressCache.putIfAbsent(key, () => state.reverseGeocode(position));
+    return _addressCache.putIfAbsent(
+      key,
+      () => state
+          .reverseGeocode(position)
+          .catchError((Object _) => locationFallback(position)),
+    );
   }
 
   Widget _personTile(AppState state, TraccarDevice device) {
@@ -197,17 +203,10 @@ class _LocationText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (position == null) return const Text('No location reported');
-    if (friendlyPlace != null) {
-      return Text(friendlyPlace!, maxLines: 2, overflow: TextOverflow.ellipsis);
-    }
-    return FutureBuilder<String>(
-      future: address,
-      builder: (context, snapshot) => Text(
-        snapshot.data ??
-            (snapshot.hasError ? 'Location unavailable' : 'Finding location…'),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
+    return LocationLabel(
+      position: position!,
+      friendlyPlace: friendlyPlace,
+      address: address,
     );
   }
 }

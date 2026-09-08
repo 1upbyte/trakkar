@@ -16,17 +16,26 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool? _satelliteAutoAtStreetZoom;
-
-  Future<void> _saveMapAppearance() async {
-    final state = context.read<AppState>();
-    await state.saveMapAppearance(
-      satelliteAutoAtStreetZoom:
-          _satelliteAutoAtStreetZoom ?? state.satelliteAutoAtStreetZoom,
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Map appearance saved.')));
+  Future<void> _saveMapAppearance({
+    bool? darkMap,
+    bool? satelliteAutoAtStreetZoom,
+    bool? satelliteAlways,
+    double? satelliteZoom,
+  }) async {
+    try {
+      await context.read<AppState>().saveMapAppearance(
+        darkMap: darkMap,
+        satelliteAutoAtStreetZoom: satelliteAutoAtStreetZoom,
+        satelliteAlways: satelliteAlways,
+        satelliteZoom: satelliteZoom,
+      );
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Map changes could not be saved. Please try again.'),
+        ),
+      );
     }
   }
 
@@ -102,8 +111,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final satelliteAuto =
-        _satelliteAutoAtStreetZoom ?? state.satelliteAutoAtStreetZoom;
+
     final ownImage = state.ownDevice == null
         ? null
         : state.deviceImages[state.ownDevice!.id];
@@ -276,8 +284,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'The map uses streets until it is almost fully zoomed in, then '
-            'switches to high-resolution MapTiler satellite imagery.',
+            'Choose when to show satellite imagery. Changes save automatically.',
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -287,22 +294,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 SwitchListTile(
+                  title: const Text('Dark map'),
+                  subtitle: const Text(
+                    'Use a dark street map. Satellite imagery keeps its natural colors.',
+                  ),
+                  value: state.darkMap,
+                  onChanged: (value) => _saveMapAppearance(darkMap: value),
+                ),
+                SwitchListTile(
                   title: const Text('Satellite at street level'),
                   subtitle: const Text(
                     'Show satellite imagery automatically when zoomed in.',
                   ),
-                  value: satelliteAuto,
+                  value: state.satelliteAutoAtStreetZoom,
+                  onChanged: state.satelliteAlways
+                      ? null
+                      : (value) => _saveMapAppearance(
+                          satelliteAutoAtStreetZoom: value,
+                        ),
+                ),
+                SwitchListTile(
+                  title: const Text('Always satellite'),
+                  subtitle: const Text(
+                    'Show satellite imagery at every zoom level.',
+                  ),
+                  value: state.satelliteAlways,
                   onChanged: (value) =>
-                      setState(() => _satelliteAutoAtStreetZoom = value),
+                      _saveMapAppearance(satelliteAlways: value),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _saveMapAppearance,
-                      child: const Text('Save map appearance'),
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Satellite starts at zoom ${state.satelliteZoom.toStringAsFixed(1)}',
+                      ),
+                      Slider(
+                        value: state.satelliteZoom,
+                        min: 2,
+                        max: 21,
+                        divisions: 38,
+                        label: state.satelliteZoom.toStringAsFixed(1),
+                        onChanged:
+                            state.satelliteAlways ||
+                                !state.satelliteAutoAtStreetZoom
+                            ? null
+                            : (value) =>
+                                  _saveMapAppearance(satelliteZoom: value),
+                      ),
+                      const Text(
+                        'Lower values switch sooner; higher values switch closer in.',
+                      ),
+                    ],
                   ),
                 ),
               ],

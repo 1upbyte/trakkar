@@ -10,11 +10,17 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../widgets/location_label.dart';
+import '../widgets/building_highlights.dart';
+import '../models/named_place.dart';
+import '../services/building_lookup.dart';
+import '../services/named_place_store.dart';
+import 'places_screen.dart';
 import '../models/traccar_device.dart';
 import '../models/traccar_position.dart';
 
 const _streetStyleUri = 'https://tiles.openfreemap.org/styles/positron';
-const _satelliteZoom = 20.0;
+const _darkStreetStyleUri = 'https://tiles.openfreemap.org/styles/dark';
 const _minMapZoom = 2.0;
 const _maxMapZoom = 21.0;
 const _personFocusZoom = 18.0;
@@ -33,13 +39,31 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen>
+    with SingleTickerProviderStateMixin {
   final _mapController = MapController();
+  late final AnimationController _cameraAnimation = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  );
+  VoidCallback? _cameraTick;
+  bool? _requestedDarkMap;
+  int _styleRequest = 0;
   vt.Style? _baseMapStyle;
   Object? _baseMapError;
   bool _centeredOnCurrentDevice = false;
   double _zoom = 12;
   bool _drawingPlace = false;
+  bool _autoBuilding = false;
+  bool _buildingBusy = false;
+  int _buildingSession = 0;
+  final _buildingLookup = BuildingLookup();
+  final _buildingHits = ValueNotifier<LayerHitResult<String>?>(null);
+  List<BuildingFootprint> _availableBuildings = [];
+  Timer? _buildingRefresh;
+  String? _buildingError;
+  final List<BuildingFootprint> _selectedBuildings = [];
+  double _rotation = 0;
   final List<LatLng> _draftBoundary = <LatLng>[];
   PersistentBottomSheetController? _personSheetController;
 
@@ -52,15 +76,24 @@ class _MapScreenState extends State<MapScreen> {
   );
 
   @override
-  void initState() {
-    super.initState();
-    unawaited(_loadBaseMap());
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final darkMap = context.watch<AppState>().darkMap;
+    if (_requestedDarkMap != darkMap) {
+      _requestedDarkMap = darkMap;
+      unawaited(_loadBaseMap());
+    }
+    if (MediaQuery.disableAnimationsOf(context)) _cameraAnimation.stop();
   }
 
   @override
   void didUpdateWidget(covariant MapScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.visible && !widget.visible) {
+      _buildingRefresh?.cancel();
+      _buildingSession++;
+      _buildingBusy = false;
+      _cameraAnimation.stop();
       _personSheetController?.close();
       if (_drawingPlace) {
         setState(() {
@@ -72,9 +105,12 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _loadBaseMap() async {
+    final request = ++_styleRequest;
     try {
-      final style = await vt.StyleReader(uri: _streetStyleUri).read();
-      if (!mounted) {
+      final style = await vt.StyleReader(
+        uri: _requestedDarkMap == true ? _darkStreetStyleUri : _streetStyleUri,
+      ).read();
+      if (!mounted || request != _styleRequest) {
         style.dispose();
         return;
       }
@@ -83,17 +119,59 @@ class _MapScreenState extends State<MapScreen> {
         _baseMapStyle = style;
         _baseMapError = null;
       });
-      previous?.dispose();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        previous?.dispose();
+        if (mounted && _drawingPlace && _autoBuilding) _scheduleBuildings();
+      });
     } on Object catch (error) {
-      if (mounted) setState(() => _baseMapError = error);
+      if (mounted && request == _styleRequest) {
+        setState(() => _baseMapError = error);
+      }
     }
   }
 
   @override
   void dispose() {
     _personSheetController?.close();
+    _buildingRefresh?.cancel();
+    _buildingHits.dispose();
+    _cameraAnimation.dispose();
+    _mapController.dispose();
     _baseMapStyle?.dispose();
     super.dispose();
+  }
+
+  void _animateCamera(LatLng target, double zoom, {double? rotation}) {
+    _cameraAnimation.stop();
+    if (_cameraTick != null) _cameraAnimation.removeListener(_cameraTick!);
+    if (MediaQuery.disableAnimationsOf(context) || !widget.visible) {
+      _mapController.move(target, zoom);
+      if (rotation != null) _mapController.rotate(rotation);
+      return;
+    }
+    final camera = _mapController.camera;
+    final rotationDelta = rotation == null
+        ? 0.0
+        : (rotation - camera.rotation + 180) % 360 - 180;
+    final start = camera.projectAtZoom(camera.center, 0);
+    // Choose the nearest world copy when crossing the date line.
+    final longitude =
+        camera.center.longitude +
+        ((target.longitude - camera.center.longitude + 180) % 360 - 180);
+    final end = camera.projectAtZoom(LatLng(target.latitude, longitude), 0);
+    _cameraTick = () {
+      final t = Curves.easeInOutCubic.transform(_cameraAnimation.value);
+      final point = camera.unprojectAtZoom(Offset.lerp(start, end, t)!, 0);
+      if (rotation != null) {
+        _mapController.rotate(camera.rotation + rotationDelta * t);
+      }
+      _mapController.move(
+        LatLng(point.latitude, (point.longitude + 180) % 360 - 180),
+        camera.zoom + (zoom - camera.zoom) * t,
+      );
+    };
+    _cameraAnimation.addListener(_cameraTick!);
+    _cameraAnimation.forward(from: 0);
   }
 
   void _fitPositions(AppState state) {
@@ -102,15 +180,14 @@ class _MapScreenState extends State<MapScreen> {
         .toList(growable: false);
     if (points.isEmpty) return;
     if (points.length == 1) {
-      _mapController.move(points.first, 15);
+      _animateCamera(points.first, 15);
       return;
     }
-    _mapController.fitCamera(
-      CameraFit.bounds(
-        bounds: LatLngBounds.fromPoints(points),
-        padding: const EdgeInsets.fromLTRB(48, 120, 48, 180),
-      ),
-    );
+    final fitted = CameraFit.bounds(
+      bounds: LatLngBounds.fromPoints(points),
+      padding: const EdgeInsets.fromLTRB(48, 120, 48, 180),
+    ).fit(_mapController.camera);
+    _animateCamera(fitted.center, fitted.zoom.clamp(_minMapZoom, _maxMapZoom));
   }
 
   Future<bool> _addPlace(LatLng point) async {
@@ -186,16 +263,33 @@ class _MapScreenState extends State<MapScreen> {
     return saved;
   }
 
-  void _startDrawingPlace() {
+  void _startDrawingPlace({bool auto = false}) {
     _personSheetController?.close();
     setState(() {
+      _buildingRefresh?.cancel();
+      _buildingSession++;
+      _buildingBusy = false;
+      _buildingError = null;
+      _availableBuildings = [];
+      _autoBuilding = auto;
+      _selectedBuildings.clear();
       _drawingPlace = true;
       _draftBoundary.clear();
     });
+    if (auto) {
+      if (_zoom < 16) {
+        _animateCamera(_mapController.camera.center, 17);
+      }
+      _scheduleBuildings();
+    }
   }
 
   void _cancelDrawingPlace() {
     setState(() {
+      _buildingRefresh?.cancel();
+      _buildingSession++;
+      _buildingBusy = false;
+      _selectedBuildings.clear();
       _drawingPlace = false;
       _draftBoundary.clear();
     });
@@ -203,7 +297,11 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _finishDrawingPlace() async {
     if (_draftBoundary.length < 3) return;
-    final name = TextEditingController();
+    final names = _selectedBuildings
+        .map((building) => building.name)
+        .where((name) => name.isNotEmpty)
+        .toSet();
+    final name = TextEditingController(text: names.join(' / '));
     final save = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -258,12 +356,140 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _updateBuildingBoundary() {
+    _draftBoundary
+      ..clear()
+      ..addAll(buildingBoundary(_selectedBuildings));
+  }
+
+  void _handleMapTap(LatLng point) {
+    if (_drawingPlace) {
+      if (_autoBuilding) {
+        _selectBuilding(point);
+      } else {
+        setState(() => _draftBoundary.add(point));
+      }
+      return;
+    }
+    final place = NamedPlaceStore.nearest(
+      context.read<AppState>().namedPlaces,
+      point.latitude,
+      point.longitude,
+    );
+    if (place != null) _showPlaceSheet(place);
+  }
+
+  void _scheduleBuildings() {
+    if (!_drawingPlace || !_autoBuilding || !widget.visible) return;
+    _buildingRefresh?.cancel();
+    // Invalidate any request for the previous viewport.
+    final session = ++_buildingSession;
+    _buildingRefresh = Timer(const Duration(milliseconds: 300), () {
+      unawaited(_loadSelectableBuildings(session));
+    });
+  }
+
+  Future<void> _loadSelectableBuildings(int session) async {
+    if (!mounted || session != _buildingSession) return;
+    if (_zoom < 16) {
+      setState(() {
+        _buildingBusy = false;
+        _availableBuildings = [];
+        _buildingError = 'Zoom in to see selectable buildings.';
+      });
+      return;
+    }
+    final style = _baseMapStyle;
+    final sources = style?.theme.referencedSourceLayers.entries.where(
+      (entry) => entry.value.contains('building'),
+    );
+    final source = sources?.firstOrNull?.key;
+    final provider = source == null ? null : style?.providers[source];
+    if (provider == null) {
+      setState(() {
+        _buildingBusy = false;
+        _buildingError =
+            'Waiting for the map. Retry if outlines do not appear.';
+      });
+      return;
+    }
+    setState(() {
+      _buildingBusy = true;
+      _buildingError = null;
+    });
+    try {
+      final buildings = await _buildingLookup.inBounds(
+        provider,
+        _mapController.camera.visibleBounds,
+      );
+      if (!mounted || session != _buildingSession) return;
+      setState(() {
+        _availableBuildings = buildings;
+        if (buildings.isEmpty) {
+          _buildingError =
+              'No mapped buildings here. Move the map or draw manually.';
+        }
+      });
+    } on Object catch (error) {
+      if (!mounted || session != _buildingSession) return;
+      setState(() {
+        _buildingError = error is FormatException
+            ? error.message
+            : 'Could not load outlines. Tap Retry.';
+      });
+    } finally {
+      if (mounted && session == _buildingSession) {
+        setState(() => _buildingBusy = false);
+      }
+    }
+  }
+
+  void _selectBuilding(LatLng point) {
+    final candidates = <String, BuildingFootprint>{
+      for (final b in _availableBuildings) b.id: b,
+      for (final b in _selectedBuildings) b.id: b,
+    };
+    final hitId = _buildingHits.value?.hitValues.firstOrNull;
+    final hits = candidates.values.where((b) => b.contains(point)).toList()
+      ..sort(
+        (a, b) => polygonArea(a.boundary).compareTo(polygonArea(b.boundary)),
+      );
+    final building = candidates[hitId] ?? hits.firstOrNull;
+    if (building == null) return;
+    setState(() {
+      final selected = _selectedBuildings.indexWhere(
+        (b) => b.id == building.id,
+      );
+      if (selected >= 0) {
+        _selectedBuildings.removeAt(selected);
+      } else {
+        _selectedBuildings.add(building);
+      }
+      _updateBuildingBoundary();
+    });
+  }
+
+  void _showPlaceSheet(NamedPlace place) {
+    _personSheetController?.close();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.5,
+        child: PlacesScreen(selectedPlaceId: place.id),
+      ),
+    );
+  }
+
   void _showPersonSheet(
     TraccarDevice device,
     TraccarPosition position,
     AppState state,
   ) {
-    final address = state.reverseGeocode(position);
+    final address = state
+        .reverseGeocode(position)
+        .catchError((Object _) => locationFallback(position));
     _personSheetController?.close();
     late final PersistentBottomSheetController controller;
     controller = showBottomSheet(
@@ -303,7 +529,7 @@ class _MapScreenState extends State<MapScreen> {
     AppState state,
   ) {
     final point = LatLng(position.latitude, position.longitude);
-    _mapController.move(point, math.max(_zoom, _personFocusZoom));
+    _animateCamera(point, math.max(_zoom, _personFocusZoom));
     _showPersonSheet(device, position, state);
   }
 
@@ -323,7 +549,7 @@ class _MapScreenState extends State<MapScreen> {
       _centeredOnCurrentDevice = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _mapController.move(
+        _animateCamera(
           LatLng(
             currentDevicePosition.latitude,
             currentDevicePosition.longitude,
@@ -334,13 +560,9 @@ class _MapScreenState extends State<MapScreen> {
     }
     final baseMapStyle = _baseMapStyle;
     final showSatellite =
-        state.satelliteAutoAtStreetZoom &&
-        _zoom >= _satelliteZoom &&
-        state.mapTilerApiKey.isNotEmpty;
+        state.satelliteAtZoom(_zoom) && state.mapTilerApiKey.isNotEmpty;
     final satelliteMissingKey =
-        state.satelliteAutoAtStreetZoom &&
-        _zoom >= _satelliteZoom &&
-        state.mapTilerApiKey.isEmpty;
+        state.satelliteAtZoom(_zoom) && state.mapTilerApiKey.isEmpty;
     final attribution = baseMapStyle?.attributions
         .map((item) => item.text)
         .where((text) => text.isNotEmpty)
@@ -349,214 +571,233 @@ class _MapScreenState extends State<MapScreen> {
 
     return Stack(
       children: [
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: initialPosition == null
-                ? const LatLng(20, 0)
-                : LatLng(initialPosition.latitude, initialPosition.longitude),
-            initialZoom: initialPosition == null ? 2.5 : 12,
-            minZoom: _minMapZoom,
-            maxZoom: _maxMapZoom,
-            onTap: _drawingPlace
-                ? (_, point) => setState(() => _draftBoundary.add(point))
-                : null,
-            onPositionChanged: (camera, _) {
-              final wasSatelliteZoom = _zoom >= _satelliteZoom;
-              final isSatelliteZoom = camera.zoom >= _satelliteZoom;
-              _zoom = camera.zoom;
-              if (wasSatelliteZoom != isSatelliteZoom) setState(() {});
-            },
-            onLongPress: _drawingPlace
-                ? null
-                : (_, point) => unawaited(_addPlace(point)),
-          ),
-          children: [
-            if (baseMapStyle != null)
-              vt.VectorTileLayer(
-                theme: baseMapStyle.theme,
-                tileProviders: baseMapStyle.providers,
-                rasterSources: baseMapStyle.rasterSources,
-                sprites: baseMapStyle.sprites,
-                // Positron omits POIs such as restaurants while retaining
-                // useful road and city labels.
-                showLabels: true,
-                concurrency: 2,
-                diskCacheMaximumSizeInBytes: 40 * 1024 * 1024,
-              )
-            else
-              const ColoredBox(
-                color: Color(0xFFE9ECE8),
-                child: SizedBox.expand(),
-              ),
-            // Keep this layer mounted so its long-lived HTTP client remains
-            // reusable as the user crosses the satellite zoom threshold.
-            TileLayer(
-              urlTemplate:
-                  'https://api.maptiler.com/maps/satellite-v4/'
-                  '{z}/{x}/{y}@2x.jpg?key=${state.mapTilerApiKey}',
-              userAgentPackageName: 'com.oneupbyte.trakkar',
-              tileProvider: _satelliteTileProvider,
-              minZoom:
-                  state.satelliteAutoAtStreetZoom &&
-                      state.mapTilerApiKey.isNotEmpty
-                  ? _satelliteZoom
-                  : _maxMapZoom + 1,
-              tileDimension: 512,
-              zoomOffset: -1,
-              maxNativeZoom: 21,
+        Listener(
+          onPointerDown: (_) => _cameraAnimation.stop(),
+          child: FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: initialPosition == null
+                  ? const LatLng(20, 0)
+                  : LatLng(initialPosition.latitude, initialPosition.longitude),
+              backgroundColor: state.darkMap
+                  ? const Color(0xFF171A21)
+                  : const Color(0xFFE9ECE8),
+              initialZoom: initialPosition == null ? 2.5 : 12,
+              minZoom: _minMapZoom,
               maxZoom: _maxMapZoom,
+              onTap: (_, point) => _handleMapTap(point),
+              onPositionChanged: (camera, _) {
+                final wasSatelliteZoom = state.satelliteAtZoom(_zoom);
+                final isSatelliteZoom = state.satelliteAtZoom(camera.zoom);
+                _zoom = camera.zoom;
+                _scheduleBuildings();
+                if (wasSatelliteZoom != isSatelliteZoom ||
+                    _rotation != camera.rotation) {
+                  setState(() => _rotation = camera.rotation);
+                }
+              },
+              onLongPress: _drawingPlace
+                  ? null
+                  : (_, point) => unawaited(_addPlace(point)),
             ),
-            CircleLayer(
-              circles: state.namedPlaces
-                  .where((place) => !place.isPolygon)
-                  .map(
-                    (place) => CircleMarker(
-                      point: LatLng(place.latitude, place.longitude),
-                      radius: place.radiusMeters,
-                      useRadiusInMeter: true,
-                      color: placeColor.withValues(alpha: 0.16),
-                      borderColor: placeColor,
-                      borderStrokeWidth: 2,
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-            PolygonLayer(
-              polygons: <Polygon>[
-                ...state.namedPlaces
-                    .where((place) => place.isPolygon)
+            children: [
+              if (baseMapStyle != null)
+                vt.VectorTileLayer(
+                  theme: baseMapStyle.theme,
+                  tileProviders: baseMapStyle.providers,
+                  rasterSources: baseMapStyle.rasterSources,
+                  sprites: baseMapStyle.sprites,
+                  showLabels: true,
+                  concurrency: 2,
+                  diskCacheMaximumSizeInBytes: 40 * 1024 * 1024,
+                )
+              else
+                ColoredBox(
+                  color: state.darkMap
+                      ? const Color(0xFF171A21)
+                      : const Color(0xFFE9ECE8),
+                  child: const SizedBox.expand(),
+                ),
+              // Keep this layer mounted so its long-lived HTTP client remains
+              // reusable as the user crosses the satellite zoom threshold.
+              TileLayer(
+                urlTemplate:
+                    'https://api.maptiler.com/maps/satellite-v4/'
+                    '{z}/{x}/{y}@2x.jpg?key=${state.mapTilerApiKey}',
+                userAgentPackageName: 'com.oneupbyte.trakkar',
+                tileProvider: _satelliteTileProvider,
+                minZoom: state.mapTilerApiKey.isEmpty
+                    ? _maxMapZoom + 1
+                    : state.satelliteAlways
+                    ? _minMapZoom
+                    : state.satelliteAutoAtStreetZoom
+                    ? state.satelliteZoom
+                    : _maxMapZoom + 1,
+                tileDimension: 512,
+                zoomOffset: -1,
+                maxNativeZoom: 21,
+                maxZoom: _maxMapZoom,
+              ),
+              CircleLayer(
+                circles: state.namedPlaces
+                    .where((place) => !place.isPolygon)
                     .map(
-                      (place) => Polygon(
-                        points: place.boundary,
+                      (place) => CircleMarker(
+                        point: LatLng(place.latitude, place.longitude),
+                        radius: place.radiusMeters,
+                        useRadiusInMeter: true,
                         color: placeColor.withValues(alpha: 0.16),
                         borderColor: placeColor,
                         borderStrokeWidth: 2,
                       ),
+                    )
+                    .toList(growable: false),
+              ),
+              PolygonLayer(
+                polygons: <Polygon>[
+                  ...state.namedPlaces
+                      .where((place) => place.isPolygon)
+                      .map(
+                        (place) => Polygon(
+                          points: place.boundary,
+                          color: placeColor.withValues(alpha: 0.16),
+                          borderColor: placeColor,
+                          borderStrokeWidth: 2,
+                        ),
+                      ),
+                  if (_draftBoundary.length >= 3)
+                    Polygon(
+                      points: _draftBoundary,
+                      color: placeColor.withValues(alpha: 0.22),
+                      borderColor: placeColor,
+                      borderStrokeWidth: 3,
                     ),
-                if (_draftBoundary.length >= 3)
-                  Polygon(
-                    points: _draftBoundary,
-                    color: placeColor.withValues(alpha: 0.22),
-                    borderColor: placeColor,
-                    borderStrokeWidth: 3,
-                  ),
-              ],
-            ),
-            if (_draftBoundary.length >= 2)
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: _draftBoundary,
-                    color: placeColor,
-                    strokeWidth: 3,
-                  ),
                 ],
               ),
-            if (_draftBoundary.isNotEmpty)
-              CircleLayer(
-                circles: _draftBoundary
+              if (_draftBoundary.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _draftBoundary,
+                      color: placeColor,
+                      strokeWidth: 3,
+                    ),
+                  ],
+                ),
+              if (_draftBoundary.isNotEmpty)
+                CircleLayer(
+                  circles: _draftBoundary
+                      .map(
+                        (point) => CircleMarker(
+                          point: point,
+                          radius: 6,
+                          color: Theme.of(context).colorScheme.surface,
+                          borderColor: placeColor,
+                          borderStrokeWidth: 3,
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              if (_drawingPlace && _autoBuilding)
+                BuildingHighlights(
+                  buildings: {
+                    for (final b in _availableBuildings) b.id: b,
+                    for (final b in _selectedBuildings) b.id: b,
+                  }.values.toList(),
+                  selectedIds: _selectedBuildings.map((b) => b.id).toSet(),
+                  hitNotifier: _buildingHits,
+                ),
+              MarkerLayer(
+                markers: state.namedPlaces
                     .map(
-                      (point) => CircleMarker(
-                        point: point,
-                        radius: 6,
-                        color: Theme.of(context).colorScheme.surface,
-                        borderColor: placeColor,
-                        borderStrokeWidth: 3,
+                      (place) => Marker(
+                        point: LatLng(place.latitude, place.longitude),
+                        width: 42,
+                        height: 42,
+                        child: Tooltip(
+                          message: place.name,
+                          child: Icon(
+                            Icons.location_on_rounded,
+                            color: Theme.of(context).colorScheme.tertiary,
+                            shadows: const [
+                              Shadow(color: Colors.white, blurRadius: 5),
+                            ],
+                          ),
+                        ),
                       ),
                     )
                     .toList(growable: false),
               ),
-            MarkerLayer(
-              markers: state.namedPlaces
-                  .map(
-                    (place) => Marker(
-                      point: LatLng(place.latitude, place.longitude),
-                      width: 42,
-                      height: 42,
-                      child: Tooltip(
-                        message: place.name,
-                        child: Icon(
-                          Icons.location_on_rounded,
-                          color: Theme.of(context).colorScheme.tertiary,
-                          shadows: const [
-                            Shadow(color: Colors.white, blurRadius: 5),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-            MarkerClusterLayerWidget(
-              options: MarkerClusterLayerOptions(
-                rotate: true,
-                maxClusterRadius: 60,
-                maxZoom: _maxMapZoom,
-                disableClusteringAtZoom: 22,
-                zoomToBoundsOnClick: false,
-                spiderfyCluster: true,
-                spiderfyCircleRadius: 72,
-                showPolygon: false,
-                markerChildBehavior: true,
-                size: const Size(72, 54),
-                markers: state.positions.entries
-                    .map((entry) {
-                      final device = devicesById[entry.key];
-                      final position = entry.value;
-                      return Marker(
-                        key: ValueKey(entry.key),
-                        point: LatLng(position.latitude, position.longitude),
-                        width: 126,
-                        height: 64,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: device == null
-                              ? null
-                              : () => _focusPerson(device, position, state),
-                          child: _AvatarMarker(
-                            name: device?.name ?? 'Unknown',
-                            online: device?.status == 'online',
-                            driving: state.isDriving(position),
-                            position: position,
-                            imageBytes: device == null
+              MarkerClusterLayerWidget(
+                options: MarkerClusterLayerOptions(
+                  rotate: true,
+                  maxClusterRadius: 60,
+                  maxZoom: _maxMapZoom,
+                  disableClusteringAtZoom: 22,
+                  zoomToBoundsOnClick: false,
+                  spiderfyCluster: true,
+                  spiderfyCircleRadius: 72,
+                  showPolygon: false,
+                  markerChildBehavior: true,
+                  size: const Size(72, 54),
+                  markers: state.positions.entries
+                      .map((entry) {
+                        final device = devicesById[entry.key];
+                        final position = entry.value;
+                        return Marker(
+                          key: ValueKey(entry.key),
+                          point: LatLng(position.latitude, position.longitude),
+                          width: 126,
+                          height: 64,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: device == null
                                 ? null
-                                : state.deviceImages[device.id],
+                                : () => _focusPerson(device, position, state),
+                            child: _AvatarMarker(
+                              name: device?.name ?? 'Unknown',
+                              online: device?.status == 'online',
+                              driving: state.isDriving(position),
+                              position: position,
+                              imageBytes: device == null
+                                  ? null
+                                  : state.deviceImages[device.id],
+                            ),
                           ),
+                        );
+                      })
+                      .toList(growable: false),
+                  builder: (context, markers) {
+                    final people = <_ClusterPerson>[];
+                    for (final marker in markers) {
+                      final key = marker.key;
+                      if (key is! ValueKey<int>) continue;
+                      final device = devicesById[key.value];
+                      people.add(
+                        _ClusterPerson(
+                          name: device?.name ?? 'Unknown',
+                          imageBytes: state.deviceImages[key.value],
                         ),
                       );
-                    })
-                    .toList(growable: false),
-                builder: (context, markers) {
-                  final people = <_ClusterPerson>[];
-                  for (final marker in markers) {
-                    final key = marker.key;
-                    if (key is! ValueKey<int>) continue;
-                    final device = devicesById[key.value];
-                    people.add(
-                      _ClusterPerson(
-                        name: device?.name ?? 'Unknown',
-                        imageBytes: state.deviceImages[key.value],
-                      ),
-                    );
-                  }
-                  return _ClusterMarker(people: people);
-                },
-              ),
-            ),
-            RichAttributionWidget(
-              showFlutterMapAttribution: false,
-              attributions: [
-                TextSourceAttribution(
-                  showSatellite
-                      ? '© MapTiler · © OpenStreetMap contributors'
-                      : attribution?.isNotEmpty ?? false
-                      ? attribution!
-                      : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
+                    }
+                    return _ClusterMarker(people: people);
+                  },
                 ),
-              ],
-            ),
-          ],
+              ),
+              RichAttributionWidget(
+                showFlutterMapAttribution: false,
+                attributions: [
+                  TextSourceAttribution(
+                    showSatellite
+                        ? '© MapTiler · © OpenStreetMap contributors'
+                        : attribution?.isNotEmpty ?? false
+                        ? attribution!
+                        : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         if (!_drawingPlace)
           Positioned(
@@ -624,9 +865,33 @@ class _MapScreenState extends State<MapScreen> {
                   tooltip: 'Draw a place',
                   child: const Icon(Icons.gesture_rounded),
                 ),
+                const SizedBox(height: 10),
+                FloatingActionButton.small(
+                  heroTag: 'autoPlace',
+                  onPressed: () => _startDrawingPlace(auto: true),
+                  tooltip: 'Auto: select buildings',
+                  child: const Text('Auto'),
+                ),
               ],
             ),
           ),
+        Positioned(
+          right: 16,
+          bottom: _drawingPlace ? 190 : 32,
+          child: FloatingActionButton.small(
+            heroTag: 'compass',
+            tooltip: 'Point north',
+            onPressed: () => _animateCamera(
+              _mapController.camera.center,
+              _zoom,
+              rotation: 0,
+            ),
+            child: Transform.rotate(
+              angle: _rotation * math.pi / 180,
+              child: const Icon(Icons.navigation_rounded),
+            ),
+          ),
+        ),
         if (_drawingPlace)
           Positioned(
             left: 16,
@@ -641,13 +906,36 @@ class _MapScreenState extends State<MapScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _draftBoundary.length < 3
+                      _autoBuilding
+                          ? (_buildingError ??
+                                (_buildingBusy
+                                    ? 'Loading selectable buildings…'
+                                    : 'Tap highlighted buildings to add or remove them'))
+                          : _draftBoundary.length < 3
                           ? 'Tap at least 3 corners of the place'
                           : 'Tap to add more corners, or finish the shape',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
+                    if (_autoBuilding) ...[
+                      const SizedBox(height: 6),
+                      const Text('Blue: selectable · Green: selected'),
+                      if (_buildingError != null)
+                        TextButton(
+                          onPressed: () {
+                            if (_baseMapStyle == null) {
+                              unawaited(_loadBaseMap());
+                            }
+                            _scheduleBuildings();
+                          },
+                          child: const Text('Retry'),
+                        ),
+                    ],
                     const SizedBox(height: 6),
-                    Text('${_draftBoundary.length} corners added'),
+                    Text(
+                      _autoBuilding
+                          ? '${_selectedBuildings.length} buildings selected · © OpenStreetMap contributors'
+                          : '${_draftBoundary.length} corners added',
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -656,17 +944,24 @@ class _MapScreenState extends State<MapScreen> {
                           child: const Text('Cancel'),
                         ),
                         IconButton(
-                          tooltip: 'Undo last corner',
-                          onPressed: _draftBoundary.isEmpty
+                          tooltip: _autoBuilding
+                              ? 'Undo last building'
+                              : 'Undo last corner',
+                          onPressed: _buildingBusy || _draftBoundary.isEmpty
                               ? null
                               : () => setState(() {
-                                  _draftBoundary.removeLast();
+                                  if (_autoBuilding) {
+                                    _selectedBuildings.removeLast();
+                                    _updateBuildingBoundary();
+                                  } else {
+                                    _draftBoundary.removeLast();
+                                  }
                                 }),
                           icon: const Icon(Icons.undo_rounded),
                         ),
                         const Spacer(),
                         FilledButton.icon(
-                          onPressed: _draftBoundary.length < 3
+                          onPressed: _buildingBusy || _draftBoundary.length < 3
                               ? null
                               : () => unawaited(_finishDrawingPlace()),
                           icon: const Icon(Icons.check_rounded),
@@ -1031,19 +1326,7 @@ class _PersonSheet extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
-            FutureBuilder<String>(
-              future: address,
-              builder: (context, snapshot) => Text(
-                snapshot.data ??
-                    (snapshot.hasError
-                        ? 'Address unavailable'
-                        : 'Finding address…'),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
+            LocationLabel(position: position, address: address),
             const SizedBox(height: 8),
             Text(
               _positionSummary(position),

@@ -63,7 +63,7 @@ void main() {
     );
 
     expect(find.text('Alex'), findsOneWidget);
-    expect(find.text('Home'), findsOneWidget);
+    expect(find.textContaining('Home · Update time unknown'), findsOneWidget);
     expect(find.text('Blake'), findsOneWidget);
     expect(find.text('No location reported'), findsOneWidget);
   });

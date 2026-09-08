@@ -37,6 +37,10 @@ class AppState extends ChangeNotifier {
   static const _firstNameKey = 'profile.firstName';
   static const _deviceUsernameKey = 'profile.deviceUsername';
   static const _trackingWantedKey = 'tracking.wanted';
+  static const _satelliteZoomKey = 'map.satelliteZoom';
+  static const _satelliteAlwaysKey = 'map.satelliteAlways';
+  Future<void> _appearanceSave = Future.value();
+  static const _darkMapKey = 'map.darkMode';
   static const _satelliteAutoKey = 'map.satelliteAutoAtStreetZoom';
   static const _themePreferenceKey = 'appearance.theme';
 
@@ -74,6 +78,9 @@ class AppState extends ChangeNotifier {
   Map<int, TraccarPosition> positions = const {};
   Map<int, Uint8List> deviceImages = const {};
   List<NamedPlace> namedPlaces = const [];
+  double satelliteZoom = 20;
+  bool satelliteAlways = false;
+  bool darkMap = false;
   bool satelliteAutoAtStreetZoom = true;
   String mapTilerApiKey = '';
   ThemePreference themePreference = ThemePreference.system;
@@ -89,6 +96,10 @@ class AppState extends ChangeNotifier {
     namedPlaces = await _namedPlaceStore.load();
     satelliteAutoAtStreetZoom =
         await _preferences.getBool(_satelliteAutoKey) ?? true;
+    satelliteZoom = (await _preferences.getDouble(_satelliteZoomKey) ?? 20)
+        .clamp(2, 21);
+    satelliteAlways = await _preferences.getBool(_satelliteAlwaysKey) ?? false;
+    darkMap = await _preferences.getBool(_darkMapKey) ?? false;
     final savedTheme = await _preferences.getString(_themePreferenceKey);
     themePreference = ThemePreference.values.firstWhere(
       (preference) => preference.name == savedTheme,
@@ -278,10 +289,11 @@ class AppState extends ChangeNotifier {
         _loadMapTilerKey(api),
       ]);
       devices = results[0] as List<TraccarDevice>;
-      positions = <int, TraccarPosition>{
-        for (final position in results[1] as List<TraccarPosition>)
-          position.deviceId: position,
-      };
+      positions = mergeLastKnownPositions({
+        for (final entry in positions.entries)
+          if (devices.any((device) => device.id == entry.key))
+            entry.key: entry.value,
+      }, results[1] as List<TraccarPosition>);
       _recordDrivingStatus(positions.values);
       var sharedPlaces = results[2] as List<NamedPlace>;
       for (final local in cachedLocalPlaces) {
@@ -399,10 +411,7 @@ class AppState extends ChangeNotifier {
         }
       }
       final latest = await api.positions();
-      positions = <int, TraccarPosition>{
-        ...positions,
-        for (final position in latest) position.deviceId: position,
-      };
+      positions = mergeLastKnownPositions(positions, latest);
       _recordDrivingStatus(latest);
       lastError = null;
       notifyListeners();
@@ -487,16 +496,14 @@ class AppState extends ChangeNotifier {
     }
     final positionPayloads = message['positions'] as List<dynamic>?;
     if (positionPayloads != null) {
-      final updated = Map<int, TraccarPosition>.from(positions);
       final latest = <TraccarPosition>[];
       for (final payload in positionPayloads) {
         final position = TraccarPosition.fromJson(
           Map<String, dynamic>.from(payload as Map),
         );
-        updated[position.deviceId] = position;
         latest.add(position);
       }
-      positions = updated;
+      positions = mergeLastKnownPositions(positions, latest);
       _recordDrivingStatus(latest);
     }
     final eventPayloads = message['events'] as List<dynamic>?;
@@ -620,12 +627,34 @@ class AppState extends ChangeNotifier {
     return api.reverseGeocode(position.latitude, position.longitude);
   }
 
+  bool satelliteAtZoom(double zoom) =>
+      satelliteAlways || (satelliteAutoAtStreetZoom && zoom >= satelliteZoom);
+
   Future<void> saveMapAppearance({
-    required bool satelliteAutoAtStreetZoom,
-  }) async {
-    await _preferences.setBool(_satelliteAutoKey, satelliteAutoAtStreetZoom);
-    this.satelliteAutoAtStreetZoom = satelliteAutoAtStreetZoom;
+    bool? satelliteAutoAtStreetZoom,
+    bool? darkMap,
+    double? satelliteZoom,
+    bool? satelliteAlways,
+  }) {
+    this.satelliteAutoAtStreetZoom =
+        satelliteAutoAtStreetZoom ?? this.satelliteAutoAtStreetZoom;
+    this.darkMap = darkMap ?? this.darkMap;
+    this.satelliteZoom = (satelliteZoom ?? this.satelliteZoom).clamp(2, 21);
+    this.satelliteAlways = satelliteAlways ?? this.satelliteAlways;
     notifyListeners();
+    final auto = this.satelliteAutoAtStreetZoom;
+    final dark = this.darkMap;
+    final zoom = this.satelliteZoom;
+    final always = this.satelliteAlways;
+    // Serialize writes so rapid changes cannot restore an older preference.
+    final save = _appearanceSave.catchError((Object _) {}).then((_) async {
+      await _preferences.setBool(_satelliteAutoKey, auto);
+      await _preferences.setBool(_darkMapKey, dark);
+      await _preferences.setDouble(_satelliteZoomKey, zoom);
+      await _preferences.setBool(_satelliteAlwaysKey, always);
+    });
+    _appearanceSave = save;
+    return save;
   }
 
   Future<void> setThemePreference(ThemePreference preference) async {
@@ -795,6 +824,9 @@ class AppState extends ChangeNotifier {
     positions = const {};
     deviceImages = const {};
     namedPlaces = const [];
+    satelliteZoom = 20;
+    satelliteAlways = false;
+    darkMap = false;
     satelliteAutoAtStreetZoom = true;
     mapTilerApiKey = '';
     themePreference = ThemePreference.system;
@@ -818,12 +850,16 @@ class AppState extends ChangeNotifier {
       await subscription?.cancel();
     });
     await attempt(_credentialStore.clearProvisioning);
+    await attempt(() => _appearanceSave);
     await attempt(
       () => Future.wait(<Future<void>>[
         _preferences.remove(_firstNameKey),
         _preferences.remove(_deviceUsernameKey),
         _preferences.remove(_trackingWantedKey),
         _preferences.remove(_satelliteAutoKey),
+        _preferences.remove(_darkMapKey),
+        _preferences.remove(_satelliteZoomKey),
+        _preferences.remove(_satelliteAlwaysKey),
         _preferences.remove(_themePreferenceKey),
         _namedPlaceStore.save(const []),
       ]),

@@ -44,7 +44,7 @@ class NamedPlaceStore {
     var closestMeters = double.infinity;
     for (final place in places) {
       if (place.isPolygon &&
-          !_polygonContains(place.boundary, latitude, longitude)) {
+          !polygonContains(place.boundary, latitude, longitude)) {
         continue;
       }
       final meters = distance.as(
@@ -61,7 +61,7 @@ class NamedPlaceStore {
     return closest;
   }
 
-  static bool _polygonContains(
+  static bool polygonContains(
     List<LatLng> boundary,
     double latitude,
     double longitude,

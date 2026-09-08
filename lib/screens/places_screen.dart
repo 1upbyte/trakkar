@@ -4,11 +4,23 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 
 class PlacesScreen extends StatelessWidget {
-  const PlacesScreen({super.key});
+  const PlacesScreen({this.selectedPlaceId, super.key});
+
+  final String? selectedPlaceId;
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final places = [...state.namedPlaces];
+    if (selectedPlaceId != null) {
+      places.sort(
+        (a, b) => a.id == selectedPlaceId
+            ? -1
+            : b.id == selectedPlaceId
+            ? 1
+            : 0,
+      );
+    }
     return SafeArea(
       child: CustomScrollView(
         slivers: [
@@ -26,7 +38,7 @@ class PlacesScreen extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     'Long-press the map to add a circular place, or use Draw '
-                    'place to trace its boundary.',
+                    'place to trace its boundary or Auto to select buildings.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -56,8 +68,11 @@ class PlacesScreen extends StatelessWidget {
                 itemCount: state.namedPlaces.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
-                  final place = state.namedPlaces[index];
+                  final place = places[index];
                   return Card(
+                    color: place.id == selectedPlaceId
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                        : null,
                     child: ListTile(
                       contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
                       leading: CircleAvatar(

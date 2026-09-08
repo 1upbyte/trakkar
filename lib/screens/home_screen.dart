@@ -79,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Scaffold(
         body: Stack(
           children: [
-            IndexedStack(
+            _TabStack(
               index: _index,
               children: [
                 MapScreen(
@@ -276,6 +276,73 @@ class _ErrorBanner extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Keeps each tab's map camera, scroll position, and form state alive.
+class _TabStack extends StatelessWidget {
+  const _TabStack({required this.index, required this.children});
+
+  final int index;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (var i = 0; i < children.length; i++)
+          _TabPane(active: index == i, child: children[i]),
+      ],
+    );
+  }
+}
+
+class _TabPane extends StatefulWidget {
+  const _TabPane({required this.active, required this.child});
+
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_TabPane> createState() => _TabPaneState();
+}
+
+class _TabPaneState extends State<_TabPane> {
+  late bool _hidden = !widget.active;
+
+  @override
+  void didUpdateWidget(covariant _TabPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active) _hidden = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    return Offstage(
+      offstage: reducedMotion ? !widget.active : _hidden,
+      child: TickerMode(
+        enabled: !_hidden,
+        child: IgnorePointer(
+          ignoring: !widget.active,
+          child: ExcludeSemantics(
+            excluding: !widget.active,
+            child: AnimatedOpacity(
+              opacity: widget.active ? 1 : 0,
+              duration: reducedMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              onEnd: () {
+                if (!widget.active) setState(() => _hidden = true);
+              },
+              child: widget.child,
+            ),
+          ),
         ),
       ),
     );

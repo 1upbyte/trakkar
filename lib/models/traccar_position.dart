@@ -60,3 +60,24 @@ class TraccarPosition {
     return speedMph >= 1;
   }
 }
+
+/// Preserve the last usable fix when a device loses GPS or responses arrive late.
+Map<int, TraccarPosition> mergeLastKnownPositions(
+  Map<int, TraccarPosition> previous,
+  Iterable<TraccarPosition> incoming,
+) {
+  final result = Map<int, TraccarPosition>.from(previous);
+  for (final position in incoming) {
+    final old = result[position.deviceId];
+    if (old != null) {
+      if (old.valid && !position.valid) continue;
+      if (old.fixTime != null &&
+          position.fixTime != null &&
+          position.fixTime!.isBefore(old.fixTime!)) {
+        continue;
+      }
+    }
+    result[position.deviceId] = position;
+  }
+  return result;
+}
