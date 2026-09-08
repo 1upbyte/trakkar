@@ -27,14 +27,12 @@ const _personFocusZoom = 18.0;
 
 class MapScreen extends StatefulWidget {
   const MapScreen({
-    required this.onPeopleTap,
     required this.visible,
     this.placeCreationRequest = 0,
     this.autoPlace = false,
     super.key,
   });
 
-  final VoidCallback onPeopleTap;
   final bool visible;
   final int placeCreationRequest;
   final bool autoPlace;
@@ -55,7 +53,7 @@ class _MapScreenState extends State<MapScreen>
   int _styleRequest = 0;
   vt.Style? _baseMapStyle;
   Object? _baseMapError;
-  bool _centeredOnCurrentDevice = false;
+  bool _fittedInitialPositions = false;
   double _zoom = 12;
   bool _drawingPlace = false;
   bool _autoBuilding = false;
@@ -514,17 +512,18 @@ class _MapScreenState extends State<MapScreen>
           position: position,
           imageBytes: state.deviceImages[device.id],
           address: address,
+          arrival: state.arrivalSummary(position),
           scrollController: scrollController,
           onNamePlace: () =>
               _addPlace(LatLng(position.latitude, position.longitude)),
         ),
       ),
     );
-    _personSheetController = controller;
+    setState(() => _personSheetController = controller);
     unawaited(
       controller.closed.whenComplete(() {
         if (identical(_personSheetController, controller)) {
-          _personSheetController = null;
+          if (mounted) setState(() => _personSheetController = null);
         }
       }),
     );
@@ -552,17 +551,10 @@ class _MapScreenState extends State<MapScreen>
         : state.positions[ownDevice.id];
     final initialPosition =
         currentDevicePosition ?? state.positions.values.firstOrNull;
-    if (!_centeredOnCurrentDevice && currentDevicePosition != null) {
-      _centeredOnCurrentDevice = true;
+    if (!_fittedInitialPositions && state.positions.isNotEmpty) {
+      _fittedInitialPositions = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _animateCamera(
-          LatLng(
-            currentDevicePosition.latitude,
-            currentDevicePosition.longitude,
-          ),
-          12,
-        );
+        if (mounted) _fitPositions(context.read<AppState>());
       });
     }
     final baseMapStyle = _baseMapStyle;
@@ -576,411 +568,433 @@ class _MapScreenState extends State<MapScreen>
         .join(' · ');
     final placeColor = Theme.of(context).colorScheme.tertiary;
 
-    return Stack(
-      children: [
-        Listener(
-          onPointerDown: (_) => _cameraAnimation.stop(),
-          child: FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: initialPosition == null
-                  ? const LatLng(20, 0)
-                  : LatLng(initialPosition.latitude, initialPosition.longitude),
-              backgroundColor: state.darkMap
-                  ? const Color(0xFF171A21)
-                  : const Color(0xFFE9ECE8),
-              initialZoom: initialPosition == null ? 2.5 : 12,
-              minZoom: _minMapZoom,
-              maxZoom: _maxMapZoom,
-              onTap: (_, point) => _handleMapTap(point),
-              onPositionChanged: (camera, _) {
-                final wasSatelliteZoom = state.satelliteAtZoom(_zoom);
-                final isSatelliteZoom = state.satelliteAtZoom(camera.zoom);
-                _zoom = camera.zoom;
-                _scheduleBuildings();
-                if (wasSatelliteZoom != isSatelliteZoom ||
-                    _rotation != camera.rotation) {
-                  setState(() => _rotation = camera.rotation);
-                }
-              },
-              onLongPress: _drawingPlace
-                  ? null
-                  : (_, point) => unawaited(_addPlace(point)),
-            ),
-            children: [
-              if (baseMapStyle != null)
-                vt.VectorTileLayer(
-                  theme: baseMapStyle.theme,
-                  tileProviders: baseMapStyle.providers,
-                  rasterSources: baseMapStyle.rasterSources,
-                  sprites: baseMapStyle.sprites,
-                  showLabels: true,
-                  concurrency: 2,
-                  diskCacheMaximumSizeInBytes: 40 * 1024 * 1024,
-                )
-              else
-                ColoredBox(
-                  color: state.darkMap
-                      ? const Color(0xFF171A21)
-                      : const Color(0xFFE9ECE8),
-                  child: const SizedBox.expand(),
-                ),
-              // Keep this layer mounted so its long-lived HTTP client remains
-              // reusable as the user crosses the satellite zoom threshold.
-              TileLayer(
-                urlTemplate:
-                    'https://api.maptiler.com/maps/satellite-v4/'
-                    '{z}/{x}/{y}@2x.jpg?key=${state.mapTilerApiKey}',
-                userAgentPackageName: 'com.oneupbyte.trakkar',
-                tileProvider: _satelliteTileProvider,
-                minZoom: state.mapTilerApiKey.isEmpty
-                    ? _maxMapZoom + 1
-                    : state.satelliteAlways
-                    ? _minMapZoom
-                    : state.satelliteAutoAtStreetZoom
-                    ? state.satelliteZoom
-                    : _maxMapZoom + 1,
-                tileDimension: 512,
-                zoomOffset: -1,
-                maxNativeZoom: 21,
+    return PopScope(
+      canPop: _personSheetController == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _personSheetController?.close();
+      },
+      child: Stack(
+        children: [
+          Listener(
+            onPointerDown: (_) => _cameraAnimation.stop(),
+            child: FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: initialPosition == null
+                    ? const LatLng(20, 0)
+                    : LatLng(
+                        initialPosition.latitude,
+                        initialPosition.longitude,
+                      ),
+                backgroundColor: state.darkMap
+                    ? const Color(0xFF171A21)
+                    : const Color(0xFFE9ECE8),
+                initialZoom: initialPosition == null ? 2.5 : 12,
+                minZoom: _minMapZoom,
                 maxZoom: _maxMapZoom,
+                onTap: (_, point) => _handleMapTap(point),
+                onPositionChanged: (camera, _) {
+                  final wasSatelliteZoom = state.satelliteAtZoom(_zoom);
+                  final isSatelliteZoom = state.satelliteAtZoom(camera.zoom);
+                  final zoomChanged = _zoom != camera.zoom;
+                  _zoom = camera.zoom;
+                  _scheduleBuildings();
+                  if (zoomChanged ||
+                      wasSatelliteZoom != isSatelliteZoom ||
+                      _rotation != camera.rotation) {
+                    setState(() => _rotation = camera.rotation);
+                  }
+                },
+                onLongPress: _drawingPlace
+                    ? null
+                    : (_, point) => unawaited(_addPlace(point)),
               ),
-              PolygonLayer(
-                polygons: <Polygon>[
-                  if (_draftBoundary.length >= 3)
-                    Polygon(
-                      points: _draftBoundary,
-                      color: placeColor.withValues(alpha: 0.22),
-                      borderColor: placeColor,
-                      borderStrokeWidth: 3,
-                    ),
-                ],
-              ),
-              if (_draftBoundary.length >= 2)
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: _draftBoundary,
-                      color: placeColor,
-                      strokeWidth: 3,
-                    ),
+              children: [
+                if (baseMapStyle != null)
+                  vt.VectorTileLayer(
+                    theme: baseMapStyle.theme,
+                    tileProviders: baseMapStyle.providers,
+                    rasterSources: baseMapStyle.rasterSources,
+                    sprites: baseMapStyle.sprites,
+                    showLabels: true,
+                    concurrency: 2,
+                    diskCacheMaximumSizeInBytes: 40 * 1024 * 1024,
+                  )
+                else
+                  ColoredBox(
+                    color: state.darkMap
+                        ? const Color(0xFF171A21)
+                        : const Color(0xFFE9ECE8),
+                    child: const SizedBox.expand(),
+                  ),
+                // Keep this layer mounted so its long-lived HTTP client remains
+                // reusable as the user crosses the satellite zoom threshold.
+                TileLayer(
+                  urlTemplate:
+                      'https://api.maptiler.com/maps/satellite-v4/'
+                      '{z}/{x}/{y}@2x.jpg?key=${state.mapTilerApiKey}',
+                  userAgentPackageName: 'com.oneupbyte.trakkar',
+                  tileProvider: _satelliteTileProvider,
+                  minZoom: state.mapTilerApiKey.isEmpty
+                      ? _maxMapZoom + 1
+                      : state.satelliteAlways
+                      ? _minMapZoom
+                      : state.satelliteAutoAtStreetZoom
+                      ? state.satelliteZoom
+                      : _maxMapZoom + 1,
+                  tileDimension: 512,
+                  zoomOffset: -1,
+                  maxNativeZoom: 21,
+                  maxZoom: _maxMapZoom,
+                ),
+                PolygonLayer(
+                  polygons: <Polygon>[
+                    if (_draftBoundary.length >= 3)
+                      Polygon(
+                        points: _draftBoundary,
+                        color: placeColor.withValues(alpha: 0.22),
+                        borderColor: placeColor,
+                        borderStrokeWidth: 3,
+                      ),
                   ],
                 ),
-              if (_draftBoundary.isNotEmpty)
-                CircleLayer(
-                  circles: _draftBoundary
+                if (_draftBoundary.length >= 2)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: _draftBoundary,
+                        color: placeColor,
+                        strokeWidth: 3,
+                      ),
+                    ],
+                  ),
+                if (_draftBoundary.isNotEmpty)
+                  CircleLayer(
+                    circles: _draftBoundary
+                        .map(
+                          (point) => CircleMarker(
+                            point: point,
+                            radius: 6,
+                            color: Theme.of(context).colorScheme.surface,
+                            borderColor: placeColor,
+                            borderStrokeWidth: 3,
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                if (_drawingPlace && _autoBuilding)
+                  BuildingHighlights(
+                    buildings: {
+                      for (final b in _availableBuildings) b.id: b,
+                      for (final b in _selectedBuildings) b.id: b,
+                    }.values.toList(),
+                    selectedIds: _selectedBuildings.map((b) => b.id).toSet(),
+                    hitNotifier: _buildingHits,
+                  ),
+                MarkerLayer(
+                  markers: state.namedPlaces
+                      .where((place) => placeLabelVisible(place, _zoom))
                       .map(
-                        (point) => CircleMarker(
-                          point: point,
-                          radius: 6,
-                          color: Theme.of(context).colorScheme.surface,
-                          borderColor: placeColor,
-                          borderStrokeWidth: 3,
-                        ),
-                      )
-                      .toList(growable: false),
-                ),
-              if (_drawingPlace && _autoBuilding)
-                BuildingHighlights(
-                  buildings: {
-                    for (final b in _availableBuildings) b.id: b,
-                    for (final b in _selectedBuildings) b.id: b,
-                  }.values.toList(),
-                  selectedIds: _selectedBuildings.map((b) => b.id).toSet(),
-                  hitNotifier: _buildingHits,
-                ),
-              MarkerLayer(
-                markers: state.namedPlaces
-                    .map(
-                      (place) => Marker(
-                        point: LatLng(place.latitude, place.longitude),
-                        width: 160,
-                        height: 44,
-                        rotate: true,
-                        child: GestureDetector(
-                          onTap: () => _showPlaceSheet(place),
-                          child: Center(
-                            child: Text(
-                              place.name,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: state.darkMap
-                                    ? Colors.white
-                                    : const Color(0xFF454B50),
-                                shadows: [
-                                  Shadow(
-                                    color: state.darkMap
-                                        ? Colors.black
-                                        : Colors.white,
-                                    blurRadius: 4,
-                                  ),
-                                ],
+                        (place) => Marker(
+                          point: LatLng(place.latitude, place.longitude),
+                          width: 160,
+                          height: 44,
+                          rotate: true,
+                          child: GestureDetector(
+                            onTap: () => _showPlaceSheet(place),
+                            child: Center(
+                              child: Text(
+                                place.name,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: state.darkMap
+                                      ? Colors.white
+                                      : const Color(0xFF454B50),
+                                  shadows: [
+                                    Shadow(
+                                      color: state.darkMap
+                                          ? Colors.black
+                                          : Colors.white,
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
-              MarkerClusterLayerWidget(
-                options: MarkerClusterLayerOptions(
-                  rotate: true,
-                  maxClusterRadius: 60,
-                  maxZoom: _maxMapZoom,
-                  disableClusteringAtZoom: 22,
-                  zoomToBoundsOnClick: false,
-                  spiderfyCluster: true,
-                  spiderfyCircleRadius: 72,
-                  showPolygon: false,
-                  markerChildBehavior: true,
-                  size: const Size(72, 54),
-                  markers: state.positions.entries
-                      .map((entry) {
-                        final device = devicesById[entry.key];
-                        final position = entry.value;
-                        return Marker(
-                          key: ValueKey(entry.key),
-                          point: LatLng(position.latitude, position.longitude),
-                          width: 126,
-                          height: 64,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: device == null
-                                ? null
-                                : () => _focusPerson(device, position, state),
-                            child: _AvatarMarker(
-                              name: device?.name ?? 'Unknown',
-                              online: device?.status == 'online',
-                              driving: state.isDriving(position),
-                              position: position,
-                              imageBytes: device == null
-                                  ? null
-                                  : state.deviceImages[device.id],
+                      )
+                      .toList(growable: false),
+                ),
+                MarkerClusterLayerWidget(
+                  options: MarkerClusterLayerOptions(
+                    rotate: true,
+                    maxClusterRadius: 60,
+                    maxZoom: _maxMapZoom,
+                    disableClusteringAtZoom: 22,
+                    zoomToBoundsOnClick: false,
+                    spiderfyCluster: true,
+                    spiderfyCircleRadius: 72,
+                    showPolygon: false,
+                    markerChildBehavior: true,
+                    size: const Size(72, 54),
+                    markers: state.positions.entries
+                        .map((entry) {
+                          final device = devicesById[entry.key];
+                          final position = entry.value;
+                          return Marker(
+                            key: ValueKey(entry.key),
+                            point: LatLng(
+                              position.latitude,
+                              position.longitude,
                             ),
+                            width: 126,
+                            height: 64,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: device == null
+                                  ? null
+                                  : () => _focusPerson(device, position, state),
+                              child: _AvatarMarker(
+                                name: device?.name ?? 'Unknown',
+                                online: device?.status == 'online',
+                                driving: state.isDriving(position),
+                                position: position,
+                                imageBytes: device == null
+                                    ? null
+                                    : state.deviceImages[device.id],
+                              ),
+                            ),
+                          );
+                        })
+                        .toList(growable: false),
+                    builder: (context, markers) {
+                      final people = <_ClusterPerson>[];
+                      for (final marker in markers) {
+                        final key = marker.key;
+                        if (key is! ValueKey<int>) continue;
+                        final device = devicesById[key.value];
+                        people.add(
+                          _ClusterPerson(
+                            name: device?.name ?? 'Unknown',
+                            imageBytes: state.deviceImages[key.value],
                           ),
                         );
-                      })
-                      .toList(growable: false),
-                  builder: (context, markers) {
-                    final people = <_ClusterPerson>[];
-                    for (final marker in markers) {
-                      final key = marker.key;
-                      if (key is! ValueKey<int>) continue;
-                      final device = devicesById[key.value];
-                      people.add(
-                        _ClusterPerson(
-                          name: device?.name ?? 'Unknown',
-                          imageBytes: state.deviceImages[key.value],
-                        ),
-                      );
-                    }
-                    return _ClusterMarker(people: people);
-                  },
-                ),
-              ),
-              RichAttributionWidget(
-                showFlutterMapAttribution: false,
-                attributions: [
-                  TextSourceAttribution(
-                    showSatellite
-                        ? '© MapTiler · © OpenStreetMap contributors'
-                        : attribution?.isNotEmpty ?? false
-                        ? attribution!
-                        : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
+                      }
+                      return _ClusterMarker(people: people);
+                    },
                   ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        if (!_drawingPlace)
-          Positioned(
-            top: MediaQuery.paddingOf(context).top + 16,
-            left: 16,
-            child: _ConnectionPill(
-              connected: state.liveConnected,
-              count: state.devices.length,
-              onTap: widget.onPeopleTap,
-            ),
-          ),
-        if (_baseMapError != null || satelliteMissingKey)
-          Positioned(
-            top: MediaQuery.paddingOf(context).top + 72,
-            left: 16,
-            right: 16,
-            child: Card(
-              child: ListTile(
-                leading: const Icon(Icons.map_outlined),
-                title: Text(
-                  satelliteMissingKey
-                      ? 'Satellite imagery is not configured'
-                      : 'Map style unavailable',
                 ),
-                subtitle: Text(
-                  satelliteMissingKey
-                      ? 'Add trakkarMapTilerKey to the Traccar server attributes.'
-                      : 'Check the connection and retry. Locations are still live.',
-                ),
-                trailing: satelliteMissingKey
-                    ? null
-                    : TextButton(
-                        onPressed: () {
-                          setState(() => _baseMapError = null);
-                          unawaited(_loadBaseMap());
-                        },
-                        child: const Text('Retry'),
-                      ),
-              ),
-            ),
-          ),
-        if (!_drawingPlace)
-          Positioned(
-            top: MediaQuery.paddingOf(context).top + 14,
-            right: 16,
-            child: Column(
-              children: [
-                FloatingActionButton.small(
-                  heroTag: 'refreshMap',
-                  onPressed: state.refresh,
-                  tooltip: 'Refresh positions',
-                  child: const Icon(Icons.refresh),
-                ),
-                const SizedBox(height: 10),
-                FloatingActionButton.small(
-                  heroTag: 'fitMap',
-                  onPressed: () => _fitPositions(state),
-                  tooltip: 'Show everyone',
-                  child: const Icon(Icons.zoom_out_map_rounded),
+                RichAttributionWidget(
+                  showFlutterMapAttribution: false,
+                  attributions: [
+                    TextSourceAttribution(
+                      showSatellite
+                          ? '© MapTiler · © OpenStreetMap contributors'
+                          : attribution?.isNotEmpty ?? false
+                          ? attribution!
+                          : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-        Positioned(
-          right: 16,
-          bottom: _drawingPlace ? 190 : 32,
-          child: FloatingActionButton.small(
-            heroTag: 'compass',
-            tooltip: 'Point north',
-            onPressed: () => _animateCamera(
-              _mapController.camera.center,
-              _zoom,
-              rotation: 0,
-            ),
-            child: Transform.rotate(
-              angle: _rotation * math.pi / 180,
-              child: const Icon(Icons.navigation_rounded),
-            ),
-          ),
-        ),
-        if (_drawingPlace)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 18,
-            child: Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 10, 10),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _autoBuilding
-                          ? (_buildingError ??
-                                (_buildingBusy
-                                    ? 'Loading selectable buildings…'
-                                    : 'Tap highlighted buildings to add or remove them'))
-                          : _draftBoundary.length < 3
-                          ? 'Tap at least 3 corners of the place'
-                          : 'Tap to add more corners, or finish the shape',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    if (_autoBuilding) ...[
-                      const SizedBox(height: 6),
-                      const Text('Blue: selectable · Green: selected'),
-                      if (_buildingError != null)
-                        TextButton(
+          if (_baseMapError != null || satelliteMissingKey)
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 72,
+              left: 16,
+              right: 16,
+              child: Card(
+                child: ListTile(
+                  leading: const Icon(Icons.map_outlined),
+                  title: Text(
+                    satelliteMissingKey
+                        ? 'Satellite imagery is not configured'
+                        : 'Map style unavailable',
+                  ),
+                  subtitle: Text(
+                    satelliteMissingKey
+                        ? 'Add trakkarMapTilerKey to the Traccar server attributes.'
+                        : 'Check the connection and retry. Locations are still live.',
+                  ),
+                  trailing: satelliteMissingKey
+                      ? null
+                      : TextButton(
                           onPressed: () {
-                            if (_baseMapStyle == null) {
-                              unawaited(_loadBaseMap());
-                            }
-                            _scheduleBuildings();
+                            setState(() => _baseMapError = null);
+                            unawaited(_loadBaseMap());
                           },
                           child: const Text('Retry'),
                         ),
-                    ],
-                    const SizedBox(height: 6),
-                    Text(
-                      _autoBuilding
-                          ? '${_selectedBuildings.length} buildings selected · © OpenStreetMap contributors'
-                          : '${_draftBoundary.length} corners added',
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: _cancelDrawingPlace,
-                          child: const Text('Cancel'),
-                        ),
-                        IconButton(
-                          tooltip: _autoBuilding
-                              ? 'Undo last building'
-                              : 'Undo last corner',
-                          onPressed: _buildingBusy || _draftBoundary.isEmpty
-                              ? null
-                              : () => setState(() {
-                                  if (_autoBuilding) {
-                                    _selectedBuildings.removeLast();
-                                    _updateBuildingBoundary();
-                                  } else {
-                                    _draftBoundary.removeLast();
-                                  }
-                                }),
-                          icon: const Icon(Icons.undo_rounded),
-                        ),
-                        const Spacer(),
-                        FilledButton.icon(
-                          onPressed: _buildingBusy || _draftBoundary.length < 3
-                              ? null
-                              : () => unawaited(_finishDrawingPlace()),
-                          icon: const Icon(Icons.check_rounded),
-                          label: const Text('Finish'),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
               ),
             ),
-          ),
-        if (state.positions.isEmpty)
-          Center(
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(22),
-                child: Column(
+          if (!_drawingPlace)
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 14,
+              right: 16,
+              child: Column(
+                children: [
+                  FloatingActionButton.small(
+                    heroTag: 'refreshMap',
+                    onPressed: state.refresh,
+                    tooltip: 'Refresh positions',
+                    child: const Icon(Icons.refresh),
+                  ),
+                  const SizedBox(height: 10),
+                  FloatingActionButton.small(
+                    heroTag: 'fitMap',
+                    onPressed: () => _fitPositions(state),
+                    tooltip: 'Show everyone',
+                    child: const Icon(Icons.zoom_out_map_rounded),
+                  ),
+                ],
+              ),
+            ),
+          Positioned(
+            right: 16,
+            bottom: _drawingPlace ? 190 : 32,
+            child: FloatingActionButton.small(
+              heroTag: 'compass',
+              tooltip: 'Point north',
+              onPressed: () => _animateCamera(
+                _mapController.camera.center,
+                _zoom,
+                rotation: 0,
+              ),
+              child: Transform.rotate(
+                angle: _rotation * math.pi / 180,
+                child: const Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.person_pin_circle_outlined, size: 38),
-                    const SizedBox(height: 10),
                     Text(
-                      'Waiting for locations',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      'N',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    const Text('New positions will appear here live.'),
+                    Icon(
+                      Icons.north_rounded,
+                      size: 24,
+                      color: Colors.redAccent,
+                    ),
                   ],
                 ),
               ),
             ),
           ),
-      ],
+          if (_drawingPlace)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 18,
+              child: Card(
+                elevation: 4,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 10, 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _autoBuilding
+                            ? (_buildingError ??
+                                  (_buildingBusy
+                                      ? 'Loading selectable buildings…'
+                                      : 'Tap highlighted buildings to add or remove them'))
+                            : _draftBoundary.length < 3
+                            ? 'Tap at least 3 corners of the place'
+                            : 'Tap to add more corners, or finish the shape',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      if (_autoBuilding) ...[
+                        const SizedBox(height: 6),
+                        const Text('Blue: selectable · Green: selected'),
+                        if (_buildingError != null)
+                          TextButton(
+                            onPressed: () {
+                              if (_baseMapStyle == null) {
+                                unawaited(_loadBaseMap());
+                              }
+                              _scheduleBuildings();
+                            },
+                            child: const Text('Retry'),
+                          ),
+                      ],
+                      const SizedBox(height: 6),
+                      Text(
+                        _autoBuilding
+                            ? '${_selectedBuildings.length} buildings selected · © OpenStreetMap contributors'
+                            : '${_draftBoundary.length} corners added',
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: _cancelDrawingPlace,
+                            child: const Text('Cancel'),
+                          ),
+                          IconButton(
+                            tooltip: _autoBuilding
+                                ? 'Undo last building'
+                                : 'Undo last corner',
+                            onPressed: _buildingBusy || _draftBoundary.isEmpty
+                                ? null
+                                : () => setState(() {
+                                    if (_autoBuilding) {
+                                      _selectedBuildings.removeLast();
+                                      _updateBuildingBoundary();
+                                    } else {
+                                      _draftBoundary.removeLast();
+                                    }
+                                  }),
+                            icon: const Icon(Icons.undo_rounded),
+                          ),
+                          const Spacer(),
+                          FilledButton.icon(
+                            onPressed:
+                                _buildingBusy || _draftBoundary.length < 3
+                                ? null
+                                : () => unawaited(_finishDrawingPlace()),
+                            icon: const Icon(Icons.check_rounded),
+                            label: const Text('Finish'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (state.positions.isEmpty)
+            Center(
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.person_pin_circle_outlined, size: 38),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Waiting for locations',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      const Text('New positions will appear here live.'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1195,56 +1209,13 @@ class _ClusterPerson {
   final Uint8List? imageBytes;
 }
 
-class _ConnectionPill extends StatelessWidget {
-  const _ConnectionPill({
-    required this.connected,
-    required this.count,
-    required this.onTap,
-  });
-  final bool connected;
-  final int count;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(18),
-      elevation: 1,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: connected ? const Color(0xFF36A269) : Colors.orange,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 7),
-              Text('$count ${count == 1 ? 'person' : 'people'}'),
-              const SizedBox(width: 3),
-              const Icon(Icons.chevron_right_rounded, size: 18),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _PersonSheet extends StatelessWidget {
   const _PersonSheet({
     required this.device,
     required this.position,
     required this.imageBytes,
     required this.address,
+    required this.arrival,
     required this.scrollController,
     required this.onNamePlace,
   });
@@ -1253,6 +1224,7 @@ class _PersonSheet extends StatelessWidget {
   final TraccarPosition position;
   final Uint8List? imageBytes;
   final Future<String> address;
+  final Future<String> arrival;
   final ScrollController scrollController;
   final Future<bool> Function() onNamePlace;
 
@@ -1311,7 +1283,12 @@ class _PersonSheet extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
-            LocationLabel(position: position, address: address),
+            LocationLabel(position: position, address: address, showAge: false),
+            FutureBuilder<String>(
+              future: arrival,
+              builder: (context, snapshot) =>
+                  Text(snapshot.data ?? 'Here since: checking arrival…'),
+            ),
             const SizedBox(height: 8),
             Text(
               _positionSummary(position),
@@ -1360,4 +1337,29 @@ String _satelliteCacheKey(String url) {
   } on FormatException {
     return BuiltInMapCachingProvider.uuidTileKeyGenerator(url);
   }
+}
+
+/// Hide names when the place occupies less than 80 logical pixels on the map.
+bool placeLabelVisible(NamedPlace place, double zoom) {
+  final metersPerPixel =
+      156543.03392 *
+      math.cos(place.latitude * math.pi / 180).abs() /
+      math.pow(2, zoom);
+  double diameter = place.radiusMeters * 2;
+  if (place.isPolygon) {
+    final bounds = LatLngBounds.fromPoints(place.boundary);
+    const distance = Distance();
+    final width = distance.as(
+      LengthUnit.Meter,
+      LatLng(place.latitude, bounds.west),
+      LatLng(place.latitude, bounds.east),
+    );
+    final height = distance.as(
+      LengthUnit.Meter,
+      LatLng(bounds.south, place.longitude),
+      LatLng(bounds.north, place.longitude),
+    );
+    diameter = math.sqrt(width * height);
+  }
+  return diameter / metersPerPixel >= 80;
 }

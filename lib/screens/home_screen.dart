@@ -88,7 +88,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   visible: _index == 0,
                   placeCreationRequest: _placeCreationRequest,
                   autoPlace: _autoPlace,
-                  onPeopleTap: () => _selectDestination(1),
                 ),
                 const PeopleScreen(),
                 PlacesScreen(

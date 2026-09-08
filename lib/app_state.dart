@@ -78,7 +78,7 @@ class AppState extends ChangeNotifier {
   Map<int, TraccarPosition> positions = const {};
   Map<int, Uint8List> deviceImages = const {};
   List<NamedPlace> namedPlaces = const [];
-  double satelliteZoom = 20;
+  double satelliteZoom = 19;
   bool satelliteAlways = false;
   bool darkMap = false;
   bool satelliteAutoAtStreetZoom = true;
@@ -96,7 +96,7 @@ class AppState extends ChangeNotifier {
     namedPlaces = await _namedPlaceStore.load();
     satelliteAutoAtStreetZoom =
         await _preferences.getBool(_satelliteAutoKey) ?? true;
-    satelliteZoom = (await _preferences.getDouble(_satelliteZoomKey) ?? 20)
+    satelliteZoom = (await _preferences.getDouble(_satelliteZoomKey) ?? 19)
         .clamp(2, 21);
     satelliteAlways = await _preferences.getBool(_satelliteAlwaysKey) ?? false;
     darkMap = await _preferences.getBool(_darkMapKey) ?? false;
@@ -612,6 +612,58 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<String> arrivalSummary(TraccarPosition position) async {
+    final api = _api;
+    final end = position.fixTime;
+    if (api == null || end == null) return 'Here since: unknown';
+    final place = NamedPlaceStore.nearest(
+      namedPlaces,
+      position.latitude,
+      position.longitude,
+    );
+    if (place == null && position.isMoving) return 'Currently moving';
+    try {
+      final history = await api.positionHistory(
+        position.deviceId,
+        end.subtract(const Duration(days: 7)),
+        end,
+      );
+      final fixes =
+          history.where((fix) => fix.valid && fix.fixTime != null).toList()
+            ..sort((a, b) => a.fixTime!.compareTo(b.fixTime!));
+      DateTime? arrival;
+      var foundOutside = false;
+      for (final fix in fixes.reversed) {
+        final inside = place != null
+            ? NamedPlaceStore.nearest([place], fix.latitude, fix.longitude) !=
+                  null
+            : const Distance().as(
+                    LengthUnit.Meter,
+                    LatLng(position.latitude, position.longitude),
+                    LatLng(fix.latitude, fix.longitude),
+                  ) <=
+                  50;
+        if (!inside) {
+          foundOutside = true;
+          break;
+        }
+        arrival = fix.fixTime;
+      }
+      if (arrival == null) return 'Here since: unknown';
+      final age = DateTime.now().difference(arrival);
+      final duration = age.inDays > 0
+          ? '${age.inDays}d'
+          : age.inHours > 0
+          ? '${age.inHours}h'
+          : age.inMinutes > 0
+          ? '${age.inMinutes}m'
+          : 'less than 1m';
+      return 'Here since ${foundOutside ? "" : "at least "}$duration ago';
+    } on Object {
+      return 'Here since: unknown';
+    }
+  }
+
   Future<String> reverseGeocode(TraccarPosition position) async {
     final place = NamedPlaceStore.nearest(
       namedPlaces,
@@ -824,7 +876,7 @@ class AppState extends ChangeNotifier {
     positions = const {};
     deviceImages = const {};
     namedPlaces = const [];
-    satelliteZoom = 20;
+    satelliteZoom = 19;
     satelliteAlways = false;
     darkMap = false;
     satelliteAutoAtStreetZoom = true;

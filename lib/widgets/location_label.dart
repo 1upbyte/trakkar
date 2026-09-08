@@ -25,9 +25,11 @@ class LocationLabel extends StatefulWidget {
     required this.position,
     this.friendlyPlace,
     this.address,
+    this.showAge = true,
     super.key,
   });
 
+  final bool showAge;
   final TraccarPosition position;
   final String? friendlyPlace;
   final Future<String>? address;
@@ -69,7 +71,9 @@ class _LocationLabelState extends State<LocationLabel> {
                 ? resolved!
                 : locationFallback(widget.position));
         return Text(
-          '$location · ${positionAge(widget.position.fixTime)}',
+          widget.showAge
+              ? '$location · ${positionAge(widget.position.fixTime)}'
+              : location,
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
         );

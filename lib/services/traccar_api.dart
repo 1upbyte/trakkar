@@ -117,6 +117,22 @@ class TraccarApi {
         .toList(growable: false);
   }
 
+  Future<List<TraccarPosition>> positionHistory(
+    int deviceId,
+    DateTime from,
+    DateTime to,
+  ) async {
+    final response = await _get(
+      'positions',
+      query: {
+        'deviceId': '$deviceId',
+        'from': from.toUtc().toIso8601String(),
+        'to': to.toUtc().toIso8601String(),
+      },
+    );
+    return _decodeList(response).map(TraccarPosition.fromJson).toList();
+  }
+
   /// Loads the MapTiler key from Traccar's server-level attributes. Keeping
   /// the value there gives every signed-in Trakkar client the same setting and
   /// avoids persisting third-party API keys on phones.
