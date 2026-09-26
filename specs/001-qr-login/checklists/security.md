@@ -18,12 +18,12 @@
 
 - [x] CHK004 - Are accepted Base64 alphabet, padding, whitespace, UTF-8 failure, and decoded field-count rules specific enough to produce interoperable QR codes? [Clarity, Spec §FR-002–003]
 - [x] CHK005 - Are permitted URL schemes and rules for hosts, embedded credentials, redirects, and plain-HTTP confirmation explicit? [Ambiguity, Spec §FR-006]
-- [ ] CHK006 - Is it clear which service destinations are shown for confirmation and that no credentials are sent before confirmation? [Clarity, Spec §FR-004]
+- [x] CHK006 - Is it clear that QR credentials are submitted immediately after successful parsing without a destination-confirmation prompt, while manual credentials are submitted only when the user taps Submit? [Clarity, Spec §FR-004–005]
 
 ## Requirement Consistency
 
 - [ ] CHK007 - Are the QR encoding rule and manual-entry field requirements consistent about the four values and their meaning? [Consistency, Spec §FR-002, §FR-005, §Assumptions]
-- [ ] CHK008 - Are the privacy warning and secret-handling requirements consistent across the QR scan, destination preview, authentication, retry, and error flows? [Consistency, Spec §FR-004, §FR-009–010]
+- [ ] CHK008 - Are the privacy warning and secret-handling requirements consistent across the setup-choice notice, automatic QR submission, authentication, retry, and error flows? [Consistency, Spec §FR-004, §FR-009–010]
 
 ## Scenario and Edge-Case Coverage
 

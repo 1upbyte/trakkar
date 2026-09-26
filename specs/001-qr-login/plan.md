@@ -7,10 +7,11 @@
 ## Summary
 
 Build the first-run choice between scanning an existing credential-bearing QR code and
-entering the same details manually. Both paths feed one validation/authentication flow.
+entering the same details manually. Both paths feed one authentication flow.
 Decode the complete standard Base64 UTF-8 payload once, then parse exactly
-`user;password;clienturl;managerurl`, preview normalized service destinations before
-credentials are sent, use the restored app's existing Traccar sign-in/session behavior,
+`user;password;clienturl;managerurl` and immediately submit valid scans without a
+confirmation prompt. Manual details submit when the user taps Submit. Use the restored
+app's existing Traccar sign-in/session behavior,
 and keep payloads and secrets out of logs and diagnostics. Since semicolon is the
 delimiter and there is no escaping, reject QR values containing semicolons. Android/iOS
 camera setup and Flutter host builds are part of the feature.
@@ -29,7 +30,7 @@ text and decoded password remain in memory only and are discarded after sign-in 
 cancel.
 
 **Testing**: Parser/validation unit tests with producer-approved fixtures; widget tests
-for choice, preview, permission/error/retry and manual flow; auth contract tests and
+for choice, immediate QR authentication, permission/error/retry and manual flow; auth contract tests and
 Android/iOS builds. No Flutter/test tree exists here to run them.
 
 **Target Platform**: Flutter Android and iOS; both use app identifier
@@ -38,14 +39,15 @@ requires runtime camera permission through the scanner plugin/host setup.
 
 **Project Type**: Flutter mobile app.
 
-**Performance Goals**: Decode and validate a scan promptly on-device; do not perform
-network sign-in until explicit endpoint confirmation.
+**Performance Goals**: Decode a scan promptly on-device; submit for sign-in immediately
+after successful local parsing.
 
-**Constraints**: Base64 is reversible encoding, not encryption. Treat both raw QR text
+**Constraints**: Base64 is reversible encoding, not encryption. Show a non-blocking
+privacy notice on the setup-choice screen before scanning. Treat both raw QR text
 and decoded values as secrets. Do not locally validate URL schemes, host syntax, or
 embedded URL credentials; permit HTTP without warning and do not restrict redirects by
-origin. Never expose credentials or URL user-info in previews, logs, diagnostics, or
-errors. The transport determines whether it can use a configured URL. Reuse current
+origin. Never expose credentials or URL user-info in logs, diagnostics, or errors. The
+transport determines whether it can use a configured URL. Reuse current
 Traccar authentication rather than inventing another auth scheme.
 
 **Scale/Scope**: First-run setup for one app installation; scan codes made by the
@@ -69,7 +71,7 @@ service endpoints and secure configuration used by all later tabs.
 Proposed structure (not present in this checkout):
 
 ```text
-lib/features/setup/       # first-run choice, QR scanner, manual form, preview
+lib/features/setup/       # first-run choice, QR scanner, manual form
 lib/services/auth/        # shared setup validation and existing Traccar session flow
 lib/models/               # login draft and setup attempt
 android/ ios/             # shared app identifier, camera permission, and Flutter host configuration

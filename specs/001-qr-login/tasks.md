@@ -22,25 +22,25 @@
 - [ ] T003 Create `LoginDetailsDraft` and `SetupAttempt` models with required non-empty username/password/client URL/manager URL strings, source enum, state enum, and secret-free error representation in `lib/models/login_details.dart` and `lib/models/setup_attempt.dart`.
 - [ ] T004 Authenticate against the manager URL's Traccar session endpoint, `POST /api/session`, and distinguish rejected credentials from network/service failures in `lib/services/auth/traccar_auth_service.dart`; do not include credentials or URL user-info in exceptions or logs.
 - [ ] T005 Persist only successfully authenticated session/configuration values through secure storage in `lib/services/auth/secure_session_store.dart`; configure the official Traccar Client SDK with the client URL through `lib/services/tracking/traccar_tracking_service.dart`, but start reporting only after required location permission is granted.
-- [ ] T006 Route fresh installs to setup and successful sessions to the signed-in app shell in `lib/app/app_router.dart` and `lib/main.dart`.
+- [ ] T006 Route fresh installs to setup with Scan QR and Enter Details choices plus the non-blocking Base64 privacy notice; route successful sessions to the signed-in app shell in `lib/app/app_router.dart` and `lib/main.dart`.
 
 ## Phase 3: User Story 1 - Set up from a QR code (Priority: P1)
 
-**Goal**: Scan the external four-field QR format, validate it locally, review destinations, and submit only after confirmation.
+**Goal**: Scan and locally parse the external four-field QR format, then immediately submit a valid payload for sign-in without an extra confirmation prompt.
 
-**Independent Test**: Scan a valid producer-format fixture, confirm both destinations, and verify the shared sign-in flow receives the four expected values; malformed Base64 or field grammar must not trigger a request, and arbitrary non-empty URL values pass through without local validation.
+**Independent Test**: Scan a valid producer-format fixture and verify the shared sign-in flow immediately receives the four expected values; malformed Base64 or field grammar must not trigger a request, and arbitrary non-empty URL values pass through without local validation.
 
 ### Tests for User Story 1
 
 - [ ] T007 [P] [US1] Add golden parser tests for valid ASCII/non-ASCII values, trimming leading/trailing Base64 whitespace, rejecting internal Base64 whitespace, malformed Base64/UTF-8, wrong field counts, empty fields, embedded semicolons, and accepting arbitrary non-empty URL field values in `test/services/qr_payload_parser_test.dart`.
-- [ ] T008 [P] [US1] Add QR onboarding widget tests for camera permission timing, scan/cancel/retry, safe destination preview, Base64 warning, and confirmation-before-authentication in `test/features/setup/qr_setup_flow_test.dart`.
+- [ ] T008 [P] [US1] Add QR onboarding widget tests for camera permission timing, scan/cancel/retry, the pre-scan Base64 privacy notice, immediate authentication after valid parsing, and no request after invalid parsing in `test/features/setup/qr_setup_flow_test.dart`.
 
 ### Implementation for User Story 1
 
 - [ ] T009 [P] [US1] Implement strict single-pass Base64-to-UTF-8 parsing for exactly `user;password;clienturl;managerurl` with four non-empty fields; trim only leading/trailing payload whitespace, reject internal whitespace, and do not validate URL fields during parsing in `lib/services/auth/qr_payload_parser.dart`.
 - [ ] T010 [US1] Implement the Scan QR flow and request camera permission only after selection in `lib/features/setup/qr_scan_screen.dart` and `android/app/src/main/AndroidManifest.xml`.
 - [ ] T011 [US1] Add the required iOS camera usage description for QR scanning in `ios/Runner/Info.plist`.
-- [ ] T012 [US1] Implement a destination-review screen showing configured client/manager URLs with embedded user-info redacted, hiding the login password and raw payload, explaining Base64 privacy, and requiring affirmative confirmation before calling `lib/services/auth/traccar_auth_service.dart` in `lib/features/setup/qr_destination_review.dart`.
+- [ ] T012 [US1] After successful local QR parsing, immediately call `lib/services/auth/traccar_auth_service.dart` without a destination-review or confirmation prompt; show only non-secret authentication progress and safe outcomes in `lib/features/setup/qr_scan_screen.dart`.
 - [ ] T013 [US1] Connect successful QR authentication to secure session persistence and signed-in routing in `lib/features/setup/qr_scan_screen.dart` and `lib/app/app_router.dart`.
 
 ## Phase 4: User Story 2 - Set up by entering details (Priority: P1)
@@ -121,7 +121,7 @@ Deliver the scan flow as the MVP (US1), then manual entry (US2), then recovery h
 
 ## Independent Story Checks
 
-- US1: Valid QR fixture reaches confirmed sign-in; malformed fixtures produce no network request.
+- US1: Valid QR fixture immediately reaches sign-in after parsing; malformed fixtures produce no network request.
 - US2: Valid manual details sign in; invalid fields remain editable and do not erase other entries.
 - US3: Rejected credentials and unavailable services show different safe messages and allow retry/edit.
 

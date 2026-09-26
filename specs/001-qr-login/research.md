@@ -23,10 +23,10 @@ Sources: [RFC 4648](https://www.rfc-editor.org/rfc/rfc4648.html),
 
 ## Credential handling and URLs
 
-**Decision**: Parse the QR grammar before authentication; never submit on scan. Show the
-configured client and manager destinations with embedded URL user-info redacted,
-mask/avoid re-displaying the login password, and submit only after affirmative
-confirmation. Do not locally validate URL schemes, host syntax, or embedded URL
+**Decision**: Parse the QR grammar locally, then submit immediately after a valid scan;
+do not show a destination-review or confirmation prompt. Show a non-blocking Base64
+privacy notice on the setup-choice screen before scanning. Mask the login password in
+manual entry. Do not locally validate URL schemes, host syntax, or embedded URL
 credentials; allow HTTP without a warning and do not restrict redirects by origin. The
 network transport determines whether it can use a configured URL. Keep parser,
 transport, and auth errors generic and secret-free.

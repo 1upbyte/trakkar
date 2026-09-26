@@ -25,8 +25,8 @@ values that cannot be represented by this grammar.
 - Do not locally validate decoded URL schemes, host syntax, or embedded credentials.
   HTTP is allowed without warning, and redirects are not restricted by origin. The
   network transport determines whether it can use each configured value.
-- Show client and manager destinations and require confirmation before authentication;
-  redact embedded URL user-info in the preview.
+- After successful local parsing, submit the decoded values for authentication
+  immediately. Do not show a destination-review or confirmation prompt.
 - Do not display or log the raw QR text, password, or decoded payload.
 - Explain that Base64 is encoding, not encryption, and the QR code must be kept private.
 - Clear transient payload/credential values after cancellation or completion according

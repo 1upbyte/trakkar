@@ -25,6 +25,10 @@
   schemes, hosts, or embedded credentials; HTTP is allowed without warning, and the app
   does not restrict redirects by origin. The app does not enforce a local login-password
   format or strength policy; the server determines whether credentials are accepted.
+- After a QR payload passes local parsing, the app submits it for sign-in immediately;
+  QR setup has no destination-review or confirmation prompt. Show the Base64 privacy
+  notice on the setup-choice screen before the user starts scanning. Manual setup submits
+  only when the user taps its Submit button.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -37,16 +41,17 @@ continues to sign in.
 **Why this priority**: Scanning is the requested quick setup path and avoids retyping
 multiple values.
 
-**Independent Test**: With a valid QR code and reachable services, scan the code and
-verify the user can review its destinations and complete sign-in.
+**Independent Test**: With a valid QR code and reachable services, scan it and verify
+that the app immediately submits the decoded values and completes sign-in without an
+intermediate destination review or confirmation.
 
 **Acceptance Scenarios**:
 
 1. **Given** a fresh app with no saved setup, **When** the user starts onboarding,
    **Then** the app offers QR scanning and manual entry.
-2. **Given** a valid QR code with all four required values, **When** the user scans and
-   confirms the displayed destinations, **Then** the app uses the decoded values to
-   attempt sign-in.
+2. **Given** a valid QR code with all four required values, **When** the user scans it
+   and local parsing succeeds, **Then** the app immediately uses the decoded values to
+   attempt sign-in without a destination review or confirmation prompt.
 3. **Given** a QR code that is unreadable, incomplete, or invalid, **When** the user scans
    it, **Then** the app explains that setup could not be read and lets the user retry or
    switch to manual entry without submitting credentials.
@@ -138,9 +143,11 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   values during parsing. Leading and trailing whitespace around the scanned Base64
   payload MUST be trimmed before decoding; whitespace within the payload MUST be
   rejected.
-- **FR-004**: Before sending decoded credentials, the app MUST show the service
-  destinations and require the user to confirm continuing. If a destination URL contains
-  embedded user-info, the preview MUST redact it.
+- **FR-004**: After a QR payload passes local parsing, the app MUST immediately submit
+  its decoded credentials for sign-in without an intermediate destination review or
+  confirmation prompt. Manual-entry credentials MUST be submitted only after the user
+  taps Submit. The setup-choice screen MUST show the Base64 privacy notice before QR
+  scanning begins.
 - **FR-005**: The app MUST let the user enter the same four values manually and submit
   them for sign-in.
 - **FR-006**: The app MUST require non-empty username, password, client URL, and manager
@@ -162,7 +169,7 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
 - **FR-008**: The app MUST allow a user to leave QR scanning and choose manual entry.
 - **FR-009**: The app MUST treat QR payloads and decoded credentials as secrets: it MUST
   NOT include them in logs, diagnostics, or user-visible error details. It MUST also
-  redact URL user-info from previews, logs, diagnostics, and errors.
+  redact URL user-info from logs, diagnostics, and errors.
 - **FR-010**: The app MUST explain that Base64 is encoding rather than encryption and
   that a QR code containing these values must be kept private.
 - **FR-011**: The app MUST scan QR codes supplied by an existing external workflow. Creating

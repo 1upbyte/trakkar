@@ -3,13 +3,13 @@
 - Before first successful setup, present Scan QR and Enter Details choices.
 - Request camera access only after Scan QR is selected. Denial or scan cancellation offers
   retry and manual entry.
-- Parse and validate a scan before showing a destination review. Invalid input displays
-  a safe explanation and does not submit credentials.
-- The review shows the configured client/manager destinations (redacting embedded URL
-  user-info) and explains that Base64 is not encryption and the QR must be kept private.
-  The login password and raw QR text are not shown.
-- Continue requires explicit confirmation. Manual and QR details use the same submit
-  action and authentication behavior.
+- Show a non-blocking notice on the setup-choice screen explaining that Base64 is not
+  encryption and QR codes containing credentials must be kept private.
+- Parse a scan locally. Invalid input displays a safe explanation and does not submit
+  credentials. After successful parsing, immediately submit the decoded values for
+  sign-in without showing a destination-review or confirmation prompt.
+- Manual-entry values are submitted only when the user taps Submit. Keep the password
+  masked in the form.
 - Empty required form fields stay editable. Do not locally reject URL schemes, hosts,
   embedded URL credentials, HTTP, redirects, or password formats. Errors distinguish
   rejected credentials from unavailable services without echoing secrets.
