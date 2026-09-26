@@ -14,8 +14,7 @@ rather than creating a second data or tracking path.
 
 ## Technical Context
 
-**Language/Version**: Dart with the restored app's Flutter stable SDK; current checkout
-has no Flutter project or exact version pin.
+**Language/Version**: Dart with the Flutter app's SDK constraint `^3.13.2`.
 
 **Primary Dependencies**: Flutter; shared authenticated Traccar API/live-update layer;
 shared profile and saved-place repositories; persistent tab shell (e.g. `IndexedStack`)
@@ -25,7 +24,8 @@ with coordinated transition.
 map camera state while app navigation is alive.
 
 **Testing**: Flutter widget/unit coverage for completeness, missing/stale data, shared
-selection, Back restoration and retained tab state; Android and iOS builds pending.
+selection, Back restoration and retained tab state; Android debug and iOS simulator
+builds completed.
 
 **Target Platform**: Flutter Android and iOS; SDK tracking requirements remain API
 24+ Android and iOS 15+.

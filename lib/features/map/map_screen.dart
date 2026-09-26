@@ -14,6 +14,7 @@ import '../../services/map/location_description.dart';
 import '../../services/map/map_layer_config.dart';
 import '../../services/traccar_data_repository.dart';
 import '../../widgets/server_connection_banner.dart';
+import '../people/people_list_state.dart';
 import 'map_camera_policy.dart';
 import 'person_cluster_marker.dart';
 import 'person_details_sheet.dart';
@@ -34,6 +35,7 @@ class MapScreen extends StatefulWidget {
     required this.repository,
     required this.satelliteThresholdZoom,
     required this.onSatelliteUnavailable,
+    this.onPeopleStateChanged,
     this.styleLoader,
     super.key,
   });
@@ -41,13 +43,15 @@ class MapScreen extends StatefulWidget {
   final TraccarDataRepository? repository;
   final double satelliteThresholdZoom;
   final ValueChanged<bool> onSatelliteUnavailable;
+  final void Function(PeopleListState state, List<SavedPlace> places)?
+  onPeopleStateChanged;
   final MapStyleLoader? styleLoader;
 
   @override
-  State<MapScreen> createState() => _MapScreenState();
+  MapScreenState createState() => MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class MapScreenState extends State<MapScreen> {
   final _mapController = MapController();
   final _cameraPolicy = const MapCameraPolicy();
   final _placeLabels = const PlaceLabelsLayer();
@@ -72,6 +76,40 @@ class _MapScreenState extends State<MapScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_load());
     });
+  }
+
+  Future<void> selectPerson(String personId) async {
+    for (final person in _people) {
+      if (person.personId == personId) {
+        await _selectPerson(person);
+        return;
+      }
+    }
+  }
+
+  Future<void> refresh() async {
+    final repository = widget.repository;
+    if (repository == null) return;
+    try {
+      final snapshot = await repository.loadMap();
+      if (!mounted) return;
+      setState(() {
+        _people = snapshot.people;
+        _places = snapshot.places;
+        _connectionFailed = false;
+      });
+      widget.onPeopleStateChanged?.call(
+        PeopleListState(people: _people),
+        _places,
+      );
+    } on Object {
+      if (!mounted) return;
+      setState(() => _connectionFailed = true);
+      widget.onPeopleStateChanged?.call(
+        PeopleListState(people: _people, hasError: true),
+        _places,
+      );
+    }
   }
 
   @override
@@ -99,6 +137,10 @@ class _MapScreenState extends State<MapScreen> {
       _satelliteUnavailable = false;
       _satelliteNoticeDismissed = false;
     });
+    widget.onPeopleStateChanged?.call(
+      PeopleListState(people: _people, isLoading: true),
+      _places,
+    );
     try {
       final repository = widget.repository;
       TraccarMapSnapshot? snapshot;
@@ -152,6 +194,10 @@ class _MapScreenState extends State<MapScreen> {
             (snapshot?.mapTilerKey != null && satellite == null);
       });
       widget.onSatelliteUnavailable(_satelliteUnavailable);
+      widget.onPeopleStateChanged?.call(
+        PeopleListState(people: _people, hasError: dataFailed),
+        _places,
+      );
       await _updates?.cancel();
       if (repository != null && !dataFailed) {
         _updates = repository
@@ -164,6 +210,10 @@ class _MapScreenState extends State<MapScreen> {
         _loading = false;
         _connectionFailed = true;
       });
+      widget.onPeopleStateChanged?.call(
+        PeopleListState(people: _people, hasError: true),
+        _places,
+      );
     }
   }
 
@@ -231,6 +281,7 @@ class _MapScreenState extends State<MapScreen> {
               'latitude': previous!.position!.latitude,
               'longitude': previous.position!.longitude,
               'fixTime': previous.fixTime?.toIso8601String(),
+              if (previous.address != null) 'address': previous.address,
             };
       byId[id] = PersonMapEntry.fromTraccar(device: device, position: position);
     }
@@ -255,6 +306,10 @@ class _MapScreenState extends State<MapScreen> {
       _people = byId.values.toList();
       _connectionFailed = false;
     });
+    widget.onPeopleStateChanged?.call(
+      PeopleListState(people: _people),
+      _places,
+    );
   }
 
   void _onConnectionFailure() {

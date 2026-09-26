@@ -7,6 +7,7 @@ class PersonMapEntry {
     required this.displayName,
     required this.imageRef,
     required this.position,
+    this.address,
     required this.batteryLevel,
     required this.fixTime,
   });
@@ -16,6 +17,7 @@ class PersonMapEntry {
   final String displayName;
   final String? imageRef;
   final LatLng? position;
+  final String? address;
   final double? batteryLevel;
   final DateTime? fixTime;
 
@@ -58,6 +60,7 @@ class PersonMapEntry {
           : 'Unknown person',
       imageRef: _imageReference(device, attrs),
       position: hasPosition ? LatLng(latitude, longitude) : null,
+      address: _text(position?['address']),
       batteryLevel: battery != null && battery >= 0 && battery <= 100
           ? battery
           : null,
@@ -84,3 +87,6 @@ Map<String, dynamic> _map(Object? value) =>
     value is Map<String, dynamic> ? value : const {};
 
 double? _number(Object? value) => value is num ? value.toDouble() : null;
+
+String? _text(Object? value) =>
+    value is String && value.trim().isNotEmpty ? value.trim() : null;

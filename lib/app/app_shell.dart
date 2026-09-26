@@ -5,7 +5,11 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../features/map/map_screen.dart';
+import '../features/people/people_list_state.dart';
+import '../features/people/people_screen.dart';
 import '../models/map_appearance_preference.dart';
+import '../models/person.dart';
+import '../models/saved_place.dart';
 import '../services/auth/secure_session_store.dart';
 import '../services/auth/setup_controller.dart';
 import '../services/map/map_preferences.dart';
@@ -18,12 +22,14 @@ class AppShell extends StatefulWidget {
     required this.controller,
     this.locationAccessCheck,
     this.onRequestLocationAccess,
+    this.mapStyleLoader,
     super.key,
   });
 
   final SetupController controller;
   final Future<bool> Function()? locationAccessCheck;
   final Future<void> Function()? onRequestLocationAccess;
+  final MapStyleLoader? mapStyleLoader;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -41,6 +47,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _selectedTab = 0;
   double _satelliteThreshold = 19;
   TraccarDataRepository? _mapRepository;
+  final _mapScreenKey = GlobalKey<MapScreenState>();
+  PeopleListState _peopleState = PeopleListState(
+    people: const [],
+    isLoading: true,
+  );
+  List<SavedPlace> _places = const [];
 
   static const _tabNames = ['Map', 'People', 'Places', 'Settings'];
 
@@ -173,6 +185,28 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     await _refreshLocationPermission();
   }
 
+  void _onPeopleStateChanged(PeopleListState state, List<SavedPlace> places) {
+    if (!mounted) return;
+    setState(() {
+      _peopleState = state;
+      _places = places;
+    });
+  }
+
+  void _selectPersonFromPeople(PersonMapEntry person) {
+    if (person.position == null) return;
+    setState(() => _selectedTab = 0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_mapScreenKey.currentState?.selectPerson(person.personId));
+      }
+    });
+  }
+
+  Future<void> _refreshPeople() async {
+    await _mapScreenKey.currentState?.refresh();
+  }
+
   Widget _settingsPage(BuildContext context) => ListView(
     padding: const EdgeInsets.all(20),
     children: [
@@ -217,22 +251,52 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             onAction: _requestLocationAccess,
           ),
         Expanded(
-          child: IndexedStack(
-            index: _selectedTab,
-            children: [
-              MapScreen(
-                repository: _mapRepository,
-                satelliteThresholdZoom: _satelliteThreshold,
-                onSatelliteUnavailable: (value) {
-                  if (mounted && _satelliteUnavailable != value) {
-                    setState(() => _satelliteUnavailable = value);
-                  }
-                },
-              ),
-              const Center(child: Text('People')),
-              const Center(child: Text('Places')),
-              _settingsPage(context),
-            ],
+          child: Stack(
+            fit: StackFit.expand,
+            children:
+                [
+                  MapScreen(
+                    key: _mapScreenKey,
+                    repository: _mapRepository,
+                    satelliteThresholdZoom: _satelliteThreshold,
+                    onSatelliteUnavailable: (value) {
+                      if (mounted && _satelliteUnavailable != value) {
+                        setState(() => _satelliteUnavailable = value);
+                      }
+                    },
+                    onPeopleStateChanged: _onPeopleStateChanged,
+                    styleLoader: widget.mapStyleLoader,
+                  ),
+                  PeopleScreen(
+                    state: _peopleState,
+                    places: _places,
+                    onPersonSelected: _selectPersonFromPeople,
+                    onRefresh: _refreshPeople,
+                    imageLoader: _mapRepository?.loadProfileImage,
+                  ),
+                  const Center(child: Text('Places')),
+                  _settingsPage(context),
+                ].asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final visible = _selectedTab == index;
+                  return Positioned.fill(
+                    child: IgnorePointer(
+                      ignoring: !visible,
+                      child: TickerMode(
+                        enabled: visible,
+                        child: AnimatedOpacity(
+                          opacity: visible ? 1 : 0,
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeInOut,
+                          child: ExcludeSemantics(
+                            excluding: !visible,
+                            child: entry.value,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
           ),
         ),
         if (widget.controller.isProceedingAnyway &&

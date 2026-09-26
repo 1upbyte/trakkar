@@ -19,6 +19,9 @@ class LocationDescription {
     for (final place in places) {
       if (place.contains(point)) return place.name;
     }
+    if (person.address != null && person.address!.trim().isNotEmpty) {
+      return person.address!.trim();
+    }
     try {
       final address = await repository.reverseGeocode(point);
       if (address != null && address.trim().isNotEmpty) return address.trim();
@@ -26,6 +29,15 @@ class LocationDescription {
       onServerFailure?.call();
     }
     return '${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}';
+  }
+
+  static String knownDescription(PersonMapEntry person) {
+    final point = person.position;
+    if (point == null) return 'Location unavailable';
+    final address = person.address?.trim();
+    if (address != null && address.isNotEmpty) return address;
+    return '${point.latitude.toStringAsFixed(5)}, '
+        '${point.longitude.toStringAsFixed(5)}';
   }
 
   static bool withinPlace(LatLng point, List<SavedPlace> places) =>

@@ -51,6 +51,34 @@ void main() {
   });
 
   test(
+    'server-provided position address is used before reverse geocoding',
+    () async {
+      final repository = TraccarDataRepository(
+        managerUrl: 'https://tracker.example',
+        sessionCookie: 'session',
+        client: MockClient(
+          (_) async => fail('Reverse geocoder must not be called'),
+        ),
+      );
+      final withAddress = PersonMapEntry(
+        personId: '1',
+        deviceId: 1,
+        displayName: 'Morgan',
+        imageRef: null,
+        position: const LatLng(35.7, -78.6),
+        address: 'Downtown Raleigh',
+        batteryLevel: null,
+        fixTime: null,
+      );
+      expect(
+        await LocationDescription(repository).describe(withAddress, []),
+        'Downtown Raleigh',
+      );
+      await repository.close();
+    },
+  );
+
+  test(
     'geocoding failure reports connection failure and uses coordinates',
     () async {
       var failed = false;

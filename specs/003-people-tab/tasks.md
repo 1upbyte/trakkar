@@ -12,15 +12,15 @@
 
 **Purpose**: Add People feature directories and connect them to shared app models.
 
-- [ ] T001 Create `lib/features/people/` and `test/features/people/` structure for the list, row, and navigation state.
-- [ ] T002 Replace the People placeholder with the People route in the shared bottom navigation order Map, People, Places, Settings in `lib/app/app_shell.dart`.
+- [X] T001 Create `lib/features/people/` and `test/features/people/` structure for the list, row, and navigation state.
+- [X] T002 Replace the People placeholder with the People route in the shared bottom navigation order Map, People, Places, Settings in `lib/app/app_shell.dart`.
 
 ## Phase 2: Foundational
 
 **Purpose**: Establish the authorized people projection and shared location status formatter before story UI.
 
-- [ ] T003 Project every Traccar-authorized device and latest position into the shared person model, preserving the server profile image and missing/stale status, in `lib/services/traccar_data_repository.dart`.
-- [ ] T004 Implement alphabetical name ordering and the shared saved-place/address/coordinate location description in `lib/features/people/people_list_state.dart` using `lib/services/map/location_description.dart`.
+- [X] T003 Project every Traccar-authorized device and latest position into the shared person model, preserving the server profile image and missing/stale status, in `lib/services/traccar_data_repository.dart`.
+- [X] T004 Implement alphabetical name ordering and the shared saved-place/address/coordinate location description in `lib/features/people/people_list_state.dart` using `lib/services/map/location_description.dart`.
 
 ## Phase 3: User Story 1 - Browse everyone in the People tab (Priority: P1) 🎯 MVP
 
@@ -30,13 +30,13 @@
 
 ### Tests for User Story 1
 
-- [ ] T005 [P] [US1] Add list-state tests for all authorized entries, alphabetical ordering, refresh updates, and empty-list behavior in `test/features/people/people_list_state_test.dart`.
-- [ ] T006 [P] [US1] Add row widget tests for server profile image/initial fallback, readable place/address/coordinate text, missing location, and stale status in `test/features/people/person_row_test.dart`.
+- [X] T005 [P] [US1] Add list-state tests for all authorized entries, alphabetical ordering, refresh updates, and empty-list behavior in `test/features/people/people_list_state_test.dart`.
+- [X] T006 [P] [US1] Add row widget tests for server profile image/initial fallback, readable place/address/coordinate text, missing location, and stale status in `test/features/people/person_row_test.dart`.
 
 ### Implementation for User Story 1
 
-- [ ] T007 [P] [US1] Implement a People row showing name, server image or initials, location text, and stale/unavailable state in `lib/features/people/person_row.dart`.
-- [ ] T008 [US1] Implement the People list loading, empty, error, refresh, and alphabetical data states in `lib/features/people/people_screen.dart` and `lib/features/people/people_list_state.dart`.
+- [X] T007 [P] [US1] Implement a People row showing name, server image or initials, location text, and stale/unavailable state in `lib/features/people/person_row.dart`.
+- [X] T008 [US1] Implement the People list loading, empty, error, refresh, and alphabetical data states in `lib/features/people/people_screen.dart` and `lib/features/people/people_list_state.dart`.
 
 ## Phase 4: User Story 2 - Open a person's map details from the list (Priority: P1)
 
@@ -46,12 +46,12 @@
 
 ### Tests for User Story 2
 
-- [ ] T009 [P] [US2] Add tests proving People-row selection invokes shared Map selection for known locations and handles missing locations without navigation in `test/features/people/people_map_selection_test.dart`.
+- [X] T009 [P] [US2] Add tests proving People-row selection invokes shared Map selection for known locations and handles missing locations without navigation in `test/features/people/people_map_selection_test.dart`.
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] Wire located-person row taps to the shared map person-selection action and close/navigate to Map in `lib/features/people/people_screen.dart` and `lib/app/app_shell.dart`.
-- [ ] T011 [US2] Ensure shared selection uses the existing Map details sheet, focus zoom, location formatter, and Back camera snapshot rather than a duplicate People detail page in `lib/features/map/person_details_sheet.dart`, `lib/features/map/map_state.dart`, and `lib/features/people/people_screen.dart`.
+- [X] T010 [US2] Wire located-person row taps to the shared map person-selection action and close/navigate to Map in `lib/features/people/people_screen.dart` and `lib/app/app_shell.dart`.
+- [X] T011 [US2] Ensure shared selection uses the existing Map details sheet, focus zoom, location formatter, and Back camera snapshot rather than a duplicate People detail page in `lib/features/map/person_details_sheet.dart`, `lib/features/map/map_state.dart`, and `lib/features/people/people_screen.dart`.
 
 ## Phase 5: User Story 3 - Move smoothly between bottom tabs (Priority: P2)
 
@@ -61,17 +61,17 @@
 
 ### Tests for User Story 3
 
-- [ ] T012 [P] [US3] Add navigation widget tests for persistent tab children, preserved camera/list scroll context, Map/People selection return, and no blank transition state in `test/app/app_shell_test.dart`.
+- [X] T012 [P] [US3] Add navigation widget tests for persistent tab children, preserved camera/list scroll context, Map/People selection return, and no blank transition state in `test/app/app_shell_test.dart`.
 
 ### Implementation for User Story 3
 
-- [ ] T013 [US3] Keep tab content mounted and retain Map camera and People scroll controllers in `lib/app/app_shell.dart`, `lib/features/map/map_state.dart`, and `lib/features/people/people_screen.dart`.
-- [ ] T014 [US3] Add the continuous tab visibility/transition behavior while preserving bottom navigation order and accessibility labels in `lib/app/app_shell.dart`.
+- [X] T013 [US3] Keep tab content mounted and retain Map camera and People scroll controllers in `lib/app/app_shell.dart`, `lib/features/map/map_state.dart`, and `lib/features/people/people_screen.dart`.
+- [X] T014 [US3] Add the continuous tab visibility/transition behavior while preserving bottom navigation order and accessibility labels in `lib/app/app_shell.dart`.
 
 ## Phase 6: Polish and Cross-Cutting Concerns
 
-- [ ] T015 Verify People rows and tab transitions at supported screen sizes and light/dark themes in `lib/features/people/` and `lib/app/app_shell.dart`.
-- [ ] T016 Run focused People and navigation tests and Android/iOS build checks; record any unavailable live-server/device verification in `specs/003-people-tab/quickstart.md`.
+- [X] T015 Verify People rows and tab transitions at supported screen sizes and light/dark themes in `lib/features/people/` and `lib/app/app_shell.dart`.
+- [X] T016 Run focused People and navigation tests and Android/iOS build checks; record any unavailable live-server/device verification in `specs/003-people-tab/quickstart.md`.
 
 ## Dependencies and Execution Order
 

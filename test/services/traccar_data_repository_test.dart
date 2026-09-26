@@ -38,6 +38,7 @@ void main() {
                     'deviceId': 7,
                     'latitude': 35.7,
                     'longitude': -78.6,
+                    'address': 'Raleigh, NC',
                     'fixTime': '2026-09-26T12:00:00Z',
                   },
                   {'deviceId': 999, 'latitude': 1, 'longitude': 1},
@@ -76,6 +77,7 @@ void main() {
       );
       expect(snapshot.people, hasLength(2));
       expect(snapshot.people.first.position, const LatLng(35.7, -78.6));
+      expect(snapshot.people.first.address, 'Raleigh, NC');
       expect(snapshot.people.first.batteryLevel, 72);
       expect(snapshot.people.last.position, isNull);
       expect(snapshot.places.single.name, 'Home');
