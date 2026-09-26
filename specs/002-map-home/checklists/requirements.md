@@ -6,7 +6,8 @@
 
 ## Content Quality
 
-- [x] No implementation details (languages, frameworks, APIs)
+- [x] No unrequested implementation details; requested provider, cache, and server
+      integration facts are explicitly captured for continuity with the prior app.
 - [x] Focused on user value and business needs
 - [x] Written for non-technical stakeholders
 - [x] All mandatory sections completed
@@ -33,5 +34,7 @@
 
 - The approximately two-mile automatic framing cap and missing-location behavior are
   documented in Assumptions.
-- The initial satellite threshold's numeric default is deferred to planning or design
-  review; the user-configurable behavior is specified.
+- New installations default to satellite threshold zoom 19; Settings owns this
+  preference and confirmed app reset restores that default.
+- Historical integration uses OpenFreeMap standard styles, MapTiler `satellite-v4`,
+  the existing authenticated server key and geocoder, and a 90-day / 512 MB tile cache.

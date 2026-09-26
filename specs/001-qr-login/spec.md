@@ -8,6 +8,17 @@
 
 **Input**: User description: "A QR-code login flow. The QR code should have username, password, client url, and manager url all base64 encoded. Users should be prompted upon new app to either scan QR code or to enter details manually"
 
+## Clarifications
+
+### Session 2026-09-25
+
+- QR payload format: serialize the four values in this exact order as
+  `user;password;clienturl;managerurl`, then Base64-encode the complete UTF-8 string
+  once. `user` is the login username. The semicolon is a field separator; values
+  containing a semicolon are not representable by this format and MUST be rejected by
+  QR parsing before sign-in.
+- The app identifier for both Android and iOS is `com.1upbyte.trakkar`.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Set up from a QR code (Priority: P1)
@@ -80,6 +91,8 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
 
 - The camera permission is denied or revoked before or during QR scanning.
 - The code is damaged, malformed, contains invalid Base64, or has a missing/empty field.
+- A decoded value contains a semicolon, causing the payload to split into more than four
+  fields.
 - A decoded URL uses an unsupported scheme or is malformed.
 - Credentials are valid for one service but the other configured URL is unavailable.
 - The user cancels scanning or switches between QR and manual setup.
@@ -92,10 +105,12 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
 
 - **FR-001**: On first launch before setup is complete, the app MUST offer both QR
   scanning and manual entry.
-- **FR-002**: The QR login flow MUST accept a code containing a username, password,
-  client URL, and manager URL, with each value Base64-encoded separately.
-- **FR-003**: The app MUST decode the four values and reject codes with missing, empty,
-  malformed, or undecodable values before attempting sign-in.
+- **FR-002**: The QR login flow MUST accept a standard Base64-encoded UTF-8 string whose
+  decoded form is exactly `user;password;clienturl;managerurl` in that order. `user`
+  represents the username; the complete delimited string is encoded once.
+- **FR-003**: The app MUST decode the complete payload once, split it into exactly four
+  non-empty fields, validate both URLs, and reject invalid Base64/UTF-8, extra or missing
+  fields, or field values containing the separator before attempting sign-in.
 - **FR-004**: Before sending decoded credentials, the app MUST show the service
   destinations and require the user to confirm continuing.
 - **FR-005**: The app MUST let the user enter the same four values manually and submit
@@ -111,13 +126,15 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   that a QR code containing these values must be kept private.
 - **FR-011**: The app MUST scan QR codes supplied by an existing external workflow. Creating
   or displaying QR codes is outside this feature's scope.
+- **FR-012**: Android and iOS app builds MUST use the shared app identifier
+  `com.1upbyte.trakkar`.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Login Details**: Username and password paired with the client and manager service
   URLs; supplied by scanning a code or entering values manually.
-- **QR Login Code**: A scannable representation of the four separately Base64-encoded
-  login detail values.
+- **QR Login Code**: A scannable standard Base64 representation of the complete UTF-8
+  string `user;password;clienturl;managerurl`.
 - **Setup Attempt**: A user's attempt to validate login details and reach the signed-in
   app state, including success or an actionable failure.
 
@@ -133,13 +150,17 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   receive distinct, actionable feedback and can retry or correct their details.
 - **SC-004**: No tested QR payload, username, or password appears in application logs,
   diagnostics, or error messages.
+- **SC-005**: Android and iOS build metadata report the same app identifier,
+  `com.1upbyte.trakkar`.
 
 ## Assumptions
 
 - First launch means the app has no completed login setup saved for the current user.
 - The same username and password apply to both configured service URLs.
-- Each of the four values is individually Base64-encoded from UTF-8 text. Base64 does
-  not provide confidentiality; the QR code is treated as a credential-bearing secret.
+- The four values are joined in the specified order with semicolons, then the entire
+  UTF-8 string is Base64-encoded once. Semicolons cannot appear in field values.
+  Base64 does not provide confidentiality; the QR code is treated as a
+  credential-bearing secret.
 - Manual entry and QR scanning lead to the same sign-in behavior and signed-in app
   experience.
 - QR codes are created and supplied through an existing external workflow; this feature

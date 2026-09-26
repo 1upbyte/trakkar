@@ -6,7 +6,8 @@
 
 ## Content Quality
 
-- [x] No implementation details (languages, frameworks, APIs)
+- [x] No unrequested implementation details; the requested shared mobile app
+      identifier is explicitly recorded.
 - [x] Focused on user value and business needs
 - [x] Written for non-technical stakeholders
 - [x] All mandatory sections completed
@@ -35,4 +36,5 @@
   workflow; code creation/display is out of scope.
 - Base64 is reversible encoding, not encryption. The specification treats the QR payload
   as a credential-bearing secret and requires that it not be logged.
+- Android and iOS share the requested app identifier `com.1upbyte.trakkar`.
 - Items marked incomplete require spec updates before `$speckit-clarify` or `$speckit-plan`.

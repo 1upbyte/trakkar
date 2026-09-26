@@ -8,6 +8,23 @@
 
 **Input**: User description: "The main screen should open to a map. The map will show case ciruclar icons with every person's profile picture / initial. The default view will be zoomed out to fit everybody. If users are spread out more than roughly 2 miles, the zoom will cap there. Tapping on someone will zoom in on them and open a bottom model showing their name, current location, battery status, and last location update. Pressing back will close this modal and zoom back out to the original view. The map will also convert to a satelittle view when zoomed in enough. This threshold will be user configurable. Users who are close together will be grouped. Each grouped user will have their profile picture fully visible, even if a bit smaller. The map wil also show the name of custom saved locations on the map, similar to street names."
 
+## Clarifications
+
+### Session 2026-09-25
+
+- Preserve the existing map provider integration: satellite imagery uses MapTiler's
+  `satellite-v4` tiles, with the key read from the existing authenticated Traccar
+  `/api/server` response attribute `trakkarMapTilerKey`. Do not require a Traccar server
+  code change or embed the key in the app.
+- The satellite switch threshold defaults to zoom level 19 for a new installation;
+  user changes remain persisted. This is the switch threshold, not the launch camera
+  zoom, which continues to fit people under FR-002.
+- Reuse map tiles for up to 90 days with a 512 MB local cache limit. Cache identity
+  must not include the MapTiler key.
+- Reverse geocoding remains server-side through the existing authenticated Traccar
+  geocoding service. The app does not call a third-party geocoder directly or hold its
+  credentials.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See people on the map (Priority: P1)
@@ -101,6 +118,9 @@ satellite threshold and verify the map style changes when that threshold is cros
 - The selected person's location changes while their detail panel is open.
 - A saved place is too small or too close to another label to display legibly.
 - The selected map style or satellite imagery is unavailable.
+- The server map configuration has no satellite key, the tile cache is full, or a
+  cached tile has expired.
+- Server-side reverse geocoding is disabled, unreachable, or returns no address.
 - The user changes the map view before selecting a person, then presses Back.
 
 ## Requirements *(mandatory)*
@@ -133,7 +153,19 @@ satellite threshold and verify the map style changes when that threshold is cros
 - **FR-011**: The map MUST switch from its standard view to satellite imagery when the
   current zoom reaches the user's configured threshold.
 - **FR-012**: Users MUST be able to change and retain their preferred satellite-switch
-  threshold.
+  threshold. A new installation MUST default this threshold to zoom level 19; changing
+  the preference MUST NOT change the separate initial people-fit camera behavior.
+- **FR-013**: Satellite map credentials MUST be read from the existing authenticated
+  Traccar server configuration and MUST NOT be embedded in the app package or written
+  to logs. A missing credential MUST leave the standard map usable and explain that
+  satellite imagery is unavailable.
+- **FR-014**: The app MUST cache map tiles locally, treat cached tiles as fresh for up
+  to 90 days, and limit the tile cache to 512 MB. Cache identity MUST NOT include the
+  satellite API key.
+- **FR-015**: Reverse geocoding MUST use the existing authenticated server geocoding
+  service. The app MUST NOT call a third-party geocoding provider directly or contain
+  that provider's credentials. When server geocoding is unavailable, the map MUST use
+  a matching saved-place name or coordinates as the location description.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -158,9 +190,15 @@ satellite threshold and verify the map style changes when that threshold is cros
 - **SC-003**: In 100% of tested crowded groups, each member remains individually visible
   and selectable without cropped or hidden profile images/initials.
 - **SC-004**: Users can change the satellite threshold, and in 100% of tested threshold
-  crossings the map displays the corresponding map style.
+  crossings the map displays the corresponding map style; new installations default to
+  zoom 19 without changing the people-fit launch framing.
 - **SC-005**: In usability validation, at least 90% of users can identify a person and
   read their current status from the map and detail panel without assistance.
+- **SC-006**: In 100% of tested cache scenarios, tile reuse respects the 90-day freshness
+  period and 512 MB limit without including the API key in cache identity.
+- **SC-007**: In 100% of tested address lookups, geocoding is requested through the
+  server; when unavailable, the map shows a saved-place name or coordinates and does
+  not contact a third-party geocoder directly.
 
 ## Assumptions
 
@@ -172,7 +210,9 @@ satellite threshold and verify the map style changes when that threshold is cros
   so users can judge freshness.
 - Saved-place names take precedence over reverse-geocoded descriptions when the person
   is within a named saved place.
-- The initial satellite threshold is a close-in map scale selected by the product; users
-  can change it. A numeric default can be chosen during planning or design review.
+- The satellite threshold is zoom level 19 by default and can be changed in Settings;
+  this is separate from the initial camera fit.
+- The existing Traccar server already exposes the authenticated map configuration and
+  reverse-geocoding service; this feature does not require a server code or API change.
 - Existing person, profile, battery, location, and saved-place information is available
   through the app's existing signed-in experience.
