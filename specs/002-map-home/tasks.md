@@ -69,7 +69,7 @@
 
 - [ ] T018 [P] [US3] Add tests for saved-place label visibility/decluttering and label collision behavior across zoom levels in `test/features/map/place_labels_test.dart`.
 - [ ] T019 [P] [US3] Add tests for standard/satellite threshold changes, missing MapTiler key fallback, and cache identity excluding the `key` query parameter in `test/services/map/map_layer_config_test.dart`.
-- [ ] T020 [P] [US3] Add tests for server reverse-geocode use, location fallback order, shared connection-failure bar/retry behavior, and secret-free map diagnostics in `test/services/map/location_description_test.dart`.
+- [ ] T020 [P] [US3] Add tests for server reverse-geocode use, location fallback order, shared connection-failure bar/retry behavior, location permission bar/Re-ask behavior until Always and Precise are granted, and secret-free map diagnostics in `test/services/map/location_description_test.dart`.
 
 ### Implementation for User Story 3
 
@@ -78,7 +78,7 @@
 - [ ] T023 [US3] Read the satellite key from authenticated `/api/server` attribute `trakkarMapTilerKey` into memory and configure MapTiler `satellite-v4` plus OpenFreeMap standard styles in `lib/services/map/map_layer_config.dart`.
 - [ ] T024 [US3] Implement the persisted satellite threshold with a new-install default of zoom 19 in `lib/models/map_appearance_preference.dart` and `lib/services/map/map_preferences.dart`.
 - [ ] T025 [US3] Configure the tile cache for 90-day freshness and a 512 MB maximum, excluding the MapTiler `key` query parameter from cache identity in `lib/services/map/map_tile_cache.dart`.
-- [ ] T026 [US3] Use authenticated Traccar reverse geocoding, preserve saved-place-first/address-second/coordinates-last fallback, route map-server failures to the shared connection banner, and disclose satellite unavailability while keeping the standard map usable in `lib/services/map/location_description.dart` and `lib/features/map/map_screen.dart`.
+- [ ] T026 [US3] Use authenticated Traccar reverse geocoding, preserve saved-place-first/address-second/coordinates-last fallback, route map-server failures and insufficient Always/Precise location permission to the shared status bar, and disclose satellite unavailability while keeping the standard map usable in `lib/services/map/location_description.dart` and `lib/features/map/map_screen.dart`.
 
 ## Phase 6: Polish and Cross-Cutting Concerns
 

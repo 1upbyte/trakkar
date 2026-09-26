@@ -29,14 +29,19 @@
   QR setup has no destination-review or confirmation prompt. Show the Base64 privacy
   notice on the setup-choice screen before the user starts scanning. Manual setup submits
   only when the user taps its Submit button.
+- Manual setup uses the same four values and meanings as QR setup: username, password,
+  client URL, and manager URL. Their serialization order applies only to QR payloads.
+- After successful authentication, store the username, password, client URL, and manager
+  URL in platform secure storage so the app can authenticate again when needed. Do not
+  persist raw QR text or credentials from an unverified login attempt.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Set up from a QR code (Priority: P1)
 
-On first launch, a user chooses the QR option, scans a supported code containing their
-username, password, client URL, and manager URL, reviews the service destinations, and
-continues to sign in.
+On first launch, a user chooses the QR option and scans a supported code containing
+their username, password, client URL, and manager URL. After local parsing succeeds, the
+app immediately attempts sign-in.
 
 **Why this priority**: Scanning is the requested quick setup path and avoids retyping
 multiple values.
@@ -112,6 +117,8 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
 ### Edge Cases
 
 - The camera permission is denied or revoked before or during QR scanning.
+- The app must show a permission banner if camera access is needed for scanning but not
+  granted, or if location access is not both Always and Precise.
 - The code is damaged, malformed, contains invalid Base64, or has a missing/empty field.
 - A decoded value contains a semicolon, causing the payload to split into more than four
   fields.
@@ -176,6 +183,16 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   or displaying QR codes is outside this feature's scope.
 - **FR-012**: Android and iOS app builds MUST use the shared app identifier
   `com.1upbyte.trakkar`.
+- **FR-013**: After successful manager authentication, the app MUST persist the username,
+  password, client URL, and manager URL in platform secure storage to support future
+  authentication. Credentials from an unsuccessful or unverified attempt MUST NOT be
+  persisted. The raw QR payload MUST NOT be persisted.
+- **FR-014**: If camera permission is denied or revoked while QR scanning is selected,
+  the app MUST show the shared red top bar saying camera permission is needed, with a
+  permission request action labeled Re-ask. The app MUST also show this bar whenever
+  location permission is not both Always and Precise, saying those permissions are
+  needed and offering Re-ask. The location bar MUST clear once both requirements are
+  granted. Scan cancellation MUST offer Scan Again or Enter Details.
 
 ### Key Entities *(include if feature involves data)*
 

@@ -20,5 +20,7 @@ arbitrary non-empty URL values passed through without local validation, immediat
 after valid QR parsing, no request for invalid QR payloads, camera denial and cancel, required-field validation, credential
 rejection vs unavailable service, retry, and redaction
 of credentials/payloads in logs and errors. Manually test camera scanning on Android
-and iOS with real platform permissions. See the [setup UI contract](contracts/setup-ui.md)
+and iOS with real platform permissions. Verify successful credentials are persisted only
+in platform secure storage and reused for authentication, and verify that location
+permission must be Always and Precise. See the [setup UI contract](contracts/setup-ui.md)
 and [QR payload contract](contracts/qr-payload.md).

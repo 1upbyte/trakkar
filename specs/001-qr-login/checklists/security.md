@@ -22,12 +22,12 @@
 
 ## Requirement Consistency
 
-- [ ] CHK007 - Are the QR encoding rule and manual-entry field requirements consistent about the four values and their meaning? [Consistency, Spec §FR-002, §FR-005, §Assumptions]
-- [ ] CHK008 - Are the privacy warning and secret-handling requirements consistent across the setup-choice notice, automatic QR submission, authentication, retry, and error flows? [Consistency, Spec §FR-004, §FR-009–010]
+- [x] CHK007 - Are the QR encoding rule and manual-entry field requirements consistent about the four values and their meaning? [Consistency, Spec §FR-002, §FR-005, §Assumptions]
+- [x] CHK008 - Are the privacy warning and secret-handling requirements consistent across the setup-choice notice, automatic QR submission, authentication, retry, and error flows? [Consistency, Spec §FR-004, §FR-009–010]
 
 ## Scenario and Edge-Case Coverage
 
-- [ ] CHK009 - Are camera permission denial or revocation, scan cancellation, and switching to manual entry fully specified as recoverable first-run paths? [Coverage, Exception Flow, Spec §Edge Cases, §FR-001, §FR-008]
+- [x] CHK009 - Are camera permission denial or revocation, scan cancellation, and switching to manual entry fully specified as recoverable first-run paths? [Coverage, Exception Flow, Spec §Edge Cases, §FR-001, §FR-008, §FR-014]
 - [ ] CHK010 - Are requirements defined for interrupted authentication, repeated scans, and retrying after rejected credentials or unavailable services without losing correctable non-secret values? [Coverage, Recovery Flow, Spec §Edge Cases, §FR-007]
 - [ ] CHK011 - Does the specification define whether transient QR text and decoded credentials are discarded after cancel, failure, and success, beyond prohibiting logs and diagnostics? [Gap, Spec §FR-009]
 

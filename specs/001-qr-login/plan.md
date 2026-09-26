@@ -25,9 +25,10 @@ current checkout has no app manifest or source to identify the pin.
 `mobile_scanner`; existing authenticated Traccar API/session client; secure storage for
 session material. Confirm compatible package versions when app source is restored.
 
-**Storage**: Secure local storage for successful session/configuration only; QR raw
-text and decoded password remain in memory only and are discarded after sign-in or
-cancel.
+**Storage**: After successful authentication, store username, password, both service
+URLs, and session data in platform secure storage for future authentication. Keep raw QR
+text and unverified credentials transient; never persist raw QR text or an unsuccessful
+login draft.
 
 **Testing**: Parser/validation unit tests with producer-approved fixtures; widget tests
 for choice, immediate QR authentication, permission/error/retry and manual flow; auth contract tests and
@@ -58,7 +59,7 @@ existing external workflow, with manual entry as an equivalent fallback.
 | Principle | Plan response | Gate |
 |---|---|---|
 | Server-authoritative integration | Reuse authenticated Traccar session/API and SDK setup after validation. | PASS |
-| Privacy/data minimization | QR and credentials are memory-only until success, never logged; permissions requested only when scanning. | PASS |
+| Privacy/data minimization | Credentials remain memory-only until authentication succeeds, then persist in platform secure storage for future authentication; raw QR text is never persisted or logged. | PASS |
 | Battery-aware tracking | Do not start tracking until setup/auth completes and existing user choice/permission allows it. | PASS |
 | Verifiable changes | Producer fixtures, invalid-payload, auth distinction and platform camera checks are documented. | PASS WITH VALIDATION LIMIT |
 | External compatibility | Use the user-specified ordered semicolon grammar and one Base64 encoding over the whole UTF-8 string; validate against golden fixtures. | PASS |

@@ -122,6 +122,8 @@ satellite threshold and verify the map style changes when that threshold is cros
   cached tile has expired.
 - Server-side reverse geocoding is disabled, unreachable, or returns no address.
 - A map-related server request fails or the server connection is restored after failure.
+- Location permission is not Always, precise accuracy is not granted, or the user updates
+  either permission from the platform settings.
 - The user changes the map view before selecting a person, then presses Back.
 
 ## Requirements *(mandatory)*
@@ -172,6 +174,9 @@ satellite threshold and verify the map style changes when that threshold is cros
   reading “Connection to server failed” with a Retry button. Retry MUST retry the failed
   connection, and the bar MUST clear when the connection succeeds. This applies to map
   data, map configuration, and reverse-geocoding requests.
+- **FR-017**: The app MUST show the shared red top permission bar with a Re-ask button
+  whenever location access is not both Always and Precise. The bar MUST clear when the
+  platform reports both permission requirements granted.
 
 ### Key Entities *(include if feature involves data)*
 

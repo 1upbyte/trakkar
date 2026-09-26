@@ -22,3 +22,5 @@
 - When a map-related server connection fails, show the shared red bar at the top with
   “Connection to server failed” and a Retry button. Retry the failed connection and clear
   the bar after success.
+- Show the shared red permission bar with Re-ask when location access is not both Always
+  and Precise; clear it after both permissions are granted.
