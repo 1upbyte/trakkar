@@ -32,12 +32,12 @@
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] Add golden parser tests for valid ASCII/non-ASCII values, malformed Base64/UTF-8, wrong field counts, empty fields, embedded semicolons, and invalid URLs in `test/services/qr_payload_parser_test.dart`.
+- [ ] T007 [P] [US1] Add golden parser tests for valid ASCII/non-ASCII values, trimming leading/trailing Base64 whitespace, rejecting internal Base64 whitespace, malformed Base64/UTF-8, wrong field counts, empty fields, embedded semicolons, and invalid URLs in `test/services/qr_payload_parser_test.dart`.
 - [ ] T008 [P] [US1] Add QR onboarding widget tests for camera permission timing, scan/cancel/retry, safe destination preview, Base64 warning, and confirmation-before-authentication in `test/features/setup/qr_setup_flow_test.dart`.
 
 ### Implementation for User Story 1
 
-- [ ] T009 [P] [US1] Implement strict single-pass Base64-to-UTF-8 parsing for exactly `user;password;clienturl;managerurl` with four non-empty fields in `lib/services/auth/qr_payload_parser.dart`.
+- [ ] T009 [P] [US1] Implement strict single-pass Base64-to-UTF-8 parsing for exactly `user;password;clienturl;managerurl` with four non-empty fields; trim only leading/trailing payload whitespace and reject internal whitespace in `lib/services/auth/qr_payload_parser.dart`.
 - [ ] T010 [US1] Implement the Scan QR flow and request camera permission only after selection in `lib/features/setup/qr_scan_screen.dart` and `android/app/src/main/AndroidManifest.xml`.
 - [ ] T011 [US1] Add the required iOS camera usage description for QR scanning in `ios/Runner/Info.plist`.
 - [ ] T012 [US1] Implement a destination-review screen showing normalized client/manager URLs, hiding the password and raw payload, explaining Base64 privacy, and requiring affirmative confirmation before calling `lib/services/auth/traccar_auth_service.dart` in `lib/features/setup/qr_destination_review.dart`.

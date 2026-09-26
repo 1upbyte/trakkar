@@ -12,7 +12,8 @@
 
 ## QRLoginPayload
 
-Raw scanned text is one standard Base64 string. Decode it once as UTF-8, then parse the
+Raw scanned text is one standard Base64 string. Trim leading and trailing whitespace,
+reject whitespace remaining inside the payload, then decode once as UTF-8 and parse the
 exact four-field grammar `user;password;clienturl;managerurl`. The field count must be
 exactly four and every field must be non-empty; any additional semicolon is invalid.
 Raw payload and decoded credentials are sensitive and short-lived. Invalid Base64,

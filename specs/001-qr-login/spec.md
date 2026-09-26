@@ -126,7 +126,9 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   represents the username; the complete delimited string is encoded once.
 - **FR-003**: The app MUST decode the complete payload once, split it into exactly four
   non-empty fields, validate both URLs, and reject invalid Base64/UTF-8, extra or missing
-  fields, or field values containing the separator before attempting sign-in.
+  fields, or field values containing the separator before attempting sign-in. Leading
+  and trailing whitespace around the scanned Base64 payload MUST be trimmed before
+  decoding; whitespace within the payload MUST be rejected.
 - **FR-004**: Before sending decoded credentials, the app MUST show the service
   destinations and require the user to confirm continuing.
 - **FR-005**: The app MUST let the user enter the same four values manually and submit
@@ -169,7 +171,8 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
 - **SC-001**: In usability validation, at least 90% of users with valid setup details
   complete either onboarding path without assistance in two minutes or less.
 - **SC-002**: 100% of valid QR test cases provide the same four values as the source
-  details; 100% of invalid or incomplete QR cases are rejected before sign-in.
+  details, including payloads with surrounding whitespace; 100% of invalid or incomplete
+  QR cases, including payloads with internal whitespace, are rejected before sign-in.
 - **SC-003**: In all tested rejected-credential and unavailable-service cases, users
   receive distinct feedback. An unavailable-service warning identifies the service,
   reveals sanitized full error details only on request, and offers Back and Proceed

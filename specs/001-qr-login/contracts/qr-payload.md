@@ -2,9 +2,11 @@
 
 ## Wire format
 
-The QR scanner returns one standard RFC 4648 Base64 string. Decode the complete string
-once to UTF-8. The decoded text MUST contain exactly four non-empty fields, in this
-order, separated by literal semicolons:
+The QR scanner returns one standard RFC 4648 Base64 string. Trim leading and trailing
+whitespace from the scanned string before decoding; reject whitespace anywhere within
+the remaining Base64 payload. Decode the complete trimmed string once to UTF-8. The
+decoded text MUST contain exactly four non-empty fields, in this order, separated by
+literal semicolons:
 
 ```text
 user;password;clienturl;managerurl
@@ -30,6 +32,7 @@ values that cannot be represented by this grammar.
 ## Interoperability fixtures
 
 Maintain golden tests generated from the agreed grammar using non-secret test values.
-Include valid payloads and malformed Base64, invalid UTF-8, missing/empty/additional
-fields, semicolon-containing values, invalid URLs, and valid strings with non-ASCII
-UTF-8. QR generation and display remain outside this app feature.
+Include valid payloads with surrounding whitespace, rejection of internal whitespace,
+malformed Base64, invalid UTF-8, missing/empty/additional fields, semicolon-containing
+values, invalid URLs, and valid strings with non-ASCII UTF-8. QR generation and display
+remain outside this app feature.

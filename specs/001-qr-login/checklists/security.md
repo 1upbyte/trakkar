@@ -16,7 +16,7 @@
 
 ## Requirement Clarity
 
-- [ ] CHK004 - Are accepted Base64 alphabet, padding, whitespace, UTF-8 failure, and decoded field-count rules specific enough to produce interoperable QR codes? [Clarity, Spec §FR-002–003]
+- [x] CHK004 - Are accepted Base64 alphabet, padding, whitespace, UTF-8 failure, and decoded field-count rules specific enough to produce interoperable QR codes? [Clarity, Spec §FR-002–003]
 - [ ] CHK005 - Are permitted URL schemes and rules for hosts, embedded credentials, redirects, and plain-HTTP confirmation explicit? [Ambiguity, Spec §FR-006]
 - [ ] CHK006 - Is it clear which service destinations are shown for confirmation and that no credentials are sent before confirmation? [Clarity, Spec §FR-004]
 
