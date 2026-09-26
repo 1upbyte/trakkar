@@ -10,9 +10,9 @@
 
 ## Requirement Completeness
 
-- [ ] CHK001 - Does the specification define that the complete UTF-8 string `user;password;clienturl;managerurl` is Base64-encoded once, with `user` meaning username? [Completeness, Spec §Clarifications, §FR-002]
-- [ ] CHK002 - Are QR payloads with missing, empty, additional, or semicolon-containing fields explicitly covered by rejection requirements? [Coverage, Spec §Edge Cases, §FR-003]
-- [ ] CHK003 - Are requirements defined for how the app handles a service being reachable while the other configured service is unavailable, including whether setup may partially succeed? [Gap, Spec §Edge Cases, §FR-007]
+- [x] CHK001 - Does the specification define that the complete UTF-8 string `user;password;clienturl;managerurl` is Base64-encoded once, with `user` meaning username? [Completeness, Spec §Clarifications, §FR-002]
+- [x] CHK002 - Are QR payloads with missing, empty, additional, or semicolon-containing fields explicitly covered by rejection requirements? [Coverage, Spec §Edge Cases, §FR-003]
+- [x] CHK003 - Are requirements defined for how the app handles a service being reachable while the other configured service is unavailable, including whether setup may partially succeed? [Gap, Spec §Edge Cases, §FR-007]
 
 ## Requirement Clarity
 

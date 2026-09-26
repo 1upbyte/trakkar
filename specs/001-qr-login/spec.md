@@ -84,8 +84,17 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
 
 1. **Given** a service rejects the credentials, **When** sign-in fails, **Then** the app
    reports that the credentials were not accepted and allows correction.
-2. **Given** a service cannot be reached, **When** sign-in fails, **Then** the app reports
-   a connection problem separately from rejected credentials and allows retry.
+2. **Given** a configured service is unavailable, **When** setup detects the failure,
+   **Then** the app shows which service is unavailable, offers an option to view its full
+   error details, and presents exactly two actions: Back and Proceed Anyway.
+3. **Given** the user chooses Back, **When** the unavailable-service warning is shown,
+   **Then** the app returns to setup so the user can review or correct the details.
+4. **Given** the user chooses Proceed Anyway, **When** the unavailable-service warning is
+   shown, **Then** the app continues to the map without representing the unavailable
+   service as reachable or authenticated. A red bar appears at the top saying
+   “Connection to server failed” with a Retry button. This bar is also shown whenever any
+   server connection fails; Retry retries the failed connection and the bar clears when
+   that connection succeeds.
 
 ### Edge Cases
 
@@ -95,6 +104,12 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   fields.
 - A decoded URL uses an unsupported scheme or is malformed.
 - Credentials are valid for one service but the other configured URL is unavailable.
+- The unavailable-service warning may reveal sanitized full error details only after the
+  user asks to view them; neither summary nor details may contain credentials, raw QR
+  text, or URL user-info.
+- Proceeding to the map after unavailable manager authentication does not create an
+  authenticated session; the map is shown with the connection-failure bar until Retry
+  successfully restores the server connection.
 - The user cancels scanning or switches between QR and manual setup.
 - The same code is scanned more than once or a sign-in attempt is interrupted.
 - A QR code is copied or viewed by someone other than its intended user.
@@ -104,7 +119,8 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
 ### Functional Requirements
 
 - **FR-001**: On first launch before setup is complete, the app MUST offer both QR
-  scanning and manual entry.
+  scanning and manual entry. Choosing Proceed Anyway after an unavailable-service
+  warning MUST navigate to the map even when manager authentication has not succeeded.
 - **FR-002**: The QR login flow MUST accept a standard Base64-encoded UTF-8 string whose
   decoded form is exactly `user;password;clienturl;managerurl` in that order. `user`
   represents the username; the complete delimited string is encoded once.
@@ -117,8 +133,16 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   them for sign-in.
 - **FR-006**: The app MUST validate that required values are present and that both URLs
   are well-formed before attempting sign-in.
-- **FR-007**: The app MUST distinguish rejected credentials from unavailable services
-  and provide a way to correct values or retry.
+- **FR-007**: The app MUST distinguish rejected credentials from unavailable services.
+  For an unavailable service, it MUST identify the affected service, show a safe warning,
+  offer user-requested sanitized full error details, and present exactly two actions:
+  Back and Proceed Anyway. Back returns to setup for review or correction. Proceed Anyway
+  navigates to the map without claiming that the unavailable service is reachable or
+  authenticated. A red bar at the top MUST say “Connection to server failed” and include
+  a Retry button whenever a server connection fails. Retry MUST retry the failed
+  connection, including the failed manager authentication attempt when applicable, and
+  the bar MUST clear when the connection succeeds. A session MUST be established only
+  after manager authentication succeeds.
 - **FR-008**: The app MUST allow a user to leave QR scanning and choose manual entry.
 - **FR-009**: The app MUST treat QR payloads and decoded credentials as secrets: it MUST
   NOT include them in logs, diagnostics, or user-visible error details.
@@ -147,7 +171,11 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
 - **SC-002**: 100% of valid QR test cases provide the same four values as the source
   details; 100% of invalid or incomplete QR cases are rejected before sign-in.
 - **SC-003**: In all tested rejected-credential and unavailable-service cases, users
-  receive distinct, actionable feedback and can retry or correct their details.
+  receive distinct feedback. An unavailable-service warning identifies the service,
+  reveals sanitized full error details only on request, and offers Back and Proceed
+  Anyway; Back returns to setup, and Proceed Anyway opens the map without claiming the
+  unavailable service is authenticated. On server connection failure, the map displays
+  the red connection-failure bar with Retry; successful reconnection clears the bar.
 - **SC-004**: No tested QR payload, username, or password appears in application logs,
   diagnostics, or error messages.
 - **SC-005**: Android and iOS build metadata report the same app identifier,

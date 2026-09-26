@@ -10,5 +10,18 @@
 - Continue requires explicit confirmation. Manual and QR details use the same submit
   action and authentication behavior.
 - Invalid/missing form fields stay editable; errors distinguish rejected credentials
-  from unavailable service without echoing secrets.
-- Never display scanner/parser exception text verbatim.
+  from unavailable services without echoing secrets.
+- When a service is unavailable, show a warning naming that service. Offer a control to
+  reveal sanitized full error details on request and exactly two actions: Back and
+  Proceed Anyway. Back returns to setup so the user can review or correct details.
+  Proceed Anyway navigates to the map without representing the unavailable service as
+  reachable or authenticated.
+- Whenever a server connection fails, show a red bar at the top reading “Connection to
+  server failed” with a Retry button. Retry attempts the failed connection again; clear
+  the bar when that connection succeeds. This also applies after the user proceeds to the
+  map without an authenticated manager session. If manager authentication succeeds on
+  retry, establish the session then; do not treat the earlier Proceed Anyway choice as
+  authentication.
+- Full error details may include safe diagnostic context, but MUST omit credentials, raw
+  QR text, URL user-info, and any other secret. Never display parser/scanner exception
+  text verbatim.

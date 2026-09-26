@@ -121,13 +121,15 @@ satellite threshold and verify the map style changes when that threshold is cros
 - The server map configuration has no satellite key, the tile cache is full, or a
   cached tile has expired.
 - Server-side reverse geocoding is disabled, unreachable, or returns no address.
+- A map-related server request fails or the server connection is restored after failure.
 - The user changes the map view before selecting a person, then presses Back.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: The app MUST open to the map as its main screen after setup is complete.
+- **FR-001**: The app MUST open to the map as its main screen after setup succeeds or
+  after the user explicitly chooses Proceed Anyway for an unavailable service.
 - **FR-002**: The initial map view MUST frame people with known locations, while limiting
   automatic zoom-out to an extent of approximately two miles. When their spread exceeds
   that limit, the app MUST keep the capped view; users MAY pan or zoom to reach people
@@ -166,6 +168,10 @@ satellite threshold and verify the map style changes when that threshold is cros
   service. The app MUST NOT call a third-party geocoding provider directly or contain
   that provider's credentials. When server geocoding is unavailable, the map MUST use
   a matching saved-place name or coordinates as the location description.
+- **FR-016**: Whenever a server connection fails, the app MUST show a red bar at the top
+  reading “Connection to server failed” with a Retry button. Retry MUST retry the failed
+  connection, and the bar MUST clear when the connection succeeds. This applies to map
+  data, map configuration, and reverse-geocoding requests.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -199,6 +205,8 @@ satellite threshold and verify the map style changes when that threshold is cros
 - **SC-007**: In 100% of tested address lookups, geocoding is requested through the
   server; when unavailable, the map shows a saved-place name or coordinates and does
   not contact a third-party geocoder directly.
+- **SC-008**: In 100% of tested failed map-server requests, the red top connection bar
+  and Retry button appear; retrying a recovered connection clears the bar.
 
 ## Assumptions
 

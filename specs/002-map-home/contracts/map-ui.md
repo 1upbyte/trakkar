@@ -19,3 +19,6 @@
   the standard map stays usable and satellite unavailability is surfaced.
 - Readable addresses come from the authenticated server geocoder; if it is unavailable,
   show a matching saved-place name or coordinates.
+- When a map-related server connection fails, show the shared red bar at the top with
+  “Connection to server failed” and a Retry button. Retry the failed connection and clear
+  the bar after success.

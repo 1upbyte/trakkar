@@ -22,17 +22,21 @@ invalid UTF-8, or malformed field count is rejected before authentication.
 
 | Field | Type | Rules |
 |---|---|---|
-| `state` | choosing, scanning, previewing, editing, authenticating, success, rejected, unavailable, canceled | Error categories distinguish bad credentials from service/network failure. |
+| `state` | choosing, scanning, previewing, editing, authenticating, success, rejected, unavailable, proceeding, canceled | Error categories distinguish bad credentials from service/network failure. `proceeding` navigates to the map after the user chooses Proceed Anyway; it does not assert that an unavailable service is authenticated. |
 | `details` | LoginDetailsDraft or null | Cleared on cancel/failure completion as appropriate. |
-| `safeError` | enum/message or null | Contains no password, payload, or URL user-info. |
-| `sessionRef` | secure session handle or null | Created only after successful auth and stored using the existing session policy. |
+| `safeError` | enum/message or null | Identifies the affected service and contains no password, payload, or URL user-info. Full sanitized details are exposed only when requested by the user. |
+| `sessionRef` | secure session handle or null | Created only after successful auth and stored using the existing session policy; remains null when the user proceeds without manager authentication. |
 
 State flow:
 
 ```text
 first-run -> choosing -> scanning -> previewing -> authenticating -> success
-                    \-> manual form --------------------/       -> rejected/unavailable -> edit/retry
+                    \-> manual form --------------------/       -> rejected -> edit/retry
+                                                                   -> unavailable -> warning
+                                                                                  -> Back -> edit/review
+                                                                                  -> Proceed Anyway -> map + connection-failure bar
 ```
 
 Camera denial or cancellation returns to choosing/manual entry. No network request is
-made from scan parsing or the destination-preview screen.
+made from scan parsing or the destination-preview screen. A server connection failure
+shows the shared top red bar with Retry; it clears after the failed connection succeeds.
