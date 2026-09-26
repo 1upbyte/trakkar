@@ -5,12 +5,14 @@
   retry and manual entry.
 - Parse and validate a scan before showing a destination review. Invalid input displays
   a safe explanation and does not submit credentials.
-- The review shows normalized client/manager destinations and explains that Base64 is
-  not encryption and the QR must be kept private. Password and raw QR text are not shown.
+- The review shows the configured client/manager destinations (redacting embedded URL
+  user-info) and explains that Base64 is not encryption and the QR must be kept private.
+  The login password and raw QR text are not shown.
 - Continue requires explicit confirmation. Manual and QR details use the same submit
   action and authentication behavior.
-- Invalid/missing form fields stay editable; errors distinguish rejected credentials
-  from unavailable services without echoing secrets.
+- Empty required form fields stay editable. Do not locally reject URL schemes, hosts,
+  embedded URL credentials, HTTP, redirects, or password formats. Errors distinguish
+  rejected credentials from unavailable services without echoing secrets.
 - When a service is unavailable, show a warning naming that service. Offer a control to
   reveal sanitized full error details on request and exactly two actions: Back and
   Proceed Anyway. Back returns to setup so the user can review or correct details.

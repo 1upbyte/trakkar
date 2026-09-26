@@ -19,7 +19,7 @@
 
 **Purpose**: Establish first-run routing, shared session state, and safe authenticated Traccar requests before onboarding stories.
 
-- [ ] T003 Create `LoginDetailsDraft` and `SetupAttempt` models with the required username, password, absolute HTTP(S) client and manager URLs, source enum, state enum, and secret-free error representation in `lib/models/login_details.dart` and `lib/models/setup_attempt.dart`.
+- [ ] T003 Create `LoginDetailsDraft` and `SetupAttempt` models with required non-empty username/password/client URL/manager URL strings, source enum, state enum, and secret-free error representation in `lib/models/login_details.dart` and `lib/models/setup_attempt.dart`.
 - [ ] T004 Authenticate against the manager URL's Traccar session endpoint, `POST /api/session`, and distinguish rejected credentials from network/service failures in `lib/services/auth/traccar_auth_service.dart`; do not include credentials or URL user-info in exceptions or logs.
 - [ ] T005 Persist only successfully authenticated session/configuration values through secure storage in `lib/services/auth/secure_session_store.dart`; configure the official Traccar Client SDK with the client URL through `lib/services/tracking/traccar_tracking_service.dart`, but start reporting only after required location permission is granted.
 - [ ] T006 Route fresh installs to setup and successful sessions to the signed-in app shell in `lib/app/app_router.dart` and `lib/main.dart`.
@@ -28,34 +28,34 @@
 
 **Goal**: Scan the external four-field QR format, validate it locally, review destinations, and submit only after confirmation.
 
-**Independent Test**: Scan a valid producer-format fixture, confirm both destinations, and verify the shared sign-in flow receives the four expected values; malformed fixtures must not trigger a request.
+**Independent Test**: Scan a valid producer-format fixture, confirm both destinations, and verify the shared sign-in flow receives the four expected values; malformed Base64 or field grammar must not trigger a request, and arbitrary non-empty URL values pass through without local validation.
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] Add golden parser tests for valid ASCII/non-ASCII values, trimming leading/trailing Base64 whitespace, rejecting internal Base64 whitespace, malformed Base64/UTF-8, wrong field counts, empty fields, embedded semicolons, and invalid URLs in `test/services/qr_payload_parser_test.dart`.
+- [ ] T007 [P] [US1] Add golden parser tests for valid ASCII/non-ASCII values, trimming leading/trailing Base64 whitespace, rejecting internal Base64 whitespace, malformed Base64/UTF-8, wrong field counts, empty fields, embedded semicolons, and accepting arbitrary non-empty URL field values in `test/services/qr_payload_parser_test.dart`.
 - [ ] T008 [P] [US1] Add QR onboarding widget tests for camera permission timing, scan/cancel/retry, safe destination preview, Base64 warning, and confirmation-before-authentication in `test/features/setup/qr_setup_flow_test.dart`.
 
 ### Implementation for User Story 1
 
-- [ ] T009 [P] [US1] Implement strict single-pass Base64-to-UTF-8 parsing for exactly `user;password;clienturl;managerurl` with four non-empty fields; trim only leading/trailing payload whitespace and reject internal whitespace in `lib/services/auth/qr_payload_parser.dart`.
+- [ ] T009 [P] [US1] Implement strict single-pass Base64-to-UTF-8 parsing for exactly `user;password;clienturl;managerurl` with four non-empty fields; trim only leading/trailing payload whitespace, reject internal whitespace, and do not validate URL fields during parsing in `lib/services/auth/qr_payload_parser.dart`.
 - [ ] T010 [US1] Implement the Scan QR flow and request camera permission only after selection in `lib/features/setup/qr_scan_screen.dart` and `android/app/src/main/AndroidManifest.xml`.
 - [ ] T011 [US1] Add the required iOS camera usage description for QR scanning in `ios/Runner/Info.plist`.
-- [ ] T012 [US1] Implement a destination-review screen showing normalized client/manager URLs, hiding the password and raw payload, explaining Base64 privacy, and requiring affirmative confirmation before calling `lib/services/auth/traccar_auth_service.dart` in `lib/features/setup/qr_destination_review.dart`.
+- [ ] T012 [US1] Implement a destination-review screen showing configured client/manager URLs with embedded user-info redacted, hiding the login password and raw payload, explaining Base64 privacy, and requiring affirmative confirmation before calling `lib/services/auth/traccar_auth_service.dart` in `lib/features/setup/qr_destination_review.dart`.
 - [ ] T013 [US1] Connect successful QR authentication to secure session persistence and signed-in routing in `lib/features/setup/qr_scan_screen.dart` and `lib/app/app_router.dart`.
 
 ## Phase 4: User Story 2 - Set up by entering details (Priority: P1)
 
 **Goal**: Let users enter the same four required values manually and submit through the shared validation/authentication path.
 
-**Independent Test**: Submit valid manual details and reach the signed-in shell; submit missing values or malformed URLs and verify field-specific correction while preserving other entries.
+**Independent Test**: Submit non-empty manual details and reach the signed-in shell; submit missing values and verify field-specific correction while preserving other entries. Confirm URL strings are passed to the network layer without local URL validation.
 
 ### Tests for User Story 2
 
-- [ ] T014 [P] [US2] Add manual-entry widget tests for required fields, URL validation, masked password, retained editable values, and successful shared submission in `test/features/setup/manual_setup_form_test.dart`.
+- [ ] T014 [P] [US2] Add manual-entry widget tests for required non-empty fields, no local URL/password-format validation, masked password, retained editable values, and successful shared submission in `test/features/setup/manual_setup_form_test.dart`.
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Implement the manual username/password/client URL/manager URL form with inline validation and password masking in `lib/features/setup/manual_setup_screen.dart`.
+- [ ] T015 [US2] Implement the manual username/password/client URL/manager URL form with required-field validation only and password masking; pass URL values unchanged to the network layer in `lib/features/setup/manual_setup_screen.dart`.
 - [ ] T016 [US2] Route manual submissions through the same normalized `LoginDetailsDraft`, authentication service, secure session store, and signed-in route used by QR setup in `lib/features/setup/manual_setup_screen.dart`.
 
 ## Phase 5: User Story 3 - Recover from a failed sign-in (Priority: P2)

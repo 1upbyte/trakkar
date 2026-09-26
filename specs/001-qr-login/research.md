@@ -23,13 +23,13 @@ Sources: [RFC 4648](https://www.rfc-editor.org/rfc/rfc4648.html),
 
 ## Credential handling and URLs
 
-**Decision**: Parse and validate entirely before authentication; never submit on scan.
-Show normalized client and manager destinations, mask/avoid re-displaying the password,
-and submit only after affirmative confirmation. Validate absolute HTTP(S) URLs with a
-host and reject malformed syntax and embedded URL credentials. Prefer HTTPS; if plain
-HTTP must be supported for a self-hosted deployment, clearly disclose the unencrypted
-transport and obtain confirmation before sending the password. Keep parser, transport,
-and auth errors generic and secret-free.
+**Decision**: Parse the QR grammar before authentication; never submit on scan. Show the
+configured client and manager destinations with embedded URL user-info redacted,
+mask/avoid re-displaying the login password, and submit only after affirmative
+confirmation. Do not locally validate URL schemes, host syntax, or embedded URL
+credentials; allow HTTP without a warning and do not restrict redirects by origin. The
+network transport determines whether it can use a configured URL. Keep parser,
+transport, and auth errors generic and secret-free.
 
 **Rationale**: Base64 represents bytes as text but does not provide secrecy. URLs and
 scanner exceptions can also contain sensitive material. Server authentication remains

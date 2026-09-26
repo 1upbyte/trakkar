@@ -22,8 +22,11 @@ values that cannot be represented by this grammar.
 ## Processing and privacy
 
 - Parse locally; parsing has no network side effects.
-- Validate both decoded URLs as absolute supported service URLs before preview.
-- Show client and manager destinations and require confirmation before authentication.
+- Do not locally validate decoded URL schemes, host syntax, or embedded credentials.
+  HTTP is allowed without warning, and redirects are not restricted by origin. The
+  network transport determines whether it can use each configured value.
+- Show client and manager destinations and require confirmation before authentication;
+  redact embedded URL user-info in the preview.
 - Do not display or log the raw QR text, password, or decoded payload.
 - Explain that Base64 is encoding, not encryption, and the QR code must be kept private.
 - Clear transient payload/credential values after cancellation or completion according
@@ -34,5 +37,5 @@ values that cannot be represented by this grammar.
 Maintain golden tests generated from the agreed grammar using non-secret test values.
 Include valid payloads with surrounding whitespace, rejection of internal whitespace,
 malformed Base64, invalid UTF-8, missing/empty/additional fields, semicolon-containing
-values, invalid URLs, and valid strings with non-ASCII UTF-8. QR generation and display
-remain outside this app feature.
+values, arbitrary non-empty URL field values, and valid strings with non-ASCII UTF-8. QR
+generation and display remain outside this app feature.

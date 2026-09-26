@@ -19,6 +19,13 @@
   QR parsing before sign-in.
 - The app identifier for both Android and iOS is `com.1upbyte.trakkar`.
 
+### Session 2026-09-26
+
+- Service URL values need only be non-empty. The app does not locally check their
+  schemes, hosts, or embedded credentials; HTTP is allowed without warning, and the app
+  does not restrict redirects by origin. The app does not enforce a local login-password
+  format or strength policy; the server determines whether credentials are accepted.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Set up from a QR code (Priority: P1)
@@ -63,9 +70,10 @@ be completed; then submit invalid details and verify the user can correct them.
    for all four required values.
 2. **Given** all required values are valid, **When** the user submits them, **Then** the
    app attempts sign-in and reports the outcome.
-3. **Given** a required value is missing or a URL cannot be used, **When** the user
-   submits the form, **Then** the app identifies what needs correction and preserves the
-   other entered values.
+3. **Given** a required value is missing, **When** the user submits the form, **Then** the
+   app identifies the missing value and preserves the other entered values. If a service
+   URL cannot be used by the network transport, the app reports that service as
+   unavailable and offers the recovery choices in User Story 3.
 
 ---
 
@@ -102,7 +110,7 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
 - The code is damaged, malformed, contains invalid Base64, or has a missing/empty field.
 - A decoded value contains a semicolon, causing the payload to split into more than four
   fields.
-- A decoded URL uses an unsupported scheme or is malformed.
+- A configured service URL uses a scheme or format the network transport cannot use.
 - Credentials are valid for one service but the other configured URL is unavailable.
 - The unavailable-service warning may reveal sanitized full error details only after the
   user asks to view them; neither summary nor details may contain credentials, raw QR
@@ -125,16 +133,22 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   decoded form is exactly `user;password;clienturl;managerurl` in that order. `user`
   represents the username; the complete delimited string is encoded once.
 - **FR-003**: The app MUST decode the complete payload once, split it into exactly four
-  non-empty fields, validate both URLs, and reject invalid Base64/UTF-8, extra or missing
-  fields, or field values containing the separator before attempting sign-in. Leading
-  and trailing whitespace around the scanned Base64 payload MUST be trimmed before
-  decoding; whitespace within the payload MUST be rejected.
+  non-empty fields, and reject invalid Base64/UTF-8, extra or missing fields, or field
+  values containing the separator before attempting sign-in. It MUST NOT validate URL
+  values during parsing. Leading and trailing whitespace around the scanned Base64
+  payload MUST be trimmed before decoding; whitespace within the payload MUST be
+  rejected.
 - **FR-004**: Before sending decoded credentials, the app MUST show the service
-  destinations and require the user to confirm continuing.
+  destinations and require the user to confirm continuing. If a destination URL contains
+  embedded user-info, the preview MUST redact it.
 - **FR-005**: The app MUST let the user enter the same four values manually and submit
   them for sign-in.
-- **FR-006**: The app MUST validate that required values are present and that both URLs
-  are well-formed before attempting sign-in.
+- **FR-006**: The app MUST require non-empty username, password, client URL, and manager
+  URL values. It MUST NOT locally validate URL schemes, host syntax, URL-embedded
+  credentials, or password format/strength. HTTP is allowed without warning or
+  confirmation, and the app MUST NOT restrict redirects based on origin. The network
+  transport determines whether it can use a configured URL; failures use the recovery
+  behavior in FR-007. The server determines whether login credentials are accepted.
 - **FR-007**: The app MUST distinguish rejected credentials from unavailable services.
   For an unavailable service, it MUST identify the affected service, show a safe warning,
   offer user-requested sanitized full error details, and present exactly two actions:
@@ -147,7 +161,8 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   after manager authentication succeeds.
 - **FR-008**: The app MUST allow a user to leave QR scanning and choose manual entry.
 - **FR-009**: The app MUST treat QR payloads and decoded credentials as secrets: it MUST
-  NOT include them in logs, diagnostics, or user-visible error details.
+  NOT include them in logs, diagnostics, or user-visible error details. It MUST also
+  redact URL user-info from previews, logs, diagnostics, and errors.
 - **FR-010**: The app MUST explain that Base64 is encoding rather than encryption and
   that a QR code containing these values must be kept private.
 - **FR-011**: The app MUST scan QR codes supplied by an existing external workflow. Creating

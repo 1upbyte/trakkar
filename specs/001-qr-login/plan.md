@@ -42,10 +42,11 @@ requires runtime camera permission through the scanner plugin/host setup.
 network sign-in until explicit endpoint confirmation.
 
 **Constraints**: Base64 is reversible encoding, not encryption. Treat both raw QR text
-and decoded values as secrets. Validate both absolute service URLs; prefer HTTPS and
-require an explicit warning/confirmation before sending credentials over HTTP if legacy
-self-hosted servers require it. Never echo credentials or URL user-info in errors.
-Reuse current Traccar authentication rather than inventing another auth scheme.
+and decoded values as secrets. Do not locally validate URL schemes, host syntax, or
+embedded URL credentials; permit HTTP without warning and do not restrict redirects by
+origin. Never expose credentials or URL user-info in previews, logs, diagnostics, or
+errors. The transport determines whether it can use a configured URL. Reuse current
+Traccar authentication rather than inventing another auth scheme.
 
 **Scale/Scope**: First-run setup for one app installation; scan codes made by the
 existing external workflow, with manual entry as an equivalent fallback.

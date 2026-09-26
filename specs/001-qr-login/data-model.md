@@ -5,9 +5,9 @@
 | Field | Type | Rules |
 |---|---|---|
 | `username` | string | Required, trimmed according to existing auth rules. |
-| `password` | secret string | Required; masked in UI, memory-only until successful auth, never serialized to logs. |
-| `clientUrl` | absolute HTTP(S) URI | Required; valid host; reject embedded credentials. |
-| `managerUrl` | absolute HTTP(S) URI | Required; valid host; reject embedded credentials. |
+| `password` | secret string | Required and masked in UI; no local password-format or strength validation; server determines acceptance. Keep transient and never serialize to logs. |
+| `clientUrl` | string | Required non-empty value; preserve as entered/decoded without local scheme, host, or embedded-credential validation. |
+| `managerUrl` | string | Required non-empty value; preserve as entered/decoded without local scheme, host, or embedded-credential validation. |
 | `source` | qr or manual | Used for flow behavior/analytics category only; never log payload. |
 
 ## QRLoginPayload
