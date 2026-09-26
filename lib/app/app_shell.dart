@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../services/auth/setup_controller.dart';
+import '../features/map/map_screen.dart';
+import '../models/map_appearance_preference.dart';
 import '../services/auth/secure_session_store.dart';
+import '../services/auth/setup_controller.dart';
+import '../services/map/map_preferences.dart';
+import '../services/traccar_data_repository.dart';
 import '../services/tracking/traccar_tracking_service.dart';
 import '../widgets/server_connection_banner.dart';
 
@@ -26,17 +32,27 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final _tracking = TraccarTrackingService();
   final _sessionStore = SecureSessionStore();
+  final _mapPreferences = MapPreferences();
   bool _locationReady = false;
   bool _trackingStarted = false;
   bool _trackingConfigured = false;
   bool _serverConnectionFailed = false;
+  bool _satelliteUnavailable = false;
+  int _selectedTab = 0;
+  double _satelliteThreshold = 19;
+  TraccarDataRepository? _mapRepository;
+
+  static const _tabNames = ['Map', 'People', 'Places', 'Settings'];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _refreshLocationPermission();
-    if (widget.controller.hasAuthenticatedSession) _configureTracking();
+    unawaited(_loadMapPreference());
+    if (widget.controller.hasAuthenticatedSession) {
+      unawaited(_configureTracking());
+    }
   }
 
   @override
@@ -47,6 +63,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_mapRepository?.close());
     super.dispose();
   }
 
@@ -54,6 +71,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     try {
       final stored = await _sessionStore.read();
       if (stored != null) {
+        _mapRepository ??= TraccarDataRepository(
+          managerUrl: stored.details.managerUrl,
+          sessionCookie: stored.cookie,
+        );
+        if (mounted) setState(() {});
         await _tracking.configure(stored.details);
         _trackingConfigured = true;
         await _maybeStartTracking();
@@ -61,6 +83,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     } on Object {
       if (mounted) setState(() => _serverConnectionFailed = true);
     }
+  }
+
+  Future<void> _loadMapPreference() async {
+    final preference = await _mapPreferences.read();
+    if (mounted) {
+      setState(() => _satelliteThreshold = preference.satelliteThresholdZoom);
+    }
+  }
+
+  Future<void> _saveMapPreference(double value) async {
+    setState(() => _satelliteThreshold = value);
+    await _mapPreferences.save(
+      MapAppearancePreference(satelliteThresholdZoom: value),
+    );
   }
 
   Future<void> _refreshLocationPermission() async {
@@ -137,9 +173,32 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     await _refreshLocationPermission();
   }
 
+  Widget _settingsPage(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(20),
+    children: [
+      Text('Map appearance', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 12),
+      Text(
+        'Switch to satellite at zoom ${_satelliteThreshold.toStringAsFixed(0)}',
+      ),
+      Slider(
+        value: _satelliteThreshold,
+        min: 15,
+        max: 21,
+        divisions: 6,
+        label: _satelliteThreshold.toStringAsFixed(0),
+        onChanged: (value) => unawaited(_saveMapPreference(value)),
+      ),
+      if (_satelliteUnavailable)
+        const Text('Satellite imagery is unavailable from the server.'),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Trakkar')),
+    appBar: AppBar(
+      title: Text(_selectedTab == 0 ? 'Trakkar' : _tabNames[_selectedTab]),
+    ),
     body: Column(
       children: [
         if (_serverConnectionFailed ||
@@ -157,7 +216,25 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             actionLabel: 'Re-ask',
             onAction: _requestLocationAccess,
           ),
-        const Expanded(child: Center(child: Text('Map'))),
+        Expanded(
+          child: IndexedStack(
+            index: _selectedTab,
+            children: [
+              MapScreen(
+                repository: _mapRepository,
+                satelliteThresholdZoom: _satelliteThreshold,
+                onSatelliteUnavailable: (value) {
+                  if (mounted && _satelliteUnavailable != value) {
+                    setState(() => _satelliteUnavailable = value);
+                  }
+                },
+              ),
+              const Center(child: Text('People')),
+              const Center(child: Text('Places')),
+              _settingsPage(context),
+            ],
+          ),
+        ),
         if (widget.controller.isProceedingAnyway &&
             !widget.controller.hasAuthenticatedSession)
           Padding(
@@ -167,6 +244,25 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               child: const Text('Retry authentication'),
             ),
           ),
+      ],
+    ),
+    bottomNavigationBar: NavigationBar(
+      selectedIndex: _selectedTab,
+      onDestinationSelected: (index) => setState(() => _selectedTab = index),
+      destinations: const [
+        NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
+        NavigationDestination(
+          icon: Icon(Icons.people_outline),
+          label: 'People',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.place_outlined),
+          label: 'Places',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.settings_outlined),
+          label: 'Settings',
+        ),
       ],
     ),
   );

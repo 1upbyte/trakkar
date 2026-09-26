@@ -1,6 +1,6 @@
 # Quickstart Validation: Map Home
 
-The current checkout has no Flutter app tree; run these from the restored Flutter root.
+Run these from the repository root. The Flutter app lives in the root project.
 
 ```sh
 flutter pub get
@@ -9,6 +9,19 @@ flutter test
 flutter build apk --debug
 flutter build ios --simulator
 ```
+
+## Validation results (2026-09-26)
+
+- `flutter analyze`: passed with no issues.
+- `flutter test`: all 47 tests passed, including map camera fit, people markers and
+  clusters, person details and selection state, saved-place labels, authenticated
+  Traccar data, server geocoding, map retry behavior, tile-cache policy, and the
+  existing setup flows.
+- `flutter build apk --debug`: passed. Flutter reports a future Kotlin Gradle Plugin
+  compatibility warning from `traccar_client_sdk`.
+- `flutter build ios --simulator`: passed.
+- Physical-device permission behavior, live Traccar authorization and updates, provider
+  tile attribution, and real MapTiler-key availability still need manual verification.
 
 The iOS command requires macOS/Xcode and CocoaPods. Expected focused coverage: empty,
 single, inside-cap and outside-cap fit; circular portrait/initial rendering; crowded

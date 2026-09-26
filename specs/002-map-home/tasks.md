@@ -12,17 +12,17 @@
 
 **Purpose**: Add the shared Flutter map, vector-tile, cluster, and bounded cache dependencies.
 
-- [ ] T001 Add compatible Flutter map renderer, OpenFreeMap vector tile, marker clustering, coordinate, and tile-cache dependencies in `pubspec.yaml`.
-- [ ] T002 Add map feature folders and test folders under `lib/features/map/`, `lib/models/`, `lib/services/map/`, and `test/features/map/`.
+- [X] T001 Add compatible Flutter map renderer, OpenFreeMap vector tile, marker clustering, coordinate, and tile-cache dependencies in `pubspec.yaml`.
+- [X] T002 Add map feature folders and test folders under `lib/features/map/`, `lib/models/`, `lib/services/map/`, and `test/features/map/`.
 
 ## Phase 2: Foundational
 
 **Purpose**: Connect authenticated device/position data and shared map state for all map stories.
 
-- [ ] T003 Define server-backed `Person`, `PersonLocation`, map view state, and map preference models with nullable image/battery/address state in `lib/models/person.dart`, `lib/models/person_location.dart`, and `lib/models/map_view_state.dart`.
-- [ ] T004 Implement one authorized-device/latest-position repository using the existing authenticated session and supported live update channel in `lib/services/traccar_data_repository.dart`; do not create a tracking loop or expose unauthorized devices.
-- [ ] T005 Implement shared map camera state and deterministic location-fit policy interfaces in `lib/features/map/map_camera_policy.dart` and `lib/features/map/map_state.dart`.
-- [ ] T006 Add the signed-in Map landing view and bottom-navigation placeholders ordered Map, People, Places, Settings to the shared app shell while preserving setup routing in `lib/app/app_shell.dart` and `lib/features/map/map_screen.dart`.
+- [X] T003 Define server-backed `Person`, `PersonLocation`, map view state, and map preference models with nullable image/battery/address state in `lib/models/person.dart`, `lib/models/person_location.dart`, and `lib/models/map_view_state.dart`.
+- [X] T004 Implement one authorized-device/latest-position repository using the existing authenticated session and supported live update channel in `lib/services/traccar_data_repository.dart`; do not create a tracking loop or expose unauthorized devices.
+- [X] T005 Implement shared map camera state and deterministic location-fit policy interfaces in `lib/features/map/map_camera_policy.dart` and `lib/features/map/map_state.dart`.
+- [X] T006 Add the signed-in Map landing view and bottom-navigation placeholders ordered Map, People, Places, Settings to the shared app shell while preserving setup routing in `lib/app/app_shell.dart` and `lib/features/map/map_screen.dart`.
 
 ## Phase 3: User Story 1 - See people on the map (Priority: P1) 🎯 MVP
 
@@ -32,15 +32,15 @@
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] Add deterministic tests for empty/single/multiple location fit and the approximately two-mile outward framing cap in `test/features/map/map_camera_policy_test.dart`.
-- [ ] T008 [P] [US1] Add widget tests for portrait/initial markers, failed image loading, close-person clusters, member identity, and no-location behavior in `test/features/map/map_markers_test.dart`.
+- [X] T007 [P] [US1] Add deterministic tests for empty/single/multiple location fit and the approximately two-mile outward framing cap in `test/features/map/map_camera_policy_test.dart`.
+- [X] T008 [P] [US1] Add widget tests for portrait/initial markers, failed image loading, close-person clusters, member identity, and no-location behavior in `test/features/map/map_markers_test.dart`.
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Implement initial camera bounds and zoom policy for no known locations, one location, and multiple locations in `lib/features/map/map_camera_policy.dart`.
-- [ ] T010 [P] [US1] Implement circular person markers with image/initial fallback and explicit loading/error states in `lib/features/map/person_marker.dart`.
-- [ ] T011 [US1] Implement grouped markers that retain every member's visible identity and individual selection in `lib/features/map/person_cluster_marker.dart`.
-- [ ] T012 [US1] Render server-authorized current positions and apply the auto-fit policy when the Map tab opens in `lib/features/map/map_screen.dart`.
+- [X] T009 [US1] Implement initial camera bounds and zoom policy for no known locations, one location, and multiple locations in `lib/features/map/map_camera_policy.dart`.
+- [X] T010 [P] [US1] Implement circular person markers with image/initial fallback and explicit loading/error states in `lib/features/map/person_marker.dart`.
+- [X] T011 [US1] Implement grouped markers that retain every member's visible identity and individual selection in `lib/features/map/person_cluster_marker.dart`.
+- [X] T012 [US1] Render server-authorized current positions and apply the auto-fit policy when the Map tab opens in `lib/features/map/map_screen.dart`.
 
 ## Phase 4: User Story 2 - Inspect a person's status (Priority: P1)
 
@@ -50,14 +50,14 @@
 
 ### Tests for User Story 2
 
-- [ ] T013 [P] [US2] Add tests for selection camera snapshots, focused selection, Back restoration, and repeated selection in `test/features/map/person_selection_test.dart`.
-- [ ] T014 [P] [US2] Add detail panel tests for name, location description, battery unknown state, stale timestamp, and missing-position state in `test/features/map/person_details_sheet_test.dart`.
+- [X] T013 [P] [US2] Add tests for selection camera snapshots, focused selection, Back restoration, and repeated selection in `test/features/map/person_selection_test.dart`.
+- [X] T014 [P] [US2] Add detail panel tests for name, location description, battery unknown state, stale timestamp, and missing-position state in `test/features/map/person_details_sheet_test.dart`.
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Implement a shared location description formatter that prefers containing saved-place/address data, then server reverse-geocode text, then coordinates in `lib/services/map/location_description.dart`.
-- [ ] T016 [US2] Implement the person details bottom sheet with name, last-known location, battery, and last update state in `lib/features/map/person_details_sheet.dart`.
-- [ ] T017 [US2] Wire marker and cluster-member selection to focus camera and snapshot the prior camera for Back restoration in `lib/features/map/map_screen.dart` and `lib/features/map/map_state.dart`.
+- [X] T015 [US2] Implement a shared location description formatter that prefers containing saved-place/address data, then server reverse-geocode text, then coordinates in `lib/services/map/location_description.dart`.
+- [X] T016 [US2] Implement the person details bottom sheet with name, last-known location, battery, and last update state in `lib/features/map/person_details_sheet.dart`.
+- [X] T017 [US2] Wire marker and cluster-member selection to focus camera and snapshot the prior camera for Back restoration in `lib/features/map/map_screen.dart` and `lib/features/map/map_state.dart`.
 
 ## Phase 5: User Story 3 - Read map context and choose satellite detail (Priority: P2)
 
@@ -67,23 +67,23 @@
 
 ### Tests for User Story 3
 
-- [ ] T018 [P] [US3] Add tests for saved-place label visibility/decluttering and label collision behavior across zoom levels in `test/features/map/place_labels_test.dart`.
-- [ ] T019 [P] [US3] Add tests for standard/satellite threshold changes, missing MapTiler key fallback, and cache identity excluding the `key` query parameter in `test/services/map/map_layer_config_test.dart`.
-- [ ] T020 [P] [US3] Add tests for server reverse-geocode use, location fallback order, shared connection-failure bar/retry behavior, location permission bar/Re-ask behavior until Always and Precise are granted, and secret-free map diagnostics in `test/services/map/location_description_test.dart`.
+- [X] T018 [P] [US3] Add tests for saved-place label visibility/decluttering and label collision behavior across zoom levels in `test/features/map/place_labels_test.dart`.
+- [X] T019 [P] [US3] Add tests for standard/satellite threshold changes, missing MapTiler key fallback, and cache identity excluding the `key` query parameter in `test/services/map/map_layer_config_test.dart`.
+- [X] T020 [P] [US3] Add tests for server reverse-geocode use, location fallback order, shared connection-failure bar/retry behavior, location permission bar/Re-ask behavior until Always and Precise are granted, and secret-free map diagnostics in `test/services/map/location_description_test.dart`.
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] Read authorized saved geofences and expose their names/boundaries to the map through the shared authenticated repository in `lib/services/traccar_data_repository.dart`.
-- [ ] T022 [US3] Implement named-place labels with area-aware zoom visibility and collision handling in `lib/features/map/place_labels_layer.dart`.
-- [ ] T023 [US3] Read the satellite key from authenticated `/api/server` attribute `trakkarMapTilerKey` into memory and configure MapTiler `satellite-v4` plus OpenFreeMap standard styles in `lib/services/map/map_layer_config.dart`.
-- [ ] T024 [US3] Implement the persisted satellite threshold with a new-install default of zoom 19 in `lib/models/map_appearance_preference.dart` and `lib/services/map/map_preferences.dart`.
-- [ ] T025 [US3] Configure the tile cache for 90-day freshness and a 512 MB maximum, excluding the MapTiler `key` query parameter from cache identity in `lib/services/map/map_tile_cache.dart`.
-- [ ] T026 [US3] Use authenticated Traccar reverse geocoding, preserve saved-place-first/address-second/coordinates-last fallback, route map-server failures and insufficient Always/Precise location permission to the shared status bar, and disclose satellite unavailability while keeping the standard map usable in `lib/services/map/location_description.dart` and `lib/features/map/map_screen.dart`.
+- [X] T021 [US3] Read authorized saved geofences and expose their names/boundaries to the map through the shared authenticated repository in `lib/services/traccar_data_repository.dart`.
+- [X] T022 [US3] Implement named-place labels with area-aware zoom visibility and collision handling in `lib/features/map/place_labels_layer.dart`.
+- [X] T023 [US3] Read the satellite key from authenticated `/api/server` attribute `trakkarMapTilerKey` into memory and configure MapTiler `satellite-v4` plus OpenFreeMap standard styles in `lib/services/map/map_layer_config.dart`.
+- [X] T024 [US3] Implement the persisted satellite threshold with a new-install default of zoom 19 in `lib/models/map_appearance_preference.dart` and `lib/services/map/map_preferences.dart`.
+- [X] T025 [US3] Configure the tile cache for 90-day freshness and a 512 MB maximum, excluding the MapTiler `key` query parameter from cache identity in `lib/services/map/map_tile_cache.dart`.
+- [X] T026 [US3] Use authenticated Traccar reverse geocoding, preserve saved-place-first/address-second/coordinates-last fallback, route map-server failures and insufficient Always/Precise location permission to the shared status bar, and disclose satellite unavailability while keeping the standard map usable in `lib/services/map/location_description.dart` and `lib/features/map/map_screen.dart`.
 
 ## Phase 6: Polish and Cross-Cutting Concerns
 
-- [ ] T027 Review map and cluster semantics on supported phone/tablet layouts and light/dark themes in `lib/features/map/`.
-- [ ] T028 Run focused map tests and Android/iOS build checks; record results and any unavailable device/live-server verification in `specs/002-map-home/quickstart.md`.
+- [X] T027 Review map and cluster semantics on supported phone/tablet layouts and light/dark themes in `lib/features/map/`.
+- [X] T028 Run focused map tests and Android/iOS build checks; record results and any unavailable device/live-server verification in `specs/002-map-home/quickstart.md`.
 
 ## Dependencies and Execution Order
 
