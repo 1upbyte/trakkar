@@ -6,7 +6,7 @@ The QR scanner returns one standard RFC 4648 Base64 string. Trim leading and tra
 whitespace from the scanned string before decoding; reject whitespace anywhere within
 the remaining Base64 payload. Decode the complete trimmed string once to UTF-8. The
 decoded text MUST contain exactly four non-empty fields, in this order, separated by
-literal semicolons:
+exactly three literal semicolons:
 
 ```text
 user;password;clienturl;managerurl
@@ -22,6 +22,8 @@ values that cannot be represented by this grammar.
 ## Processing and privacy
 
 - Parse locally; parsing has no network side effects.
+- Any invalid QR payload shows a popup reading “Invalid QR code” and offers retry or
+  manual entry without submitting credentials.
 - Do not locally validate decoded URL schemes, host syntax, or embedded credentials.
   HTTP is allowed without warning, and redirects are not restricted by origin. The
   network transport determines whether it can use each configured value.
@@ -39,3 +41,5 @@ Include valid payloads with surrounding whitespace, rejection of internal whites
 malformed Base64, invalid UTF-8, missing/empty/additional fields, semicolon-containing
 values, arbitrary non-empty URL field values, and valid strings with non-ASCII UTF-8. QR
 generation and display remain outside this app feature.
+
+The concise producer-facing format is also documented in the [project README](../../../README.md).

@@ -33,12 +33,12 @@
 
 ## Acceptance Criteria Quality
 
-- [ ] CHK012 - Can the success criteria objectively distinguish valid four-field payloads from malformed Base64, invalid UTF-8, and wrong field counts before any sign-in request? [Measurability, Spec §SC-002, §FR-003]
-- [ ] CHK013 - Does the no-secret-leak success criterion cover logs, diagnostics, and user-facing errors across scan, parse, network, and authentication failures? [Measurability, Coverage, Spec §SC-004, §FR-009]
+- [x] CHK012 - Can the success criteria objectively distinguish valid four-field payloads from malformed Base64, invalid UTF-8, and wrong field counts before any sign-in request? [Measurability, Spec §SC-002, §FR-003]
+- [x] CHK013 - Does the no-secret-leak success criterion cover logs, diagnostics, and user-facing errors across scan, parse, network, and authentication failures? [Measurability, Coverage, Spec §SC-004, §FR-009]
 
 ## Dependencies and Assumptions
 
-- [ ] CHK014 - Are the existing external QR producer, shared authentication/session behavior, and expected client-versus-manager URL roles documented well enough to establish compatibility? [Dependency, Assumption, Spec §FR-011, §Assumptions]
+- [x] CHK014 - Are the existing external QR producer, shared authentication/session behavior, and expected client-versus-manager URL roles documented well enough to establish compatibility? [Dependency, Assumption, Spec §FR-011, §Assumptions]
 
 ## Notes
 

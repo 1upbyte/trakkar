@@ -16,7 +16,7 @@
   `user;password;clienturl;managerurl`, then Base64-encode the complete UTF-8 string
   once. `user` is the login username. The semicolon is a field separator; values
   containing a semicolon are not representable by this format and MUST be rejected by
-  QR parsing before sign-in.
+  QR parsing before sign-in. A valid decoded payload has exactly three semicolons.
 - The app identifier for both Android and iOS is `com.1upbyte.trakkar`.
 
 ### Session 2026-09-26
@@ -58,8 +58,9 @@ intermediate destination review or confirmation.
    and local parsing succeeds, **Then** the app immediately uses the decoded values to
    attempt sign-in without a destination review or confirmation prompt.
 3. **Given** a QR code that is unreadable, incomplete, or invalid, **When** the user scans
-   it, **Then** the app explains that setup could not be read and lets the user retry or
-   switch to manual entry without submitting credentials.
+   it, **Then** a popup says “Invalid QR code” and lets the user retry or switch to manual
+   entry without submitting credentials. A decoded payload with any number of
+   semicolons other than exactly three is invalid.
 
 ---
 
@@ -150,9 +151,11 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   decoded form is exactly `user;password;clienturl;managerurl` in that order. `user`
   represents the username; the complete delimited string is encoded once.
 - **FR-003**: The app MUST decode the complete payload once, split it into exactly four
-  non-empty fields, and reject invalid Base64/UTF-8, extra or missing fields, or field
-  values containing the separator before attempting sign-in. It MUST NOT validate URL
-  values during parsing. Leading and trailing whitespace around the scanned Base64
+  non-empty fields separated by exactly three literal semicolons, and reject invalid
+  Base64/UTF-8, extra or missing fields, or field values containing the separator before
+  attempting sign-in. Any rejected QR payload MUST show a popup saying “Invalid QR code”
+  and MUST NOT trigger authentication. It MUST NOT validate URL values during parsing.
+  Leading and trailing whitespace around the scanned Base64
   payload MUST be trimmed before decoding; whitespace within the payload MUST be
   rejected.
 - **FR-004**: After a QR payload passes local parsing, the app MUST immediately submit
@@ -224,7 +227,8 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   complete either onboarding path without assistance in two minutes or less.
 - **SC-002**: 100% of valid QR test cases provide the same four values as the source
   details, including payloads with surrounding whitespace; 100% of invalid or incomplete
-  QR cases, including payloads with internal whitespace, are rejected before sign-in.
+  QR cases, including payloads with internal whitespace or other than exactly three
+  semicolons, are rejected before sign-in and show an “Invalid QR code” popup.
 - **SC-003**: In all tested rejected-credential and unavailable-service cases, users
   receive distinct feedback and exactly Back, Retry, and Proceed Anyway. Back returns to
   setup with entered values retained; Retry resubmits current credentials; Proceed Anyway
@@ -233,8 +237,10 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   Interrupted requests use the unavailable-service warning. On actual server connection
   failure, the map displays the red connection-failure bar with Retry; successful
   reconnection clears the bar.
-- **SC-004**: No tested QR payload, username, or password appears in application logs,
-  diagnostics, or error messages.
+- **SC-004**: Across tested QR scan, parse, authentication, network-failure, retry, and
+  error-detail flows, no raw QR payload, username, password, or URL user-info appears in
+  application logs, diagnostics, or user-visible errors, including opt-in full error
+  details.
 - **SC-005**: Android and iOS build metadata report the same app identifier,
   `com.1upbyte.trakkar`.
 

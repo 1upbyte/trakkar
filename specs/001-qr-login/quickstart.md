@@ -22,5 +22,6 @@ rejection vs unavailable service, retry, and redaction
 of credentials/payloads in logs and errors. Manually test camera scanning on Android
 and iOS with real platform permissions. Verify successful credentials are persisted only
 in platform secure storage and reused for authentication, and verify that location
-permission must be Always and Precise. See the [setup UI contract](contracts/setup-ui.md)
+permission must be Always and Precise. The external QR payload format is documented in
+the [project README](../../README.md). See the [setup UI contract](contracts/setup-ui.md)
 and [QR payload contract](contracts/qr-payload.md).

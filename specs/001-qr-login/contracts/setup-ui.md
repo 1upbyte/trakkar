@@ -8,9 +8,10 @@
   available. Canceling a scan offers Scan Again or Enter Details.
 - Show a non-blocking notice on the setup-choice screen explaining that Base64 is not
   encryption and QR codes containing credentials must be kept private.
-- Parse a scan locally. Invalid input displays a safe explanation and does not submit
-  credentials. After successful parsing, immediately submit the decoded values for
-  sign-in without showing a destination-review or confirmation prompt.
+- Parse a scan locally. Invalid input shows a popup saying “Invalid QR code,” offers
+  retry or manual entry, and does not submit credentials. After successful parsing,
+  immediately submit the decoded values for sign-in without showing a destination-review
+  or confirmation prompt.
 - Manual-entry values are submitted only when the user taps Submit. Keep the password
   masked in the form.
 - Empty required form fields stay editable. Do not locally reject URL schemes, hosts,

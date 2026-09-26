@@ -33,7 +33,7 @@
 ### Tests for User Story 1
 
 - [ ] T007 [P] [US1] Add golden parser tests for valid ASCII/non-ASCII values, trimming leading/trailing Base64 whitespace, rejecting internal Base64 whitespace, malformed Base64/UTF-8, wrong field counts, empty fields, embedded semicolons, and accepting arbitrary non-empty URL field values in `test/services/qr_payload_parser_test.dart`.
-- [ ] T008 [P] [US1] Add QR onboarding widget tests for camera permission timing, scan/cancel/retry, the pre-scan Base64 privacy notice, immediate authentication after valid parsing, and no request after invalid parsing in `test/features/setup/qr_setup_flow_test.dart`.
+- [ ] T008 [P] [US1] Add QR onboarding widget tests for camera permission timing, scan/cancel/retry, the pre-scan Base64 privacy notice, immediate authentication after valid parsing, and an “Invalid QR code” popup with retry/manual entry and no request for invalid parsing in `test/features/setup/qr_setup_flow_test.dart`.
 
 ### Implementation for User Story 1
 
@@ -80,7 +80,8 @@
 
 - [ ] T023 Verify Android and iOS app identifiers plus camera and Always/Precise location permission declarations in `android/app/build.gradle.kts`, `android/app/src/main/AndroidManifest.xml`, `ios/Runner.xcodeproj/project.pbxproj`, and `ios/Runner/Info.plist`.
 - [ ] T024 Add setup flow and payload privacy checks to the onboarding coverage in `test/features/setup/` and `test/services/`; ensure logs/errors contain no QR payload, username, password, or URL user-info.
-- [ ] T025 Run the QR feature validation commands and document Android/iOS build outcomes in `specs/001-qr-login/quickstart.md`.
+- [ ] T025 Document the external QR payload grammar, encoding, and privacy warning in the project `README.md`.
+- [ ] T026 Run the QR feature validation commands and document Android/iOS build outcomes in `specs/001-qr-login/quickstart.md`.
 
 ## Dependencies and Execution Order
 
