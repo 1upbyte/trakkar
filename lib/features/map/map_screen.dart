@@ -6,6 +6,11 @@ import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:flutter_map_vector_tiles/flutter_map_vector_tiles.dart' as vt;
 import 'package:latlong2/latlong.dart';
 
+import '../places/auto_place_editor.dart';
+import '../places/building_highlights.dart';
+import '../places/building_lookup.dart';
+import '../places/manual_place_editor.dart';
+import '../../models/place_creation_draft.dart';
 import '../../models/map_appearance_preference.dart';
 import '../../models/map_view_state.dart';
 import '../../models/person.dart';
@@ -13,6 +18,7 @@ import '../../models/saved_place.dart';
 import '../../services/map/location_description.dart';
 import '../../services/map/map_layer_config.dart';
 import '../../services/traccar_data_repository.dart';
+import '../../services/places/place_geometry.dart';
 import '../../widgets/server_connection_banner.dart';
 import '../people/people_list_state.dart';
 import 'map_camera_policy.dart';
@@ -36,6 +42,7 @@ class MapScreen extends StatefulWidget {
     required this.satelliteThresholdZoom,
     required this.onSatelliteUnavailable,
     this.onPeopleStateChanged,
+    this.onSavePlace,
     this.styleLoader,
     super.key,
   });
@@ -45,6 +52,12 @@ class MapScreen extends StatefulWidget {
   final ValueChanged<bool> onSatelliteUnavailable;
   final void Function(PeopleListState state, List<SavedPlace> places)?
   onPeopleStateChanged;
+  final Future<void> Function(
+    String name,
+    String area,
+    SavedPlaceSource source,
+  )?
+  onSavePlace;
   final MapStyleLoader? styleLoader;
 
   @override
@@ -53,6 +66,7 @@ class MapScreen extends StatefulWidget {
 
 class MapScreenState extends State<MapScreen> {
   final _mapController = MapController();
+  final _mapKey = GlobalKey();
   final _cameraPolicy = const MapCameraPolicy();
   final _placeLabels = const PlaceLabelsLayer();
   List<PersonMapEntry> _people = const [];
@@ -69,6 +83,14 @@ class MapScreenState extends State<MapScreen> {
   bool _satelliteNoticeDismissed = false;
   int _loadGeneration = 0;
   StreamSubscription<TraccarMapUpdate>? _updates;
+  PlaceCreationMode? _placeCreationMode;
+  BuildingLookup? _buildingLookup;
+  BuildingLookupResult _buildingResult = const BuildingLookupResult();
+  String? _selectedBuildingId;
+  bool _reviewingBuilding = false;
+  bool _savingPlace = false;
+  bool _buildingLoading = false;
+  List<LatLng> _manualPoints = const [];
 
   @override
   void initState() {
@@ -84,6 +106,146 @@ class MapScreenState extends State<MapScreen> {
         await _selectPerson(person);
         return;
       }
+    }
+  }
+
+  void updatePlaces(List<SavedPlace> places) {
+    if (!mounted) return;
+    setState(() => _places = List.of(places));
+  }
+
+  Future<void> startPlaceCreation(PlaceCreationMode mode) async {
+    if (!mounted) return;
+    setState(() {
+      _placeCreationMode = mode;
+      _manualPoints = const [];
+      _buildingResult = const BuildingLookupResult();
+      _selectedBuildingId = null;
+      _reviewingBuilding = false;
+      _buildingLoading = mode == PlaceCreationMode.auto;
+    });
+    if (mode == PlaceCreationMode.auto && _standardStyle != null) {
+      await _searchBuildings();
+    }
+  }
+
+  void cancelPlaceCreation() {
+    if (!mounted) return;
+    setState(() {
+      _placeCreationMode = null;
+      _manualPoints = const [];
+      _buildingResult = const BuildingLookupResult();
+      _selectedBuildingId = null;
+      _reviewingBuilding = false;
+      _savingPlace = false;
+      _buildingLoading = false;
+    });
+  }
+
+  Future<void> _searchBuildings() async {
+    final style = _standardStyle;
+    if (style == null) {
+      setState(() {
+        _buildingLoading = false;
+        _buildingResult = const BuildingLookupResult(
+          message: 'Building outlines are unavailable in this map style.',
+        );
+      });
+      return;
+    }
+    final lookup = _buildingLookup ??= BuildingLookup(style: style);
+    setState(() {
+      _buildingLoading = true;
+      _buildingResult = const BuildingLookupResult();
+    });
+    try {
+      final camera = _mapController.camera;
+      final result = await lookup.lookup(
+        bounds: camera.visibleBounds,
+        displayZoom: camera.zoom,
+      );
+      if (!mounted || _placeCreationMode != PlaceCreationMode.auto) return;
+      setState(() {
+        _buildingLoading = false;
+        _buildingResult = result;
+        if (_selectedBuildingId != null &&
+            !result.candidates.any(
+              (candidate) => candidate.id == _selectedBuildingId,
+            )) {
+          _selectedBuildingId = null;
+        }
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _buildingLoading = false;
+        _buildingResult = const BuildingLookupResult(
+          message: 'Building outlines could not be loaded.',
+          hadTileFailure: true,
+        );
+      });
+    }
+  }
+
+  void _selectBuilding(BuildingCandidate candidate) {
+    setState(() => _selectedBuildingId = candidate.id);
+  }
+
+  void _onPlaceMapTap(LatLng point) {
+    if (_placeCreationMode == PlaceCreationMode.manual) {
+      setState(() => _manualPoints = [..._manualPoints, point]);
+    } else if (_placeCreationMode == PlaceCreationMode.auto) {
+      for (final candidate in _buildingResult.candidates) {
+        if (candidate.contains(point)) {
+          _selectBuilding(candidate);
+          return;
+        }
+      }
+    }
+  }
+
+  void _moveManualCorner(int index, Offset globalPosition) {
+    final context = _mapKey.currentContext;
+    final renderObject = context?.findRenderObject();
+    if (renderObject is! RenderBox) return;
+    final local = renderObject.globalToLocal(globalPosition);
+    final point = _mapController.camera.screenOffsetToLatLng(local);
+    if (!mounted || index >= _manualPoints.length) return;
+    setState(() {
+      final points = List<LatLng>.of(_manualPoints);
+      points[index] = point;
+      _manualPoints = points;
+    });
+  }
+
+  Future<void> _savePlace(String name, List<LatLng> points) async {
+    final callback = widget.onSavePlace;
+    final error = PlaceGeometry.validationError(points);
+    if (callback == null ||
+        error != null ||
+        name.trim().isEmpty ||
+        _savingPlace) {
+      return;
+    }
+    final source = _placeCreationMode == PlaceCreationMode.auto
+        ? SavedPlaceSource.auto
+        : SavedPlaceSource.manual;
+    setState(() => _savingPlace = true);
+    try {
+      await callback(name.trim(), PlaceGeometry.toWktPolygon(points), source);
+      if (!mounted) return;
+      cancelPlaceCreation();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Place saved.')));
+    } on Object {
+      if (!mounted) return;
+      setState(() => _savingPlace = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Could not save place. Try again.')),
+        );
     }
   }
 
@@ -179,6 +341,7 @@ class MapScreenState extends State<MapScreen> {
       }
       _standardStyle?.dispose();
       _satelliteStyle?.dispose();
+      _buildingLookup = null;
       setState(() {
         _standardStyle = standard;
         _satelliteStyle = satellite;
@@ -198,6 +361,13 @@ class MapScreenState extends State<MapScreen> {
         PeopleListState(people: _people, hasError: dataFailed),
         _places,
       );
+      if (_placeCreationMode == PlaceCreationMode.auto) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _placeCreationMode == PlaceCreationMode.auto) {
+            unawaited(_searchBuildings());
+          }
+        });
+      }
       await _updates?.cancel();
       if (repository != null && !dataFailed) {
         _updates = repository
@@ -395,6 +565,7 @@ class MapScreenState extends State<MapScreen> {
       children: [
         if (style != null)
           FlutterMap(
+            key: _mapKey,
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _center,
@@ -407,8 +578,12 @@ class MapScreenState extends State<MapScreen> {
                     _zoom = event.camera.zoom;
                     _center = event.camera.center;
                   });
+                  if (_placeCreationMode == PlaceCreationMode.auto) {
+                    unawaited(_searchBuildings());
+                  }
                 }
               },
+              onTap: (_, point) => _onPlaceMapTap(point),
             ),
             children: [
               vt.VectorTileLayer(
@@ -448,6 +623,40 @@ class MapScreenState extends State<MapScreen> {
                   zoomToBoundsOnClick: false,
                 ),
               ),
+              if (_placeCreationMode == PlaceCreationMode.auto)
+                PolygonLayer(
+                  polygons: BuildingHighlights.build(
+                    candidates: _buildingResult.candidates,
+                    selectedId: _selectedBuildingId,
+                  ),
+                ),
+              if (_placeCreationMode == PlaceCreationMode.manual &&
+                  _manualPoints.length >= 3)
+                PolygonLayer(
+                  polygons: [BuildingHighlights.draft(_manualPoints)],
+                ),
+              if (_placeCreationMode == PlaceCreationMode.manual)
+                MarkerLayer(
+                  markers: [
+                    for (var i = 0; i < _manualPoints.length; i++)
+                      Marker(
+                        point: _manualPoints[i],
+                        width: 36,
+                        height: 36,
+                        child: GestureDetector(
+                          onPanUpdate: (details) =>
+                              _moveManualCorner(i, details.globalPosition),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               MarkerLayer(
                 markers: _placeLabels.build(
                   places: _places,
@@ -509,6 +718,62 @@ class MapScreenState extends State<MapScreen> {
                 padding: EdgeInsets.all(12),
                 child: Text('No people have reported a location yet.'),
               ),
+            ),
+          ),
+        if (_placeCreationMode == PlaceCreationMode.auto)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: AutoPlaceEditor(
+              candidates: _buildingResult.candidates,
+              selectedId: _selectedBuildingId,
+              isLoading: _buildingLoading,
+              isReviewing: _reviewingBuilding,
+              isSaving: _savingPlace,
+              message:
+                  _buildingResult.message ??
+                  (_zoom < 16
+                      ? 'Zoom in to level 16 to search for buildings.'
+                      : null),
+              attribution: (_standardStyle?.attributions ?? const [])
+                  .map((source) => source.text)
+                  .join(' · '),
+              onSelect: _selectBuilding,
+              onReview: () => setState(() => _reviewingBuilding = true),
+              onSearchArea: () => unawaited(_searchBuildings()),
+              onUseManual: () =>
+                  unawaited(startPlaceCreation(PlaceCreationMode.manual)),
+              onCancel: cancelPlaceCreation,
+              onSave: (name) {
+                final selected = _buildingResult.candidates
+                    .where((candidate) => candidate.id == _selectedBuildingId)
+                    .firstOrNull;
+                return selected == null
+                    ? Future<void>.value()
+                    : _savePlace(name, selected.points);
+              },
+            ),
+          ),
+        if (_placeCreationMode == PlaceCreationMode.manual)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ManualPlaceEditor(
+              points: _manualPoints,
+              validationError: PlaceGeometry.validationError(_manualPoints),
+              isSaving: _savingPlace,
+              onRemoveLast: () => setState(() {
+                if (_manualPoints.isNotEmpty) {
+                  _manualPoints = _manualPoints.sublist(
+                    0,
+                    _manualPoints.length - 1,
+                  );
+                }
+              }),
+              onCancel: cancelPlaceCreation,
+              onSave: (name) => _savePlace(name, _manualPoints),
             ),
           ),
       ],

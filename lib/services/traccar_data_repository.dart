@@ -95,6 +95,56 @@ class TraccarDataRepository {
     }
   }
 
+  Future<List<SavedPlace>> loadGeofences() async {
+    try {
+      return (await _getList('/api/geofences'))
+          .map(SavedPlace.fromTraccar)
+          .whereType<SavedPlace>()
+          .toList();
+    } on TraccarDataFailure {
+      rethrow;
+    } on Object {
+      throw const TraccarDataFailure();
+    }
+  }
+
+  Future<void> createGeofence({
+    required String name,
+    required String area,
+  }) async {
+    try {
+      final response = await _client
+          .post(
+            _apiUri('/api/geofences'),
+            headers: {..._headers, 'Content-Type': 'application/json'},
+            body: jsonEncode({'name': name, 'area': area}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw const TraccarDataFailure();
+      }
+    } on TraccarDataFailure {
+      rethrow;
+    } on Object {
+      throw const TraccarDataFailure();
+    }
+  }
+
+  Future<void> deleteGeofence(int id) async {
+    try {
+      final response = await _client
+          .delete(_apiUri('/api/geofences/$id'), headers: _headers)
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw const TraccarDataFailure();
+      }
+    } on TraccarDataFailure {
+      rethrow;
+    } on Object {
+      throw const TraccarDataFailure();
+    }
+  }
+
   Future<String?> reverseGeocode(LatLng point) async {
     try {
       final uri = _apiUri('/api/server/geocode').replace(

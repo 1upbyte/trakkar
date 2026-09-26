@@ -6,17 +6,30 @@ class SavedPlace {
     required this.name,
     required this.points,
     this.circleRadiusMeters,
+    this.wktArea,
+    this.source = SavedPlaceSource.existing,
   });
 
   final int id;
   final String name;
   final List<LatLng> points;
   final double? circleRadiusMeters;
+  final String? wktArea;
+  final SavedPlaceSource source;
+
+  SavedPlaceGeometry get geometryType => circleRadiusMeters != null
+      ? SavedPlaceGeometry.circle
+      : points.length < 3
+      ? SavedPlaceGeometry.point
+      : SavedPlaceGeometry.polygon;
 
   bool contains(LatLng point) {
     if (circleRadiusMeters case final radius?) {
       return const Distance().as(LengthUnit.Meter, points.first, point) <=
           radius;
+    }
+    if (points.length == 1) {
+      return const Distance().as(LengthUnit.Meter, points.first, point) <= 1;
     }
     if (points.length < 3) return false;
     var inside = false;
@@ -44,11 +57,48 @@ class SavedPlace {
       caseSensitive: false,
     ).firstMatch(area);
     if (circle != null) {
+      final latitude = double.tryParse(circle[1]!);
+      final longitude = double.tryParse(circle[2]!);
+      final radius = double.tryParse(circle[3]!);
+      if (latitude == null ||
+          longitude == null ||
+          radius == null ||
+          !latitude.isFinite ||
+          !longitude.isFinite ||
+          !radius.isFinite ||
+          latitude.abs() > 90 ||
+          longitude.abs() > 180 ||
+          radius <= 0) {
+        return null;
+      }
       return SavedPlace(
         id: (json['id'] as num?)?.toInt() ?? 0,
         name: name,
-        points: [LatLng(double.parse(circle[1]!), double.parse(circle[2]!))],
-        circleRadiusMeters: double.parse(circle[3]!),
+        points: [LatLng(latitude, longitude)],
+        circleRadiusMeters: radius,
+        wktArea: area,
+      );
+    }
+    final point = RegExp(
+      r'^\s*POINT\s*\(\s*(-?[\d.]+)\s+(-?[\d.]+)\s*\)\s*$',
+      caseSensitive: false,
+    ).firstMatch(area);
+    if (point != null) {
+      final longitude = double.tryParse(point[1]!);
+      final latitude = double.tryParse(point[2]!);
+      if (latitude == null ||
+          longitude == null ||
+          !latitude.isFinite ||
+          !longitude.isFinite ||
+          latitude.abs() > 90 ||
+          longitude.abs() > 180) {
+        return null;
+      }
+      return SavedPlace(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        name: name,
+        points: [LatLng(latitude, longitude)],
+        wktArea: area,
       );
     }
     final body = RegExp(
@@ -63,6 +113,8 @@ class SavedPlace {
       final latitude = double.tryParse(parts[1]);
       if (latitude == null ||
           longitude == null ||
+          !latitude.isFinite ||
+          !longitude.isFinite ||
           latitude.abs() > 90 ||
           longitude.abs() > 180) {
         return null;
@@ -74,6 +126,11 @@ class SavedPlace {
       id: (json['id'] as num?)?.toInt() ?? 0,
       name: name,
       points: points.cast<LatLng>(),
+      wktArea: area,
     );
   }
 }
+
+enum SavedPlaceGeometry { point, circle, polygon }
+
+enum SavedPlaceSource { auto, manual, existing }

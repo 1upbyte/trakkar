@@ -7,12 +7,16 @@ import 'package:permission_handler/permission_handler.dart';
 import '../features/map/map_screen.dart';
 import '../features/people/people_list_state.dart';
 import '../features/people/people_screen.dart';
+import '../features/places/places_list_state.dart';
+import '../features/places/places_screen.dart';
 import '../models/map_appearance_preference.dart';
+import '../models/place_creation_draft.dart';
 import '../models/person.dart';
 import '../models/saved_place.dart';
 import '../services/auth/secure_session_store.dart';
 import '../services/auth/setup_controller.dart';
 import '../services/map/map_preferences.dart';
+import '../services/places/geofence_repository.dart';
 import '../services/traccar_data_repository.dart';
 import '../services/tracking/traccar_tracking_service.dart';
 import '../widgets/server_connection_banner.dart';
@@ -47,12 +51,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _selectedTab = 0;
   double _satelliteThreshold = 19;
   TraccarDataRepository? _mapRepository;
+  GeofenceRepository? _geofenceRepository;
   final _mapScreenKey = GlobalKey<MapScreenState>();
   PeopleListState _peopleState = PeopleListState(
     people: const [],
     isLoading: true,
   );
   List<SavedPlace> _places = const [];
+  PlacesListState _placesState = PlacesListState(
+    places: const [],
+    isLoading: true,
+  );
 
   static const _tabNames = ['Map', 'People', 'Places', 'Settings'];
 
@@ -87,6 +96,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           managerUrl: stored.details.managerUrl,
           sessionCookie: stored.cookie,
         );
+        _geofenceRepository ??= TraccarGeofenceRepository(_mapRepository!);
         if (mounted) setState(() {});
         await _tracking.configure(stored.details);
         _trackingConfigured = true;
@@ -190,7 +200,67 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     setState(() {
       _peopleState = state;
       _places = places;
+      _placesState = PlacesListState(
+        places: places,
+        isLoading: state.isLoading,
+        hasError: state.hasError,
+      );
     });
+  }
+
+  void _onPlacesChanged(List<SavedPlace> places) {
+    if (!mounted) return;
+    setState(() {
+      _places = List.of(places);
+      _placesState = PlacesListState(places: places);
+    });
+    _mapScreenKey.currentState?.updatePlaces(places);
+  }
+
+  Future<List<SavedPlace>> _refreshPlaces() async {
+    final repository = _geofenceRepository;
+    if (repository == null) {
+      throw StateError('No authenticated server session.');
+    }
+    final places = await repository.list();
+    _onPlacesChanged(places);
+    return places;
+  }
+
+  Future<void> _startPlaceCreation(PlaceCreationMode mode) async {
+    setState(() => _selectedTab = 0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_mapScreenKey.currentState?.startPlaceCreation(mode));
+      }
+    });
+  }
+
+  Future<void> _savePlace(
+    String name,
+    String area,
+    SavedPlaceSource source,
+  ) async {
+    final repository = _geofenceRepository;
+    if (repository == null) {
+      throw StateError('No authenticated server session.');
+    }
+    await repository.create(name: name, area: area);
+    try {
+      await _refreshPlaces();
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _placesState = PlacesListState(places: _places, hasError: true);
+      });
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Place saved, but the list could not refresh.'),
+          ),
+        );
+    }
   }
 
   void _selectPersonFromPeople(PersonMapEntry person) {
@@ -265,6 +335,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                       }
                     },
                     onPeopleStateChanged: _onPeopleStateChanged,
+                    onSavePlace: _savePlace,
                     styleLoader: widget.mapStyleLoader,
                   ),
                   PeopleScreen(
@@ -274,7 +345,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     onRefresh: _refreshPeople,
                     imageLoader: _mapRepository?.loadProfileImage,
                   ),
-                  const Center(child: Text('Places')),
+                  PlacesScreen(
+                    state: _placesState,
+                    repository: _geofenceRepository,
+                    onRefresh: _refreshPlaces,
+                    onPlacesChanged: _onPlacesChanged,
+                    onCreateRequested: _startPlaceCreation,
+                  ),
                   _settingsPage(context),
                 ].asMap().entries.map((entry) {
                   final index = entry.key;

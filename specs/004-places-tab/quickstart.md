@@ -1,19 +1,31 @@
 # Quickstart Validation: Places Tab
 
-No Flutter project exists in this checkout. From the restored app root:
+Feature 004 is implemented in the Flutter app in this checkout. Run from the
+repository root:
 
 ```sh
 flutter pub get
 flutter analyze
-flutter test
+flutter test test/models/saved_place_test.dart test/services/places test/features/places
 flutter build apk --debug
-flutter build ios --simulator
+flutter build ios --debug --no-codesign
 ```
 
-The iOS build requires macOS/Xcode and CocoaPods. Focused tests should cover geofence
-list/create/delete contracts; valid/invalid polygon conversion; Auto candidate preview,
-missing or unusable building outlines and Manual fallback; name validation; cancel behavior;
-named delete confirmation; offline/server failure consistency; and map/list refresh only
-after successful server changes. Manually verify map attribution, vector-tile cache
-reuse, and failure feedback on Android and iOS. See the
-[UI contract](contracts/places-ui.md) and [API contract](contracts/traccar-geofence-api.md).
+Validation completed on 2026-09-26:
+
+- `flutter analyze`: passed with no issues.
+- Focused Places suite: all 23 tests passed, covering saved-place WKT projection,
+  authenticated geofence
+  requests, polygon validation and WKT, vector-tile building selection and
+  failures, Places list/delete behavior, and Auto/Manual editor widgets.
+- `flutter test`: all 79 tests passed.
+- `flutter build apk --debug`: passed; produced `build/app/outputs/flutter-apk/app-debug.apk`.
+- `flutter build ios --debug --no-codesign`: passed; produced
+  `build/ios/iphoneos/Runner.app`. This checks compilation and does not sign or
+  deploy to a device.
+
+Auto mode reads the `building` layer from the existing OpenFreeMap vector-tile
+style and keeps its attribution visible in the editor. Manual device checks for
+map appearance, gestures, and network behavior remain a separate UI validation
+step. See the [UI contract](contracts/places-ui.md) and
+[API contract](contracts/traccar-geofence-api.md).
