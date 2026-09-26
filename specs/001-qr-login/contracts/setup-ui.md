@@ -16,17 +16,22 @@
 - Empty required form fields stay editable. Do not locally reject URL schemes, hosts,
   embedded URL credentials, HTTP, redirects, or password formats. Errors distinguish
   rejected credentials from unavailable services without echoing secrets.
-- When a service is unavailable, show a warning naming that service. Offer a control to
-  reveal sanitized full error details on request and exactly two actions: Back and
-  Proceed Anyway. Back returns to setup so the user can review or correct details.
-  Proceed Anyway navigates to the map without representing the unavailable service as
-  reachable or authenticated.
+- When credentials are rejected, show a safe message that they were not accepted and
+  exactly three actions: Back, Retry, and Proceed Anyway. When a service is unavailable,
+  name that service, offer sanitized full error details on request, and show the same
+  three actions. Retry resubmits the current credentials. Back returns to editable setup
+  with all entered details retained. Connection loss during authentication uses the
+  unavailable-service warning. Proceed Anyway navigates to the map without claiming
+  authentication or creating a session.
+- While authentication is in progress, stop accepting QR detections and disable actions
+  that could start another authentication request. Ignore duplicate scan detections.
 - Whenever a server connection fails, show a red bar at the top reading “Connection to
-  server failed” with a Retry button. Retry attempts the failed connection again; clear
-  the bar when that connection succeeds. This also applies after the user proceeds to the
-  map without an authenticated manager session. If manager authentication succeeds on
-  retry, establish the session then; do not treat the earlier Proceed Anyway choice as
-  authentication.
+  server failed” with a Retry button. Retry repeats the failed operation; if the failed
+  operation was authentication, resubmit the retained transient login details. Clear the
+  bar when the connection succeeds. This also applies after the user proceeds to the map
+  without an authenticated manager session. If manager authentication succeeds on retry,
+  persist the login details and establish the session then; do not treat the earlier
+  Proceed Anyway choice as authentication.
 - Show the shared red top bar with a Re-ask button whenever location permission is not
   both Always and Precise. Remove the location-permission bar after the platform reports
   both permission conditions granted.

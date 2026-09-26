@@ -32,8 +32,8 @@ rejected before authentication.
 
 | Field | Type | Rules |
 |---|---|---|
-| `state` | choosing, scanning, editing, authenticating, success, rejected, unavailable, proceeding, canceled | A valid QR payload moves directly from scanning to authenticating. Error categories distinguish bad credentials from service/network failure. `proceeding` navigates to the map after the user chooses Proceed Anyway; it does not assert that an unavailable service is authenticated. |
-| `details` | LoginDetailsDraft or null | Transient credentials stay in memory for correction/retry, are never persisted before successful authentication, and are cleared after successful secure-storage persistence or when the user abandons setup. |
+| `state` | choosing, scanning, editing, authenticating, success, rejected, unavailable, proceeding, canceled | A valid QR payload moves directly from scanning to authenticating. Error categories distinguish bad credentials from service/network failure. `proceeding` navigates to the map after the user chooses Proceed Anyway; it does not assert that authentication succeeded. |
+| `details` | LoginDetailsDraft or null | Retain all entered details in memory on Back and after Proceed Anyway while Retry remains available; never persist before successful authentication. After successful secure-storage persistence, clear transient references. If the user abandons setup before success, clear the draft. |
 | `safeError` | enum/message or null | Identifies the affected service and contains no password, payload, or URL user-info. Full sanitized details are exposed only when requested by the user. |
 | `sessionRef` | secure session handle or null | Created only after successful auth and stored using the existing session policy; remains null when the user proceeds without manager authentication. |
 
@@ -41,11 +41,19 @@ State flow:
 
 ```text
 first-run -> choosing -> scanning -> authenticating -> success
-                    \-> manual form -> submit --------/ -> rejected -> edit/retry
-                                                                   -> unavailable -> warning
-                                                                                  -> Back -> edit/review
-                                                                                  -> Proceed Anyway -> map + connection-failure bar
+                    \-> manual form -> submit --------/ -> rejected -> warning
+                                                                   -> Back -> edit/retry
+                                                                  -> Retry -> authenticating
+                                                                   -> Proceed Anyway -> map (no session)
+                                                        -> unavailable -> warning
+                                                                        -> Back -> edit/retry
+                                                                        -> Retry -> authenticating
+                                                                        -> Proceed Anyway -> map + connection-failure bar
 ```
+
+Connection loss during authentication enters the unavailable warning state. Only one
+authentication request may be in flight; the scanner and submit/retry actions remain
+inactive until it completes.
 
 Camera denial or cancellation returns to choosing/manual entry. QR parsing itself is
 local; successful parsing immediately triggers authentication. A server connection

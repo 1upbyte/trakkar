@@ -62,18 +62,18 @@
 
 **Goal**: Distinguish rejected credentials from unavailable services and let users correct or retry without exposing secrets.
 
-**Independent Test**: Simulate rejected credentials and unreachable endpoints; verify distinct actionable messages and an editable retry path with no secret values in rendered errors or captured logs.
+**Independent Test**: Simulate rejected credentials and unavailable endpoints; verify distinct messages, Back/Retry/Proceed Anyway choices, retry resubmission, unauthenticated map routing after proceeding, and secret-free rendered errors/logs.
 
 ### Tests for User Story 3
 
-- [ ] T017 [P] [US3] Add authentication-flow tests for invalid credentials, unavailable manager/client endpoints, interrupted requests, service identification, sanitized opt-in error details, Back/Proceed Anyway outcomes, and secret-free diagnostics in `test/services/traccar_auth_service_test.dart`.
-- [ ] T018 [P] [US3] Add recovery-state widget tests for the unavailable-service warning, initially hidden full error details, Back, Proceed Anyway navigation to the map without a session, server-failure bar/Retry, camera-permission bar/Re-ask, location-permission bar until Always and Precise are granted, editing details, repeated scan prevention, and scan cancellation/manual fallback in `test/features/setup/setup_recovery_test.dart`.
+- [ ] T017 [P] [US3] Add authentication-flow tests for invalid credentials, unavailable manager/client endpoints, connection-interrupted requests, service identification, sanitized opt-in error details, Retry resubmission, Back/Retry/Proceed Anyway outcomes for both failure types, and secret-free diagnostics in `test/services/traccar_auth_service_test.dart`.
+- [ ] T018 [P] [US3] Add recovery-state widget tests for distinct rejected-credential and unavailable-service warnings, initially hidden full service-error details, Back/Retry/Proceed Anyway for both, retained form values on Back, map navigation without a session, server-failure bar/Retry, camera-permission bar/Re-ask, location-permission bar until Always and Precise are granted, blocked duplicate scans/submits while authentication is active, and scan cancellation/manual fallback in `test/features/setup/setup_recovery_test.dart`.
 
 ### Implementation for User Story 3
 
 - [ ] T019 [US3] Map authentication and transport failures to distinct safe error states without echoing credentials, raw payloads, scanner exceptions, or URL user-info in `lib/services/auth/traccar_auth_service.dart` and `lib/models/setup_attempt.dart`.
-- [ ] T020 [US3] Implement the unavailable-service warning with service identification, opt-in sanitized full error details, Back to setup, Proceed Anyway navigation to the map without claiming authentication, retry/edit/manual fallback, and duplicate-submission prevention in `lib/features/setup/setup_recovery_view.dart`.
-- [ ] T021 [US3] Implement a shared red top status bar with context-specific actions: server failure says “Connection to server failed” with Retry; denied/revoked camera or location access shows a permission request with Re-ask. Show the location variant until both Always and Precise are granted, and retain Enter Details as a camera-scan fallback in `lib/app/app_shell.dart` and `lib/widgets/server_connection_banner.dart`.
+- [ ] T020 [US3] Implement distinct rejected-credential and unavailable-service warnings, showing opt-in sanitized full error details for unavailable services, exactly Back, Retry, and Proceed Anyway for both, Retry using current credentials, Back to editable setup, Proceed Anyway to the map without claiming authentication, retry/edit/manual fallback, and duplicate-submission prevention in `lib/features/setup/setup_recovery_view.dart`.
+- [ ] T021 [US3] Implement a shared red top status bar with context-specific actions: server failure says “Connection to server failed” with Retry, which repeats the failed operation and resubmits transient login details when authentication was interrupted; denied/revoked camera or location access shows a permission request with Re-ask. Show the location variant until both Always and Precise are granted, and retain Enter Details as a camera-scan fallback in `lib/app/app_shell.dart` and `lib/widgets/server_connection_banner.dart`.
 - [ ] T022 [US3] Discard raw QR text immediately after parsing; retain decoded credentials only in memory for correction/retry, then persist them securely and clear transient references after successful authentication, or clear them when setup is abandoned in `lib/features/setup/qr_scan_screen.dart` and `lib/features/setup/manual_setup_screen.dart`.
 
 ## Phase 6: Polish and Cross-Cutting Concerns

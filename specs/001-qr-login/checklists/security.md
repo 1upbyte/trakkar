@@ -28,8 +28,8 @@
 ## Scenario and Edge-Case Coverage
 
 - [x] CHK009 - Are camera permission denial or revocation, scan cancellation, and switching to manual entry fully specified as recoverable first-run paths? [Coverage, Exception Flow, Spec §Edge Cases, §FR-001, §FR-008, §FR-014]
-- [ ] CHK010 - Are requirements defined for interrupted authentication, repeated scans, and retrying after rejected credentials or unavailable services without losing correctable non-secret values? [Coverage, Recovery Flow, Spec §Edge Cases, §FR-007]
-- [ ] CHK011 - Does the specification define whether transient QR text and decoded credentials are discarded after cancel, failure, and success, beyond prohibiting logs and diagnostics? [Gap, Spec §FR-009]
+- [x] CHK010 - Are requirements defined for interrupted authentication, repeated scans, and retrying after rejected credentials or unavailable services without losing correctable non-secret values? [Coverage, Recovery Flow, Spec §Edge Cases, §FR-007, §FR-015]
+- [x] CHK011 - Does the specification define whether transient QR text and decoded credentials are discarded after cancel, failure, and success, beyond prohibiting logs and diagnostics? [Gap, Spec §FR-009, §FR-013]
 
 ## Acceptance Criteria Quality
 
