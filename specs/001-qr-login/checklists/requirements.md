@@ -36,5 +36,5 @@
   workflow; code creation/display is out of scope.
 - Base64 is reversible encoding, not encryption. The specification treats the QR payload
   as a credential-bearing secret and requires that it not be logged.
-- Android and iOS share the requested app identifier `com.1upbyte.trakkar`.
+- Android and iOS share the app identifier `com.oneupbyte.trakkar`.
 - Items marked incomplete require spec updates before `$speckit-clarify` or `$speckit-plan`.

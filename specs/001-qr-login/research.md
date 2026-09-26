@@ -69,7 +69,7 @@ Source: [Traccar API](https://www.traccar.org/traccar-api/) and
 
 ## Mobile app identity
 
-**Decision**: Use `com.1upbyte.trakkar` as the shared identifier for Android and iOS
+**Decision**: Use `com.oneupbyte.trakkar` as the shared identifier for Android and iOS
 builds.
 
 **Rationale**: A consistent identifier keeps both platform builds associated with the

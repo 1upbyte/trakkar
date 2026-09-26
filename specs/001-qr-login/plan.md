@@ -35,7 +35,7 @@ for choice, immediate QR authentication, permission/error/retry and manual flow;
 Android/iOS builds. No Flutter/test tree exists here to run them.
 
 **Target Platform**: Flutter Android and iOS; both use app identifier
-`com.1upbyte.trakkar`. iOS camera use requires `NSCameraUsageDescription`; Android
+`com.oneupbyte.trakkar`. iOS camera use requires `NSCameraUsageDescription`; Android
 requires runtime camera permission through the scanner plugin/host setup.
 
 **Project Type**: Flutter mobile app.

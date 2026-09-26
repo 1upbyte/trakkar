@@ -17,7 +17,7 @@
   once. `user` is the login username. The semicolon is a field separator; values
   containing a semicolon are not representable by this format and MUST be rejected by
   QR parsing before sign-in. A valid decoded payload has exactly three semicolons.
-- The app identifier for both Android and iOS is `com.1upbyte.trakkar`.
+- The app identifier for both Android and iOS is `com.oneupbyte.trakkar`.
 
 ### Session 2026-09-26
 
@@ -193,7 +193,7 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
 - **FR-011**: The app MUST scan QR codes supplied by an existing external workflow. Creating
   or displaying QR codes is outside this feature's scope.
 - **FR-012**: Android and iOS app builds MUST use the shared app identifier
-  `com.1upbyte.trakkar`.
+  `com.oneupbyte.trakkar`.
 - **FR-013**: After successful manager authentication, the app MUST persist the username,
   password, client URL, and manager URL in platform secure storage to support future
   authentication. Credentials from an unsuccessful or unverified attempt MUST NOT be
@@ -242,7 +242,7 @@ service, then verify distinct, actionable feedback and a path to retry or edit d
   application logs, diagnostics, or user-visible errors, including opt-in full error
   details.
 - **SC-005**: Android and iOS build metadata report the same app identifier,
-  `com.1upbyte.trakkar`.
+  `com.oneupbyte.trakkar`.
 
 ## Assumptions
 
