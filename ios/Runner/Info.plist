@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Trakkar uses the camera to scan your login QR code.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select a profile picture to upload to your Traccar server.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Trakkar uses your location to report device positions to your Traccar server.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

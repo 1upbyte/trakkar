@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,14 +10,22 @@ import '../features/people/people_list_state.dart';
 import '../features/people/people_screen.dart';
 import '../features/places/places_list_state.dart';
 import '../features/places/places_screen.dart';
+import '../features/settings/settings_screen.dart';
+import '../features/settings/settings_state.dart';
 import '../models/map_appearance_preference.dart';
 import '../models/place_creation_draft.dart';
 import '../models/person.dart';
+import '../models/server_details.dart';
 import '../models/saved_place.dart';
+import '../app/app_theme.dart';
 import '../services/auth/secure_session_store.dart';
 import '../services/auth/setup_controller.dart';
 import '../services/map/map_preferences.dart';
 import '../services/places/geofence_repository.dart';
+import '../services/settings/app_reset_service.dart';
+import '../services/settings/preferences_repository.dart';
+import '../services/settings/profile_image_repository.dart';
+import '../services/settings/settings_repository.dart';
 import '../services/traccar_data_repository.dart';
 import '../services/tracking/traccar_tracking_service.dart';
 import '../widgets/server_connection_banner.dart';
@@ -24,6 +33,8 @@ import '../widgets/server_connection_banner.dart';
 class AppShell extends StatefulWidget {
   const AppShell({
     required this.controller,
+    this.themeController,
+    this.preferences,
     this.locationAccessCheck,
     this.onRequestLocationAccess,
     this.mapStyleLoader,
@@ -31,6 +42,8 @@ class AppShell extends StatefulWidget {
   });
 
   final SetupController controller;
+  final AppThemeController? themeController;
+  final PreferencesRepository? preferences;
   final Future<bool> Function()? locationAccessCheck;
   final Future<void> Function()? onRequestLocationAccess;
   final MapStyleLoader? mapStyleLoader;
@@ -43,6 +56,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final _tracking = TraccarTrackingService();
   final _sessionStore = SecureSessionStore();
   final _mapPreferences = MapPreferences();
+  late final PreferencesRepository _preferences =
+      widget.preferences ?? PreferencesRepository();
+  late final AppThemeController _themeController =
+      widget.themeController ?? AppThemeController(preferences: _preferences);
   bool _locationReady = false;
   bool _trackingStarted = false;
   bool _trackingConfigured = false;
@@ -52,6 +69,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   double _satelliteThreshold = 19;
   TraccarDataRepository? _mapRepository;
   GeofenceRepository? _geofenceRepository;
+  SettingsApiClient? _settingsApi;
+  SettingsState? _settingsState;
+  String? _avatarImageRef;
+  Future<Uint8List>? _avatarImage;
+  ServerDetails _serverDetails = const ServerDetails(
+    clientUrl: null,
+    managerUrl: null,
+    accountName: null,
+  );
   final _mapScreenKey = GlobalKey<MapScreenState>();
   PeopleListState _peopleState = PeopleListState(
     people: const [],
@@ -85,6 +111,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_mapRepository?.close());
+    _settingsApi?.close();
+    _settingsState?.removeListener(_onSettingsStateChanged);
+    _settingsState?.dispose();
     super.dispose();
   }
 
@@ -97,6 +126,26 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           sessionCookie: stored.cookie,
         );
         _geofenceRepository ??= TraccarGeofenceRepository(_mapRepository!);
+        _serverDetails = ServerDetails.redacted(
+          clientUrl: stored.details.clientUrl,
+          managerUrl: stored.details.managerUrl,
+          accountName: stored.details.username,
+        );
+        _settingsApi ??= SettingsApiClient(
+          managerUrl: stored.details.managerUrl,
+          sessionCookie: stored.cookie,
+        );
+        if (_settingsState == null) {
+          _settingsState = SettingsState(
+            profileRepository: TraccarProfileRepository(_settingsApi!),
+            imageRepository: TraccarProfileImageRepository(_settingsApi!),
+            preferences: _preferences,
+            deviceUniqueId: await _tracking.deviceUniqueId(),
+            serverDetails: _serverDetails,
+          );
+          _settingsState!.addListener(_onSettingsStateChanged);
+          unawaited(_settingsState!.load());
+        }
         if (mounted) setState(() {});
         await _tracking.configure(stored.details);
         _trackingConfigured = true;
@@ -107,6 +156,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
   }
 
+  void _onSettingsStateChanged() {
+    final reference = _settingsState?.profile?.profileImageRef;
+    if (reference != _avatarImageRef) {
+      _avatarImageRef = reference;
+      final repository = _mapRepository;
+      _avatarImage = reference == null || repository == null
+          ? null
+          : repository.loadProfileImage(reference);
+    }
+    if (mounted) setState(() {});
+  }
+
   Future<void> _loadMapPreference() async {
     final preference = await _mapPreferences.read();
     if (mounted) {
@@ -115,10 +176,21 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   Future<void> _saveMapPreference(double value) async {
+    if (!mounted) return;
     setState(() => _satelliteThreshold = value);
-    await _mapPreferences.save(
-      MapAppearancePreference(satelliteThresholdZoom: value),
-    );
+    final preference = MapAppearancePreference(satelliteThresholdZoom: value);
+    await _mapPreferences.save(preference);
+    await _settingsState?.saveMapAppearance(preference);
+  }
+
+  Future<void> _resetApp() async {
+    await AppResetService(
+      sessionStore: _sessionStore,
+      preferences: _preferences,
+      tracking: _tracking,
+    ).reset();
+    await _themeController.reset();
+    widget.controller.resetToFirstRun();
   }
 
   Future<void> _refreshLocationPermission() async {
@@ -277,31 +349,39 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     await _mapScreenKey.currentState?.refresh();
   }
 
-  Widget _settingsPage(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(20),
-    children: [
-      Text('Map appearance', style: Theme.of(context).textTheme.titleLarge),
-      const SizedBox(height: 12),
-      Text(
-        'Switch to satellite at zoom ${_satelliteThreshold.toStringAsFixed(0)}',
+  Widget _profileAvatar() {
+    final profile = _settingsState?.profile;
+    final imageRef = profile?.profileImageRef;
+    if (imageRef == null || _mapRepository == null) {
+      return CircleAvatar(
+        child: Text(
+          (profile?.displayName.isNotEmpty ?? false)
+              ? profile!.displayName.characters.first.toUpperCase()
+              : '?',
+        ),
+      );
+    }
+    return FutureBuilder<Uint8List>(
+      future: _avatarImage,
+      builder: (context, snapshot) => CircleAvatar(
+        backgroundImage: snapshot.hasData ? MemoryImage(snapshot.data!) : null,
+        child: snapshot.hasData
+            ? null
+            : Text(profile!.displayName.characters.first.toUpperCase()),
       ),
-      Slider(
-        value: _satelliteThreshold,
-        min: 15,
-        max: 21,
-        divisions: 6,
-        label: _satelliteThreshold.toStringAsFixed(0),
-        onChanged: (value) => unawaited(_saveMapPreference(value)),
-      ),
-      if (_satelliteUnavailable)
-        const Text('Satellite imagery is unavailable from the server.'),
-    ],
-  );
+    );
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(_selectedTab == 0 ? 'Trakkar' : _tabNames[_selectedTab]),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Center(child: _profileAvatar()),
+        ),
+      ],
     ),
     body: Column(
       children: [
@@ -352,7 +432,22 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     onPlacesChanged: _onPlacesChanged,
                     onCreateRequested: _startPlaceCreation,
                   ),
-                  _settingsPage(context),
+                  SettingsScreen(
+                    state: _settingsState,
+                    themeController: _themeController,
+                    serverDetails: _serverDetails,
+                    mapAppearance: MapAppearancePreference(
+                      satelliteThresholdZoom: _satelliteThreshold,
+                    ),
+                    onThresholdChanged: (value) =>
+                        unawaited(_saveMapPreference(value)),
+                    onReset: _resetApp,
+                    onProfileChanged: () {
+                      _mapScreenKey.currentState?.refresh();
+                      if (mounted) setState(() {});
+                    },
+                    imageLoader: _mapRepository?.loadProfileImage,
+                  ),
                 ].asMap().entries.map((entry) {
                   final index = entry.key;
                   final visible = _selectedTab == index;

@@ -122,6 +122,16 @@ class SetupController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetToFirstRun() {
+    hasAuthenticatedSession = false;
+    isProceedingAnyway = false;
+    isRestoringSession = false;
+    draft = null;
+    failure = null;
+    state = SetupAttemptState.choosing;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _authService.close();

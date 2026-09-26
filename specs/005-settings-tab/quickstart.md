@@ -1,78 +1,60 @@
-# Quickstart Validation Guide
+# Settings Tab Validation Guide
 
-## Checkout limitation
+## Automated checks
 
-This checkout currently has no `pubspec.yaml`, `lib/`, `ios/`, or `android/` project.
-The commands below are the validation sequence for the restored/implemented Flutter
-application; they cannot run successfully from this Spec Kit-only tree. iOS builds
-require macOS with Xcode and CocoaPods. Android builds require Flutter and Android SDK
-tooling. Pin and install the Flutter SDK version selected by the actual project.
-
-## Setup and static validation
-
-From the Flutter app root:
+From the Flutter project root:
 
 ```sh
-flutter doctor -v
 flutter pub get
 flutter analyze
-flutter test
-```
-
-Expected result: dependencies resolve, static analysis is clean, and focused tests
-cover profile success/failure and cancellation, all theme modes and persistence,
-satellite threshold default/persistence/reset restoration to zoom 19,
-server-detail redaction, reset confirmation/cancel/failure, preservation of SDK queued
-positions, and routing to first-run only after successful reset.
-
-## Android compile
-
-```sh
+flutter test test/services/settings test/features/settings test/models/settings_models_test.dart test/app/app_shell_test.dart test/features/setup
 flutter build apk --debug
+flutter build ios --debug --no-codesign
 ```
 
-Expected result: the Flutter Android host and the Traccar plugin compile for the
-configured Android minimum SDK. For a release artifact with signing configured:
+Compile the Android instrumentation test source:
 
 ```sh
-flutter build appbundle
+cd android
+./gradlew :app:compileDebugAndroidTestKotlin
 ```
 
-## iOS compile
-
-On macOS with Xcode selected and CocoaPods installed:
+Compile the iOS XCTest target on macOS with Xcode:
 
 ```sh
-flutter build ios --simulator
+cd ios
+xcodebuild -project Runner.xcodeproj -scheme Runner -destination 'generic/platform=iOS Simulator' build-for-testing CODE_SIGNING_ALLOWED=NO
 ```
 
-Expected result: the iOS host, plugin, permissions/background configuration, and any
-SDK configuration bridge compile for the configured iOS deployment target. For a
-device/archive artifact with signing configured:
+The native test sources check that reset clears the SDK `Config` row only when
+there are no pending positions. If positions remain queued, reset fails before
+removing the SDK config or local session, allowing those positions to sync with
+their existing server before the user retries. The bridge tests compile on both
+platforms; runtime/device execution remains a separate check.
 
-```sh
-flutter build ipa
-```
+## Manual signed-in checks
 
-## Manual end-to-end checks
-
-1. Launch as a signed-in user and verify Settings is the last bottom tab.
-2. Change the display name and image; verify the name's server save result, the image
-   upload and server save, and that both values propagate to every profile surface.
-   Cancel image selection and verify the existing image remains.
-3. Select System, Light, and Dark, restart the app, and verify the saved mode applies;
-   with System selected, change the OS appearance and verify the app follows it.
-4. Verify the map satellite threshold starts at zoom 19, change it in Settings, and
-   verify the Map tab uses the saved value. Confirmed Reset App restores zoom 19.
-5. Inspect server details and verify client URL, manager URL, and account name appear
-   when available while passwords and tokens remain absent.
-6. Open Reset App, cancel, and verify no state changed. Confirm reset and verify the
-   app returns to first-run, server-side account/profile/profile-image/places/tracking data remain,
-   queued SDK positions remain present, and the reset flow does not direct those old
-   positions to a different server/account.
-7. Repeat platform-dependent checks on Android and iOS, including denied/revoked
-   tracking permission and interruption while reset is in progress.
+1. Open Settings and verify it is the last bottom-navigation tab. Confirm the
+   current account name and server URLs appear without passwords, tokens, URL
+   user-info, query parameters, or fragments.
+2. Save a trimmed display name. Select and crop a profile picture, then verify
+   the success state appears only after the server device image attribute is
+   saved. Cancel image selection and verify the existing image remains. Check
+   the app-bar identity on Map, People, Places, and Settings.
+3. Select System, Light, and Dark. Verify the theme changes across the whole app
+   and System follows OS appearance. Change the satellite threshold and verify
+   Map uses the saved value; a new install defaults to zoom 19.
+4. Open Reset App and cancel. Confirm no changes occur. For a successful reset,
+   confirm the SDK queue is empty, accept the confirmation, and verify the app
+   returns to first-run with System theme and threshold 19. Confirm the server
+   profile picture, account, places, and tracking data remain.
+5. With pending SDK positions, confirm Reset App fails safely, the existing
+   session/config remains, and tracking resumes. Let positions sync to the
+   current server, then retry reset.
+6. Repeat on Android and iOS. Exercise permission denial/revocation, app
+   interruption during reset, a failed name/image save, and unavailable server
+   details.
 
 See [Settings UI contract](contracts/settings-ui.md),
 [Traccar API and SDK contract](contracts/traccar-api.md), and
-[data model](data-model.md) for expected behavior.
+[data model](data-model.md) for the expected behavior.

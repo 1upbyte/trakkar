@@ -63,5 +63,6 @@ class SecureSessionStore implements SessionStore {
   }
 
   @override
-  Future<void> clear() => _storage.deleteAll();
+  Future<void> clear() =>
+      Future.wait<void>(_keys.values.map((key) => _storage.delete(key: key)));
 }
