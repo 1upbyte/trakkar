@@ -18,7 +18,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _index = 0;
   int _placeCreationRequest = 0;
   bool _autoPlace = false;
-  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
   AppState? _appState;
 
   @override
@@ -30,7 +29,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final state = context.read<AppState>();
       state.setAppForeground(true);
       state.refreshTrackingHealth();
-      state.setMapForeground(true);
     });
   }
 
@@ -42,29 +40,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _lifecycleState = state;
     _appState?.setAppForeground(state == AppLifecycleState.resumed);
-    _syncMapForeground();
     if (state == AppLifecycleState.resumed && mounted) {
       context.read<AppState>().refreshTrackingHealth();
     }
   }
 
-  void _syncMapForeground() {
-    _appState?.setMapForeground(
-      _index == 0 && _lifecycleState == AppLifecycleState.resumed,
-    );
-  }
-
   void _selectDestination(int value) {
     if (_index == value) return;
     setState(() => _index = value);
-    _syncMapForeground();
   }
 
   @override
   void dispose() {
-    _appState?.setMapForeground(false);
     _appState?.setAppForeground(false);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -97,7 +85,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       _placeCreationRequest++;
                       _index = 0;
                     });
-                    _syncMapForeground();
                   },
                 ),
                 const SettingsScreen(),

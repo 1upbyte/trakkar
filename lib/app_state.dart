@@ -56,14 +56,10 @@ class AppState extends ChangeNotifier {
   TraccarApi? _api;
   StreamSubscription<Map<String, dynamic>>? _liveSubscription;
   Timer? _reconnectTimer;
-  Timer? _mapPollTimer;
   Timer? _drivingExpiryTimer;
   bool _appForeground = true;
-  bool _mapForeground = false;
-  bool _mapPollInFlight = false;
   int _liveGeneration = 0;
   int _reconnectAttempts = 0;
-  DateTime? _lastForegroundSend;
 
   String firstName = '';
   String deviceUsername = '';
@@ -359,22 +355,6 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  /// Keeps the shared map fresh while it is the visible foreground screen.
-  /// Traccar's socket is still the low-latency path; this poll repairs missed
-  /// socket events and makes the map useful when a device reports slowly.
-  void setMapForeground(bool visible) {
-    if (_mapForeground == visible) return;
-    _mapForeground = visible;
-    _mapPollTimer?.cancel();
-    _mapPollTimer = null;
-    if (!visible || phase != AppPhase.ready) return;
-
-    unawaited(_pollMapPositions(sendOwnPosition: true));
-    _mapPollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      unawaited(_pollMapPositions());
-    });
-  }
-
   /// The manager socket is useful only while the UI is visible. Background
   /// location uploads are owned by the native tracking SDK and continue after
   /// this socket is closed.
@@ -389,37 +369,6 @@ class AppState extends ChangeNotifier {
     _reconnectAttempts = 0;
     if (phase == AppPhase.ready && _api != null) {
       _connectLive();
-    }
-  }
-
-  Future<void> _pollMapPositions({bool sendOwnPosition = false}) async {
-    if (!_mapForeground || _mapPollInFlight) return;
-    final api = _api;
-    if (api == null) return;
-    _mapPollInFlight = true;
-    try {
-      if (sendOwnPosition ||
-          _lastForegroundSend == null ||
-          DateTime.now().difference(_lastForegroundSend!) >=
-              const Duration(seconds: 30)) {
-        _lastForegroundSend = DateTime.now();
-        try {
-          await _tracker.sendNow();
-        } on Object {
-          // A failed upload must not prevent the server-position poll. The
-          // normal tracking health UI handles persistent SDK problems.
-        }
-      }
-      final latest = await api.positions();
-      positions = mergeLastKnownPositions(positions, latest);
-      _recordDrivingStatus(latest);
-      lastError = null;
-      notifyListeners();
-    } on Object catch (error) {
-      lastError = userFacingError(error);
-      notifyListeners();
-    } finally {
-      _mapPollInFlight = false;
     }
   }
 
@@ -853,17 +802,12 @@ class AppState extends ChangeNotifier {
     _liveSubscription = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    _mapPollTimer?.cancel();
-    _mapPollTimer = null;
     _drivingExpiryTimer?.cancel();
     _drivingExpiryTimer = null;
     _drivingStatus.clear();
     _appForeground = false;
-    _mapForeground = false;
-    _mapPollInFlight = false;
     _liveGeneration += 1;
     _reconnectAttempts = 0;
-    _lastForegroundSend = null;
     _api?.close();
     _api = null;
     provisioning = null;
@@ -929,7 +873,6 @@ class AppState extends ChangeNotifier {
     _reconnectTimer?.cancel();
     unawaited(_liveSubscription?.cancel());
     _api?.close();
-    _mapPollTimer?.cancel();
     _drivingExpiryTimer?.cancel();
     super.dispose();
   }
