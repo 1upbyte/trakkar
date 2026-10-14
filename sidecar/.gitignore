@@ -1,0 +1,5 @@
+# Push credentials and device ownership configuration
+/secrets/
+
+# Local registration database
+/*.sqlite*

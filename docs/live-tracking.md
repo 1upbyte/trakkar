@@ -40,10 +40,11 @@ continues ordinary tracking and does not register or create viewing sessions.
 Use Node 24 or later for local development. The container includes Node 24.
 
 1. Attach Traccar and the sidecar to the same Docker network. The supplied Compose
-   file expects an existing external network named `traccar`. Set `TRACCAR_NETWORK`
-   to your actual network name. Traccar must be resolvable as `traccar`, or change
+   file expects an existing external network named `traccar`. Set `networks.traccar.name`
+   in `sidecar/compose.yaml` to your actual network name. Traccar must be resolvable as `traccar`, or change
    `TRACCAR_MANAGER_URL` to its service name and manager port.
-2. Copy `sidecar/.env.example` to `sidecar/.env` and create `sidecar/secrets/`.
+2. Edit the inline `environment` options in `sidecar/compose.yaml` and create
+   `sidecar/secrets/`. No `.env` file is needed.
 3. Create `sidecar/secrets/device-owners.json`, mapping **Traccar numeric device IDs**
    to **Traccar numeric user IDs**, for example:
 

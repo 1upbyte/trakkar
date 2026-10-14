@@ -2,7 +2,17 @@ services:
   live-tracking:
     build: .
     restart: unless-stopped
-    env_file: .env
+    environment:
+      PORT: "8080"
+      TRACCAR_MANAGER_URL: "http://traccar:8082"
+      DEVICE_OWNERS_FILE: "/run/secrets/device-owners.json"
+      DATABASE_PATH: "/data/live-tracking.sqlite"
+      FCM_SERVICE_ACCOUNT_FILE: "/run/secrets/firebase-service-account.json"
+      APNS_KEY_FILE: "/run/secrets/AuthKey.p8"
+      APNS_KEY_ID: "replace-me"
+      APNS_TEAM_ID: "replace-me"
+      APNS_BUNDLE_ID: "com.oneupbyte.trakkar"
+      APNS_SANDBOX: "true"
     volumes:
       - live-tracking-data:/data
       - ./secrets:/run/secrets:ro
@@ -20,4 +30,4 @@ volumes:
 networks:
   traccar:
     external: true
-    name: ${TRACCAR_NETWORK:-traccar}
+    name: traccar

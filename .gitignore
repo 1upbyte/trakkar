@@ -48,7 +48,6 @@ app.*.map.json
 .widget_preview/
 
 # Live tracking deployment credentials and registration database
-sidecar/.env
 sidecar/secrets/
 sidecar/*.sqlite*
 android/app/google-services.json
