@@ -35,6 +35,9 @@ class TraccarApi {
 
   bool get hasSession => _sessionCookie != null;
 
+  /// Used only for authenticating the companion live-tracking sidecar.
+  String? get sessionCookie => _sessionCookie;
+
   Future<void> login() async {
     final response = await _guardRequest(
       () => _client

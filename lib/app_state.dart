@@ -14,6 +14,7 @@ import 'services/driving_status_tracker.dart';
 import 'services/named_place_store.dart';
 import 'services/traccar_api.dart';
 import 'services/tracker_service.dart';
+import 'services/tracking/live_tracking_service.dart';
 import 'user_facing_error.dart';
 
 enum AppPhase { loading, onboarding, ready }
@@ -58,6 +59,8 @@ class AppState extends ChangeNotifier {
   Timer? _reconnectTimer;
   Timer? _drivingExpiryTimer;
   bool _appForeground = true;
+  bool _mapVisible = false;
+  LiveTrackingService? _liveTracking;
   int _liveGeneration = 0;
   int _reconnectAttempts = 0;
 
@@ -246,10 +249,12 @@ class AppState extends ChangeNotifier {
             'Account created, but tracking is off. ${userFacingError(error)}';
       }
 
+      _configureLiveTracking(api);
       phase = AppPhase.ready;
       await refreshTrackingHealth();
       await refresh();
       _connectLive();
+      _updateLiveTrackingVisibility();
     } on DeviceConflictException {
       api.close();
       rethrow;
@@ -267,6 +272,7 @@ class AppState extends ChangeNotifier {
     final api = TraccarApi(config: config);
     await api.login();
     _api = api;
+    _configureLiveTracking(api);
     await refresh();
     _connectLive();
   }
@@ -285,6 +291,7 @@ class AppState extends ChangeNotifier {
         _loadMapTilerKey(api),
       ]);
       devices = results[0] as List<TraccarDevice>;
+      _liveTracking?.setDevices(devices.map((device) => device.id));
       positions = mergeLastKnownPositions({
         for (final entry in positions.entries)
           if (devices.any((device) => device.id == entry.key))
@@ -361,6 +368,7 @@ class AppState extends ChangeNotifier {
   void setAppForeground(bool visible) {
     if (_appForeground == visible) return;
     _appForeground = visible;
+    _updateLiveTrackingVisibility();
     if (!visible) {
       _disconnectLive();
       return;
@@ -370,6 +378,34 @@ class AppState extends ChangeNotifier {
     if (phase == AppPhase.ready && _api != null) {
       _connectLive();
     }
+  }
+
+  void _configureLiveTracking(TraccarApi api) {
+    _liveTracking?.setVisible(false);
+    _liveTracking?.dispose();
+    final cookie = api.sessionCookie;
+    if (cookie == null) {
+      _liveTracking = null;
+      return;
+    }
+    _liveTracking = LiveTrackingService(
+      sessionCookie: cookie,
+      uniqueId: deviceUsername,
+    );
+    _liveTracking!.setDevices(devices.map((device) => device.id));
+    unawaited(_liveTracking!.register());
+    _updateLiveTrackingVisibility();
+  }
+
+  void setMapVisible(bool visible) {
+    _mapVisible = visible;
+    _updateLiveTrackingVisibility();
+  }
+
+  void _updateLiveTrackingVisibility() {
+    _liveTracking?.setVisible(
+      _mapVisible && _appForeground && phase == AppPhase.ready,
+    );
   }
 
   void _connectLive() {
@@ -436,6 +472,7 @@ class AppState extends ChangeNotifier {
         byId[device.id] = device;
       }
       devices = byId.values.toList(growable: false);
+      _liveTracking?.setDevices(devices.map((device) => device.id));
       for (final payload in devicePayloads) {
         final device = TraccarDevice.fromJson(
           Map<String, dynamic>.from(payload as Map),
@@ -798,6 +835,9 @@ class AppState extends ChangeNotifier {
   Future<void> resetApp() async {
     // Leave the authenticated UI immediately. Native tracker shutdown and
     // storage cleanup can take time, and must not trap the user on Settings.
+    final liveTracking = _liveTracking;
+    _liveTracking = null;
+    liveTracking?.setVisible(false);
     final subscription = _liveSubscription;
     _liveSubscription = null;
     _reconnectTimer?.cancel();
@@ -842,6 +882,10 @@ class AppState extends ChangeNotifier {
     }
 
     await attempt(() => _tracker.stop().timeout(const Duration(seconds: 15)));
+    if (liveTracking != null) {
+      await attempt(liveTracking.unregister);
+      liveTracking.dispose();
+    }
     await attempt(() async {
       await subscription?.cancel();
     });
@@ -869,6 +913,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _liveTracking?.dispose();
     _liveGeneration += 1;
     _reconnectTimer?.cancel();
     unawaited(_liveSubscription?.cancel());

@@ -2,6 +2,7 @@ import CoreLocation
 import Flutter
 import UIKit
 import TraccarClientSDK
+import TrakkarLiveTrackingSDK
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -17,11 +18,16 @@ import TraccarClientSDK
     Task {
       _ = try? await TrackerKt.sharedTracker()
     }
+    LiveTrackingCoordinator.shared.observe()
+    LiveTrackingCoordinator.shared.resume()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LiveTrackingBridge") {
+      LiveTrackingBridge.register(with: registrar)
+    }
 
     let channel = FlutterMethodChannel(
       name: "com.oneupbyte.trakkar/tracking-support",

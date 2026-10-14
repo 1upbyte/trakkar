@@ -1,9 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
+        android:fullBackupContent="@xml/live_tracking_backup_rules"
+        android:dataExtractionRules="@xml/live_tracking_data_extraction_rules"
         android:label="trakkar"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
+        <service android:name=".live.LiveTrackingMessagingService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
+        <provider android:name=".live.LiveTrackingInitProvider"
+            android:authorities="${applicationId}.live-tracking-init" android:exported="false" />
         <activity
             android:name="com.yalantis.ucrop.UCropActivity"
             android:screenOrientation="portrait"

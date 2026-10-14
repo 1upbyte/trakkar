@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:traccar_client_sdk/traccar_client_sdk.dart';
 
 class TrackingHealth {
@@ -74,10 +75,15 @@ class TrackerService {
     );
     await _sdk.init(config);
     await _sdk.setConfig(config);
+    await _invokeLive('configure', {
+      'serverUrl': serverUrl.toString(),
+      'deviceId': deviceId,
+    });
   }
 
   Future<void> start() async {
     await _sdk.start();
+    await _invokeLive('setEnabled', {'enabled': true});
 
     // The Traccar SDK requests Always authorization from an undetermined
     // state. If the user previously chose While Using, SDK 1.0.10 accepts
@@ -117,7 +123,22 @@ class TrackerService {
     }
   }
 
-  Future<void> stop() => _sdk.stop();
+  Future<void> stop() async {
+    await _invokeLive('setEnabled', {'enabled': false});
+    await _sdk.stop();
+  }
+
+  Future<void> _invokeLive(String method, Map<String, Object> arguments) async {
+    if (const String.fromEnvironment('LIVE_TRACKING_URL').isEmpty) return;
+    try {
+      await const MethodChannel('trakkar/live_tracking')
+          .invokeMethod<void>(method, arguments);
+    } on PlatformException {
+      debugPrint('Live tracking native setup unavailable.');
+    } on MissingPluginException {
+      debugPrint('Live tracking native integration unavailable.');
+    }
+  }
 
   Future<bool> isTracking() => _sdk.isTracking();
 

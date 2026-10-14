@@ -155,3 +155,8 @@ flutter build ios --simulator --debug
 
 The iOS build command requires a complete Xcode installation. Signing settings
 and final store assets must be configured before release builds.
+
+## Friend map live tracking
+
+Optional live tracking uses a Docker sidecar and native FCM/APNs handlers. See
+[the deployment and notification flow guide](docs/live-tracking.md).

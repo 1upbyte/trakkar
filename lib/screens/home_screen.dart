@@ -27,7 +27,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final state = context.read<AppState>();
-      state.setAppForeground(true);
+      state.setAppForeground(
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+      );
+      state.setMapVisible(_index == 0);
       state.refreshTrackingHealth();
     });
   }
@@ -49,10 +52,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _selectDestination(int value) {
     if (_index == value) return;
     setState(() => _index = value);
+    _appState?.setMapVisible(value == 0);
   }
 
   @override
   void dispose() {
+    _appState?.setMapVisible(false);
     _appState?.setAppForeground(false);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -85,6 +90,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       _placeCreationRequest++;
                       _index = 0;
                     });
+                    _appState?.setMapVisible(true);
                   },
                 ),
                 const SettingsScreen(),
