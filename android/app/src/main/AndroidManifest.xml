@@ -4,9 +4,16 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <application
+        android:fullBackupContent="@xml/live_tracking_backup_rules"
+        android:dataExtractionRules="@xml/live_tracking_data_extraction_rules"
         android:label="Trakkar"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <service android:name=".live.LiveTrackingMessagingService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
+        <provider android:name=".live.LiveTrackingInitProvider"
+            android:authorities="${applicationId}.live-tracking-init" android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

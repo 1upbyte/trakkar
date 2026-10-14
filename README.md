@@ -21,3 +21,8 @@ Base64 is encoding, not encryption. The QR code contains login credentials; keep
 private. After valid local parsing, the app submits the credentials immediately without
 a confirmation prompt. The manager URL is used for authentication and session setup; the
 client URL configures the tracking SDK.
+
+## Friend map live tracking
+
+Optional 30-second tracking sessions use a Docker sidecar, Android FCM data messages,
+and an iOS location push extension. See [setup, architecture, limitations, and tests](docs/live-tracking.md).

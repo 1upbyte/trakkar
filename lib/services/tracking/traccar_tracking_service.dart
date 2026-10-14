@@ -1,6 +1,8 @@
 import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:traccar_client_sdk/traccar_client_sdk.dart';
 
 import '../../models/login_details.dart';
@@ -37,16 +39,24 @@ class TraccarTrackingService implements TrackingResetService {
     );
     await _sdk.init(config);
     await _sdk.setConfig(config);
+    if (const String.fromEnvironment('LIVE_TRACKING_URL').isNotEmpty) {
+      await _invokeLive('configure', {
+        'serverUrl': details.clientUrl,
+        'deviceId': deviceId,
+      });
+    }
   }
 
   Future<void> start() async {
     await _sdk.start();
     _isStarted = true;
+    await _setLiveEnabled(true);
   }
 
   @override
   Future<void> stop() async {
     _wasStartedBeforeStop = _isStarted;
+    await _setLiveEnabled(false);
     await _sdk.stop();
     _isStarted = false;
   }
@@ -62,6 +72,22 @@ class TraccarTrackingService implements TrackingResetService {
   Future<void> clearConfiguration() async {
     await _resetBridge.clearConfiguration();
     await _storage.delete(key: _deviceIdKey);
+  }
+
+  Future<void> _setLiveEnabled(bool enabled) async {
+    if (const String.fromEnvironment('LIVE_TRACKING_URL').isEmpty) return;
+    await _invokeLive('setEnabled', {'enabled': enabled});
+  }
+
+  Future<void> _invokeLive(String method, Map<String, Object> arguments) async {
+    try {
+      await const MethodChannel('trakkar/live_tracking')
+          .invokeMethod<void>(method, arguments);
+    } on PlatformException {
+      debugPrint('Live tracking native setup unavailable.');
+    } on MissingPluginException {
+      debugPrint('Live tracking native integration unavailable.');
+    }
   }
 
   Future<bool> requestPosition() => _sdk.requestPosition();

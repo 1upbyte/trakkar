@@ -28,6 +28,7 @@ import '../services/settings/profile_image_repository.dart';
 import '../services/settings/settings_repository.dart';
 import '../services/traccar_data_repository.dart';
 import '../services/tracking/traccar_tracking_service.dart';
+import '../services/tracking/live_tracking_service.dart';
 import '../widgets/server_connection_banner.dart';
 
 class AppShell extends StatefulWidget {
@@ -54,6 +55,8 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final _tracking = TraccarTrackingService();
+  LiveTrackingService? _liveTracking;
+  bool _appResumed = true;
   final _sessionStore = SecureSessionStore();
   final _mapPreferences = MapPreferences();
   late final PreferencesRepository _preferences =
@@ -95,6 +98,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _appResumed =
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     _refreshLocationPermission();
     unawaited(_loadMapPreference());
     if (widget.controller.hasAuthenticatedSession) {
@@ -104,12 +109,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshLocationPermission();
+    _appResumed = state == AppLifecycleState.resumed;
+    _updateLiveTrackingVisibility();
+    if (_appResumed) _refreshLocationPermission();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _liveTracking?.dispose();
     unawaited(_mapRepository?.close());
     _settingsApi?.close();
     _settingsState?.removeListener(_onSettingsStateChanged);
@@ -150,6 +158,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         await _tracking.configure(stored.details);
         _trackingConfigured = true;
         await _maybeStartTracking();
+        if (!mounted) return;
+        _liveTracking ??= LiveTrackingService(
+          sessionCookie: stored.cookie,
+          uniqueId: await _tracking.deviceUniqueId(),
+        );
+        _liveTracking!.setDevices(
+          _peopleState.people.map((person) => person.deviceId),
+        );
+        _updateLiveTrackingVisibility();
       }
     } on Object {
       if (mounted) setState(() => _serverConnectionFailed = true);
@@ -189,6 +206,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       preferences: _preferences,
       tracking: _tracking,
     ).reset();
+    await _liveTracking?.unregister();
     await _themeController.reset();
     widget.controller.resetToFirstRun();
   }
@@ -227,12 +245,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           return;
         }
         await _tracking.start();
+        _updateLiveTrackingVisibility();
         if (mounted) setState(() => _serverConnectionFailed = false);
       } on Object {
         _trackingStarted = false;
         if (mounted) setState(() => _serverConnectionFailed = true);
       }
     }
+  }
+
+  void _updateLiveTrackingVisibility() {
+    _liveTracking?.setVisible(_appResumed && _selectedTab == 0);
   }
 
   Future<void> _retryServerConnection() async {
@@ -301,6 +324,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   Future<void> _startPlaceCreation(PlaceCreationMode mode) async {
     setState(() => _selectedTab = 0);
+    _updateLiveTrackingVisibility();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_mapScreenKey.currentState?.startPlaceCreation(mode));
@@ -338,6 +362,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _selectPersonFromPeople(PersonMapEntry person) {
     if (person.position == null) return;
     setState(() => _selectedTab = 0);
+    _updateLiveTrackingVisibility();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_mapScreenKey.currentState?.selectPerson(person.personId));
@@ -414,7 +439,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         setState(() => _satelliteUnavailable = value);
                       }
                     },
-                    onPeopleStateChanged: _onPeopleStateChanged,
+                    onPeopleStateChanged: (state, places) {
+                      _onPeopleStateChanged(state, places);
+                      _liveTracking?.setDevices(
+                        state.people.map((person) => person.deviceId),
+                      );
+                    },
                     onSavePlace: _savePlace,
                     styleLoader: widget.mapStyleLoader,
                   ),
@@ -484,7 +514,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     ),
     bottomNavigationBar: NavigationBar(
       selectedIndex: _selectedTab,
-      onDestinationSelected: (index) => setState(() => _selectedTab = index),
+      onDestinationSelected: (index) {
+        setState(() => _selectedTab = index);
+        _updateLiveTrackingVisibility();
+      },
       destinations: const [
         NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
         NavigationDestination(

@@ -37,7 +37,8 @@ dependencies:
   mobile_scanner: ^7.4.2
   flutter_secure_storage: ^11.2.0
   http: ^1.6.0
-  traccar_client_sdk: ^1.0.11
+  # Keep aligned with the native live-tracking adapter and Android dependency.
+  traccar_client_sdk: 1.0.11
   permission_handler: ^13.0.2
   geolocator: ^14.0.3
   flutter_map: ^8.3.2
