@@ -66,6 +66,38 @@ class ProvisioningConfig {
     );
   }
 
+  static ProvisioningConfig fromSetupLink(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        uri.scheme != 'trakkar' ||
+        uri.host != 'setup' ||
+        (uri.path.isNotEmpty && uri.path != '/') ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasPort ||
+        uri.hasFragment ||
+        uri.queryParametersAll.length != 1 ||
+        uri.queryParametersAll['data']?.length != 1) {
+      throw const FormatException('This is not a valid Trakkar setup link.');
+    }
+    return fromQr(uri.queryParameters['data']!);
+  }
+
+  Uri toSetupLink() {
+    final payload = [
+      'v2',
+      clientUrl.toString(),
+      managerUrl.toString(),
+      liveTrackingUrl?.toString() ?? '',
+      managerUsername,
+      managerPassword,
+    ].join(';');
+    return Uri(
+      scheme: 'trakkar',
+      host: 'setup',
+      queryParameters: {'data': base64UrlEncode(utf8.encode(payload))},
+    );
+  }
+
   static Uri? _parseLiveTrackingUrl(String value) {
     if (value.trim().isEmpty) return null;
     final uri = _parseHttpUrl(value, 'live tracking');

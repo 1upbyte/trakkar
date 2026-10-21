@@ -80,6 +80,42 @@ void main() {
     });
   });
 
+  group('setup links', () {
+    test('round trips credentials, live endpoint, and special characters', () {
+      final config = ProvisioningConfig.fromFields(
+        clientUrl: 'https://client.test',
+        managerUrl: 'https://manager.test',
+        liveTrackingUrl: 'https://live.test',
+        managerUsername: 'friend@example.com',
+        managerPassword: 'secret;+&?# café',
+      );
+      final link = config.toSetupLink();
+      expect(link.scheme, 'trakkar');
+      expect(link.host, 'setup');
+      expect(
+        ProvisioningConfig.fromSetupLink(link.toString()).toStorage(),
+        config.toStorage(),
+      );
+    });
+
+    test('rejects malformed and unrelated links', () {
+      for (final link in [
+        'https://setup?data=abc',
+        'trakkar://other?data=abc',
+        'trakkar://setup',
+        'trakkar://setup?data=not-base64',
+        'trakkar://setup/path?data=abc',
+        'trakkar://setup?data=abc&data=def',
+        'trakkar://setup?data=abc&extra=value',
+      ]) {
+        expect(
+          () => ProvisioningConfig.fromSetupLink(link),
+          throwsA(isA<FormatException>()),
+        );
+      }
+    });
+  });
+
   group('ProvisioningConfig.fromFields', () {
     test('validates and normalizes manually entered fields', () {
       final config = ProvisioningConfig.fromFields(

@@ -34,6 +34,45 @@ account and must be handled like a password. Use HTTPS endpoints in production.
 HTTP is enabled for compatibility with self-hosted Traccar instances and local
 development.
 
+## Setup links for friends
+
+On a configured phone, open **Settings → Copy setup link**, then paste the link
+into a private message. The friend must already have Trakkar installed.
+
+The format is:
+
+```text
+trakkar://setup?data=<URL-encoded base64 provisioning payload>
+```
+
+The `data` parameter uses the same legacy or v2 payload as provisioning QR codes.
+For example, a server can generate a link using Python:
+
+```python
+import base64
+from urllib.parse import urlencode
+
+payload = (
+    "v2;https://client.example.com;https://manager.example.com;"
+    "https://live.example.com;manager@example.com;password"
+)
+data = base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii")
+link = "trakkar://setup?" + urlencode({"data": data})
+```
+
+Android and iOS open the setup screen when Trakkar is closed or already running.
+The recipient reviews the server and account, continues to the prefilled login
+form, taps **Connect**, and chooses their own first name and device username.
+Opening a link does not log in or start tracking automatically. If the phone is
+already configured, replacing its setup requires an explicit confirmation first.
+Canceling before replacement preserves the existing setup.
+
+Like QR codes, these links include the manager password and grant access to that
+account. Base64 does not encrypt them. Share only with trusted recipients; create
+a separate Traccar account and provisioning payload when a friend should have
+different access. Custom-scheme links require the app to be installed and do not
+provide an App Store fallback.
+
 ## Onboarding behavior
 
 1. Scan the server-generated provisioning code, or manually enter the client

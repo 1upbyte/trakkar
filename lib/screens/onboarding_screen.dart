@@ -5,10 +5,13 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../models/provisioning_config.dart';
 import '../user_facing_error.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  const OnboardingScreen({this.initialConfig, super.key});
+
+  final ProvisioningConfig? initialConfig;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -27,6 +30,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _showManual = false;
   bool _showManagerPassword = false;
   String? _connectionError;
+
+  @override
+  void initState() {
+    super.initState();
+    final config = widget.initialConfig;
+    if (config != null) {
+      _clientUrlController.text = config.clientUrl.toString();
+      _managerUrlController.text = config.managerUrl.toString();
+      _liveTrackingUrlController.text = config.liveTrackingUrl?.toString() ?? '';
+      _managerUsernameController.text = config.managerUsername;
+      _managerPasswordController.text = config.managerPassword;
+      _showManual = true;
+    }
+  }
 
   @override
   void dispose() {

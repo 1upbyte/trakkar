@@ -7,6 +7,7 @@ import 'app_state.dart';
 import 'models/theme_preference.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/setup_link_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,11 +32,15 @@ class TrakkarApp extends StatelessWidget {
           ThemePreference.light => ThemeMode.light,
           ThemePreference.dark => ThemeMode.dark,
         },
-        home: switch (state.phase) {
-          AppPhase.loading => const _LoadingScreen(),
-          AppPhase.onboarding => const OnboardingScreen(),
-          AppPhase.ready => const HomeScreen(),
-        },
+        home: const _AppHome(),
+        onGenerateInitialRoutes: (initialRoute) => [
+          MaterialPageRoute<void>(
+            settings: const RouteSettings(name: '/'),
+            builder: (_) => const _AppHome(),
+          ),
+          if (initialRoute != '/') _setupRoute(initialRoute),
+        ],
+        onGenerateRoute: (settings) => _setupRoute(settings.name ?? ''),
       ),
     );
   }
@@ -66,6 +71,26 @@ class TrakkarApp extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+Route<void> _setupRoute(String link) => MaterialPageRoute<void>(
+  // Do not retain credentials in route names or diagnostic output.
+  settings: const RouteSettings(name: '/setup'),
+  builder: (_) => SetupLinkScreen(link: link),
+);
+
+class _AppHome extends StatelessWidget {
+  const _AppHome();
+
+  @override
+  Widget build(BuildContext context) {
+    final phase = context.watch<AppState>().phase;
+    return switch (phase) {
+      AppPhase.loading => const _LoadingScreen(),
+      AppPhase.onboarding => const OnboardingScreen(),
+      AppPhase.ready => const HomeScreen(),
+    };
   }
 }
 

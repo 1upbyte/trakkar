@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -383,6 +384,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.link_rounded),
+            label: const Text('Copy setup link'),
+            onPressed: state.provisioning == null
+                ? null
+                : () async {
+                    final config = state.provisioning!;
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Share this account setup?'),
+                        content: const Text(
+                          'This link includes your manager login and password. '
+                          'Anyone with it can access this Traccar account. '
+                          'Share it only with people you trust.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Copy link'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed != true) return;
+                    await Clipboard.setData(
+                      ClipboardData(text: config.toSetupLink().toString()),
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Setup link copied')),
+                      );
+                    }
+                  },
           ),
           const SizedBox(height: 28),
           OutlinedButton.icon(
