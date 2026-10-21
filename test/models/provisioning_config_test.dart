@@ -19,6 +19,37 @@ void main() {
       expect(config.managerUrl, Uri.parse('https://manager.example.com'));
       expect(config.managerUsername, 'manager@example.com');
       expect(config.managerPassword, 'secret');
+      expect(config.liveTrackingUrl, isNull);
+    });
+
+    test('parses v2 live tracking URL and preserves password separators', () {
+      final config = ProvisioningConfig.fromQr(
+        base64Encode(
+          utf8.encode(
+            'v2;https://client.test;https://manager.test;'
+            'https://live.test/api/;admin;a;b;c',
+          ),
+        ),
+      );
+
+      expect(config.liveTrackingUrl, Uri.parse('https://live.test/api'));
+      expect(config.managerUsername, 'admin');
+      expect(config.managerPassword, 'a;b;c');
+      expect(
+        ProvisioningConfig.fromStorage(config.toStorage()).liveTrackingUrl,
+        config.liveTrackingUrl,
+      );
+    });
+
+    test('allows an empty v2 live tracking field', () {
+      final config = ProvisioningConfig.fromQr(
+        base64Encode(
+          utf8.encode(
+            'v2;https://client.test;https://manager.test;;admin;secret',
+          ),
+        ),
+      );
+      expect(config.liveTrackingUrl, isNull);
     });
 
     test('keeps semicolons inside the password', () {
@@ -54,6 +85,7 @@ void main() {
       final config = ProvisioningConfig.fromFields(
         clientUrl: ' https://client.test/ ',
         managerUrl: 'https://manager.test/api/',
+        liveTrackingUrl: ' https://live.test/ ',
         managerUsername: ' manager ',
         managerPassword: 'secret',
       );
@@ -61,6 +93,38 @@ void main() {
       expect(config.clientUrl.toString(), 'https://client.test');
       expect(config.managerUrl.toString(), 'https://manager.test/api');
       expect(config.managerUsername, 'manager');
+      expect(config.liveTrackingUrl, Uri.parse('https://live.test'));
+    });
+
+    test('rejects unsafe live tracking endpoints', () {
+      for (final endpoint in [
+        'http://live.test',
+        'https://user:pass@live.test',
+        'https://live.test?key=value',
+        'https://live.test#fragment',
+        'invalid',
+      ]) {
+        expect(
+          () => ProvisioningConfig.fromFields(
+            clientUrl: 'https://client.test',
+            managerUrl: 'https://manager.test',
+            managerUsername: 'admin',
+            managerPassword: 'secret',
+            liveTrackingUrl: endpoint,
+          ),
+          throwsA(isA<FormatException>()),
+        );
+      }
+    });
+
+    test('loads legacy stored settings without live tracking', () {
+      final config = ProvisioningConfig.fromStorage({
+        'clientUrl': 'https://client.test',
+        'managerUrl': 'https://manager.test',
+        'managerUsername': 'admin',
+        'managerPassword': 'secret',
+      });
+      expect(config.liveTrackingUrl, isNull);
     });
 
     test('requires both manager credentials', () {

@@ -70,7 +70,6 @@ class AppState extends ChangeNotifier {
   bool liveConnected = false;
   bool busy = false;
   String? lastError;
-  String? exitAlert;
   TrackingHealth trackingHealth = const TrackingHealth.unchecked();
 
   List<TraccarDevice> devices = const [];
@@ -149,6 +148,7 @@ class AppState extends ChangeNotifier {
     required String managerUrl,
     required String managerUsername,
     required String managerPassword,
+    String liveTrackingUrl = '',
   }) {
     return _acceptProvisioning(
       ProvisioningConfig.fromFields(
@@ -156,6 +156,7 @@ class AppState extends ChangeNotifier {
         managerUrl: managerUrl,
         managerUsername: managerUsername,
         managerPassword: managerPassword,
+        liveTrackingUrl: liveTrackingUrl,
       ),
     );
   }
@@ -321,17 +322,7 @@ class AppState extends ChangeNotifier {
       mapTilerApiKey = results[3] as String;
       await _namedPlaceStore.save(namedPlaces);
       unawaited(_loadDeviceImages(devices));
-      try {
-        await api.ensureNamedPlaceExitMonitoring(
-          places: namedPlaces,
-          devices: devices,
-        );
-        lastError = null;
-      } on Object catch (error) {
-        lastError =
-            'Places loaded, but exit alerts could not be enabled. '
-            '${userFacingError(error)}';
-      }
+      lastError = null;
     } on Object catch (error) {
       lastError = userFacingError(error);
     }
@@ -391,6 +382,7 @@ class AppState extends ChangeNotifier {
     _liveTracking = LiveTrackingService(
       sessionCookie: cookie,
       uniqueId: deviceUsername,
+      endpoint: api.config.liveTrackingUrl?.toString() ?? '',
     );
     _liveTracking!.setDevices(devices.map((device) => device.id));
     unawaited(_liveTracking!.register());
@@ -492,39 +484,7 @@ class AppState extends ChangeNotifier {
       positions = mergeLastKnownPositions(positions, latest);
       _recordDrivingStatus(latest);
     }
-    final eventPayloads = message['events'] as List<dynamic>?;
-    if (eventPayloads != null) {
-      for (final payload in eventPayloads.reversed) {
-        final event = Map<String, dynamic>.from(payload as Map);
-        if (event['type'] != 'geofenceExit') continue;
-        final geofenceId = (event['geofenceId'] as num?)?.toInt();
-        final deviceId = (event['deviceId'] as num?)?.toInt();
-        NamedPlace? place;
-        for (final item in namedPlaces) {
-          if (item.serverId == geofenceId) {
-            place = item;
-            break;
-          }
-        }
-        if (place == null || !place.notifyOnExit) continue;
-        TraccarDevice? device;
-        for (final item in devices) {
-          if (item.id == deviceId) {
-            device = item;
-            break;
-          }
-        }
-        exitAlert = '${device?.name ?? 'Someone'} left ${place.name}.';
-        break;
-      }
-    }
     liveConnected = true;
-    notifyListeners();
-  }
-
-  void dismissExitAlert() {
-    if (exitAlert == null) return;
-    exitAlert = null;
     notifyListeners();
   }
 
@@ -745,17 +705,7 @@ class AppState extends ChangeNotifier {
       );
       namedPlaces = <NamedPlace>[...namedPlaces, place];
       await _namedPlaceStore.save(namedPlaces);
-      try {
-        await api.ensureNamedPlaceExitMonitoring(
-          places: namedPlaces,
-          devices: devices,
-        );
-        lastError = null;
-      } on Object catch (error) {
-        lastError =
-            '${place.name} was saved, but exit alerts could not be enabled. '
-            '${userFacingError(error)}';
-      }
+      lastError = null;
       notifyListeners();
     } on Object catch (error) {
       lastError = userFacingError(error);
@@ -867,7 +817,6 @@ class AppState extends ChangeNotifier {
     mapTilerApiKey = '';
     themePreference = ThemePreference.system;
     lastError = null;
-    exitAlert = null;
     trackingHealth = const TrackingHealth.unchecked();
     phase = AppPhase.onboarding;
     notifyListeners();

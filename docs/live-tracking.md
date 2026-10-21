@@ -63,8 +63,10 @@ same device lease active; leaving one map does not cancel another viewer's sessi
 - `ios/LocationPushService`: APNs location push extension.
 - `sidecar/`: HTTP service, SQLite token registry, APNs/FCM senders, Docker configuration.
 
-The feature is opt-in at build time. Without `LIVE_TRACKING_URL`, the Flutter app
-continues ordinary tracking and does not register or create viewing sessions.
+The feature is opt-in at login. Enter an HTTPS live-tracking URL in the manual
+connection form or include it in the provisioning QR code. Leaving it blank
+continues ordinary tracking without registration or viewing sessions. The URL is
+saved with the connection settings; no compile-time flag is needed.
 
 ## Deploy alongside Traccar
 
@@ -109,11 +111,16 @@ Use Node 24 or later for local development. The container includes Node 24.
    Do not log `X-Traccar-Session` or `Authorization` headers. Internal Traccar traffic
    may use HTTP on the private Docker network; mobile-to-sidecar traffic must use
    HTTPS. This service is tied to one configured Traccar instance.
-7. Build the mobile app with the public sidecar URL:
+7. Set the public sidecar URL (for example `https://live.example.com`) in the
+   app's **Live tracking URL (optional)** login field, or generate a base64 QR
+   code with this UTF-8 payload:
 
-   ```sh
-   flutter run --dart-define=LIVE_TRACKING_URL=https://live.example.com
+   ```text
+   v2;https://client.example.com;https://manager.example.com;https://live.example.com;manager@example.com;password
    ```
+
+   Existing installations can reset their connection and log in again with the
+   updated settings. Legacy four-field QR codes leave live tracking disabled.
 
 SQLite registrations survive container restarts in the named volume. Device API
 bearer tokens are stored only as hashes on the server. Viewer leases are ephemeral;

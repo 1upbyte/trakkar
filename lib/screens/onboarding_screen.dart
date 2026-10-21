@@ -16,6 +16,7 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _clientUrlController = TextEditingController();
+  final _liveTrackingUrlController = TextEditingController();
   final _managerUrlController = TextEditingController();
   final _managerUsernameController = TextEditingController();
   final _managerPasswordController = TextEditingController();
@@ -31,6 +32,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void dispose() {
     _clientUrlController.dispose();
     _managerUrlController.dispose();
+    _liveTrackingUrlController.dispose();
     _managerUsernameController.dispose();
     _managerPasswordController.dispose();
     _firstNameController.dispose();
@@ -66,6 +68,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       await context.read<AppState>().acceptManual(
         clientUrl: _clientUrlController.text,
         managerUrl: _managerUrlController.text,
+        liveTrackingUrl: _liveTrackingUrlController.text,
         managerUsername: _managerUsernameController.text,
         managerPassword: _managerPasswordController.text,
       );
@@ -267,6 +270,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     labelText: 'Manager URL',
                     hintText: 'https://manager.example.com',
                     prefixIcon: Icon(Icons.map_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _liveTrackingUrlController,
+                  keyboardType: TextInputType.url,
+                  textInputAction: TextInputAction.next,
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    labelText: 'Live tracking URL (optional)',
+                    hintText: 'https://live.example.com',
+                    helperText: 'Leave blank to disable live tracking.',
+                    prefixIcon: Icon(Icons.location_on_outlined),
                   ),
                 ),
                 const SizedBox(height: 12),

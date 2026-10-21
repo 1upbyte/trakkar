@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:trakkar/models/named_place.dart';
 import 'package:trakkar/models/provisioning_config.dart';
 import 'package:trakkar/models/traccar_device.dart';
 import 'package:trakkar/services/traccar_api.dart';
@@ -243,108 +242,6 @@ void main() {
     );
     expect(created.isPolygon, isTrue);
   });
-
-  test(
-    'idempotently links named places and one exit notification to devices',
-    () async {
-      final linkedGeofences = <int>{};
-      final linkedNotifications = <int>{};
-      Map<String, dynamic>? createdNotification;
-      var notificationCreates = 0;
-      final client = MockClient((request) async {
-        if (request.url.path == '/api/session') {
-          return http.Response(
-            '{}',
-            200,
-            headers: {'set-cookie': 'JSESSIONID=monitoring'},
-          );
-        }
-        if (request.method == 'GET' && request.url.path == '/api/geofences') {
-          expect(request.url.queryParameters['deviceId'], '1');
-          return http.Response(
-            jsonEncode(linkedGeofences.map((id) => {'id': id}).toList()),
-            200,
-          );
-        }
-        if (request.method == 'GET' &&
-            request.url.path == '/api/notifications' &&
-            request.url.queryParameters.containsKey('deviceId')) {
-          expect(request.url.queryParameters['deviceId'], '1');
-          return http.Response(
-            jsonEncode(linkedNotifications.map((id) => {'id': id}).toList()),
-            200,
-          );
-        }
-        if (request.method == 'GET' &&
-            request.url.path == '/api/notifications') {
-          return http.Response(
-            jsonEncode(
-              createdNotification == null ? [] : [createdNotification],
-            ),
-            200,
-          );
-        }
-        if (request.method == 'POST' &&
-            request.url.path == '/api/notifications') {
-          notificationCreates += 1;
-          final body = Map<String, dynamic>.from(
-            jsonDecode(request.body) as Map,
-          );
-          expect(body['type'], 'geofenceExit');
-          expect(body['notificators'], 'web');
-          expect(
-            (body['attributes'] as Map)['trakkarNamedPlaceExitNotification'],
-            isTrue,
-          );
-          createdNotification = <String, dynamic>{...body, 'id': 20};
-          return http.Response(jsonEncode(createdNotification), 200);
-        }
-        if (request.method == 'POST' &&
-            request.url.path == '/api/permissions') {
-          final body = Map<String, dynamic>.from(
-            jsonDecode(request.body) as Map,
-          );
-          expect(body['deviceId'], 1);
-          if (body['geofenceId'] case final int geofenceId) {
-            linkedGeofences.add(geofenceId);
-          }
-          if (body['notificationId'] case final int notificationId) {
-            linkedNotifications.add(notificationId);
-          }
-          return http.Response('', 204);
-        }
-        return http.Response('', 404);
-      });
-      final api = TraccarApi(config: config, client: client);
-      final device = TraccarDevice.fromJson({
-        'id': 1,
-        'name': 'Pablo',
-        'uniqueId': 'pablo',
-        'attributes': <String, dynamic>{},
-      });
-      const place = NamedPlace(
-        id: '7',
-        name: 'Home',
-        latitude: 40.7,
-        longitude: -74,
-        serverBacked: true,
-      );
-
-      await api.login();
-      await api.ensureNamedPlaceExitMonitoring(
-        places: const [place],
-        devices: [device],
-      );
-      await api.ensureNamedPlaceExitMonitoring(
-        places: const [place],
-        devices: [device],
-      );
-
-      expect(linkedGeofences, {7});
-      expect(linkedNotifications, {20});
-      expect(notificationCreates, 1);
-    },
-  );
 
   test(
     'uploads an avatar and saves the returned deviceImage attribute',

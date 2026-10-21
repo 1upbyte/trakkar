@@ -29,22 +29,6 @@ void main() {
     expect(place.longitude, -74.006);
     expect(place.radiusMeters, 125.5);
     expect(place.serverBacked, isTrue);
-    expect(place.notifyOnExit, isTrue);
-  });
-
-  test('preserves an explicit named-place exit alert opt-out', () {
-    final place = NamedPlace.fromGeofence({
-      'id': 44,
-      'name': 'Quiet place',
-      'area': 'CIRCLE (40.7128 -74.006, 150)',
-      'attributes': {'trakkarNamedPlace': true, 'trakkarNotifyOnExit': false},
-    });
-
-    expect(place.notifyOnExit, isFalse);
-    expect(
-      (place.toGeofencePayload()['attributes'] as Map)['trakkarNotifyOnExit'],
-      isFalse,
-    );
   });
 
   test('parses and writes a drawn Traccar polygon', () {

@@ -11,7 +11,6 @@ class NamedPlace {
     this.radiusMeters = 150,
     this.boundary = const <LatLng>[],
     this.serverBacked = false,
-    this.notifyOnExit = true,
   });
 
   factory NamedPlace.fromJson(Map<String, dynamic> json) {
@@ -30,7 +29,6 @@ class NamedPlace {
           )
           .toList(growable: false),
       serverBacked: json['serverBacked'] as bool? ?? false,
-      notifyOnExit: json['notifyOnExit'] as bool? ?? true,
     );
   }
 
@@ -48,7 +46,6 @@ class NamedPlace {
         longitude: double.parse(match.group(2)!),
         radiusMeters: double.parse(match.group(3)!),
         serverBacked: true,
-        notifyOnExit: _notifyOnExit(json),
       );
     }
 
@@ -83,7 +80,6 @@ class NamedPlace {
       longitude: center.longitude,
       boundary: List<LatLng>.unmodifiable(points),
       serverBacked: true,
-      notifyOnExit: _notifyOnExit(json),
     );
   }
 
@@ -94,7 +90,6 @@ class NamedPlace {
   final double radiusMeters;
   final List<LatLng> boundary;
   final bool serverBacked;
-  final bool notifyOnExit;
 
   int? get serverId => int.tryParse(id);
   bool get isPolygon => boundary.isNotEmpty;
@@ -112,7 +107,6 @@ class NamedPlace {
       'attributes': <String, dynamic>{
         'trakkarNamedPlace': true,
         'trakkarSchemaVersion': 3,
-        'trakkarNotifyOnExit': notifyOnExit,
       },
     };
   }
@@ -127,7 +121,6 @@ class NamedPlace {
         .map((point) => <double>[point.latitude, point.longitude])
         .toList(growable: false),
     'serverBacked': serverBacked,
-    'notifyOnExit': notifyOnExit,
   };
 
   String encode() => jsonEncode(toJson());
@@ -142,14 +135,5 @@ class NamedPlace {
       (total, point) => total + point.longitude,
     );
     return LatLng(latitude / points.length, longitude / points.length);
-  }
-
-  static bool _notifyOnExit(Map<String, dynamic> json) {
-    final attributes = Map<String, dynamic>.from(
-      json['attributes'] as Map? ?? const <String, dynamic>{},
-    );
-    final value = attributes['trakkarNotifyOnExit'];
-    // Tagged places created before schema 3 become monitored on upgrade.
-    return value == null || value == true || value.toString() == 'true';
   }
 }

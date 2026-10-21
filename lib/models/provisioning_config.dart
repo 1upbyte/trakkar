@@ -6,10 +6,12 @@ class ProvisioningConfig {
     required this.managerUrl,
     required this.managerUsername,
     required this.managerPassword,
+    this.liveTrackingUrl,
   });
 
   final Uri clientUrl;
   final Uri managerUrl;
+  final Uri? liveTrackingUrl;
   final String managerUsername;
   final String managerPassword;
 
@@ -18,6 +20,7 @@ class ProvisioningConfig {
     required String managerUrl,
     required String managerUsername,
     required String managerPassword,
+    String liveTrackingUrl = '',
   }) {
     final username = managerUsername.trim();
     if (username.isEmpty) {
@@ -29,6 +32,7 @@ class ProvisioningConfig {
     return ProvisioningConfig(
       clientUrl: _parseHttpUrl(clientUrl, 'client'),
       managerUrl: _parseHttpUrl(managerUrl, 'manager'),
+      liveTrackingUrl: _parseLiveTrackingUrl(liveTrackingUrl),
       managerUsername: username,
       managerPassword: managerPassword,
     );
@@ -48,18 +52,33 @@ class ProvisioningConfig {
     }
 
     final parts = decoded.split(';');
-    if (parts.length < 4) {
-      throw const FormatException(
-        'The QR code must contain client URL, manager URL, username, and password.',
-      );
+    final versioned = parts.first == 'v2';
+    if (parts.length < (versioned ? 6 : 4)) {
+      throw const FormatException('The QR code is missing connection fields.');
     }
 
     return ProvisioningConfig.fromFields(
-      clientUrl: parts[0],
-      managerUrl: parts[1],
-      managerUsername: parts[2],
-      managerPassword: parts.sublist(3).join(';'),
+      clientUrl: parts[versioned ? 1 : 0],
+      managerUrl: parts[versioned ? 2 : 1],
+      liveTrackingUrl: versioned ? parts[3] : '',
+      managerUsername: parts[versioned ? 4 : 2],
+      managerPassword: parts.sublist(versioned ? 5 : 3).join(';'),
     );
+  }
+
+  static Uri? _parseLiveTrackingUrl(String value) {
+    if (value.trim().isEmpty) return null;
+    final uri = _parseHttpUrl(value, 'live tracking');
+    if (uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      throw const FormatException(
+        'Enter a live tracking HTTPS URL without credentials, query, or fragment.',
+      );
+    }
+    return uri;
   }
 
   static Uri _parseHttpUrl(String value, String label) {
@@ -78,6 +97,7 @@ class ProvisioningConfig {
   Map<String, String> toStorage() => <String, String>{
     'clientUrl': clientUrl.toString(),
     'managerUrl': managerUrl.toString(),
+    'liveTrackingUrl': liveTrackingUrl?.toString() ?? '',
     'managerUsername': managerUsername,
     'managerPassword': managerPassword,
   };
@@ -86,6 +106,7 @@ class ProvisioningConfig {
     return ProvisioningConfig(
       clientUrl: _parseHttpUrl(values['clientUrl'] ?? '', 'client'),
       managerUrl: _parseHttpUrl(values['managerUrl'] ?? '', 'manager'),
+      liveTrackingUrl: _parseLiveTrackingUrl(values['liveTrackingUrl'] ?? ''),
       managerUsername: values['managerUsername'] ?? '',
       managerPassword: values['managerPassword'] ?? '',
     );

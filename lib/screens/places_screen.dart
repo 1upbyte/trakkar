@@ -108,8 +108,7 @@ class PlacesScreen extends StatelessWidget {
                       subtitle: Text(
                         '${place.isPolygon ? 'Drawn area  •  ${place.boundary.length} corners' : '${place.latitude.toStringAsFixed(5)}, '
                                   '${place.longitude.toStringAsFixed(5)}  •  '
-                                  '${place.radiusMeters.round()} m'}\n'
-                        'Exit alerts ${place.notifyOnExit ? 'on' : 'off'}',
+                                  '${place.radiusMeters.round()} m'}',
                       ),
                       trailing: IconButton(
                         tooltip: 'Delete place',

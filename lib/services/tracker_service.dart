@@ -129,7 +129,6 @@ class TrackerService {
   }
 
   Future<void> _invokeLive(String method, Map<String, Object> arguments) async {
-    if (const String.fromEnvironment('LIVE_TRACKING_URL').isEmpty) return;
     try {
       await const MethodChannel('trakkar/live_tracking')
           .invokeMethod<void>(method, arguments);

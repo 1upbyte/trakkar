@@ -20,10 +20,13 @@ The server generates the QR code. Trakkar only reads it.
 Before base64 encoding, the UTF-8 payload is:
 
 ```text
-clientUrl;managerUrl;managerUsername;managerPassword
+v2;clientUrl;managerUrl;liveTrackingUrl;managerUsername;managerPassword
 ```
 
-Semicolons after the third separator are treated as part of the password. Both
+The live-tracking URL is optional; leave its field empty to disable live tracking.
+It must use HTTPS. Semicolons after the fifth separator are part of the password.
+Legacy four-field codes (`clientUrl;managerUrl;managerUsername;managerPassword`)
+remain supported and disable live tracking. Both
 standard and URL-safe base64, with or without padding, are accepted.
 
 Base64 is an encoding, not encryption. The QR code grants access to the manager
@@ -34,7 +37,7 @@ development.
 ## Onboarding behavior
 
 1. Scan the server-generated provisioning code, or manually enter the client
-   URL, manager URL, manager username, and manager password.
+   URL, manager URL, optional live-tracking URL, manager username, and manager password.
 2. Trakkar creates a normal Traccar session using the embedded manager
    credentials.
 3. Enter a first name and username.
@@ -100,15 +103,6 @@ its radius. These names are tagged circular Traccar geofences, so every app
 signed into the same manager account sees them after refresh. A local cache is
 used only for offline display. Friendly names take priority over
 reverse-geocoded addresses.
-
-Tagged named places are linked to every device available to the manager
-account. Trakkar creates one tagged `geofenceExit` notification using Traccar's
-default `web` notificator and links it to those devices. Missing links are
-repaired on refresh, including for places created by earlier app versions.
-While Trakkar is visible, received exit events appear as dismissible in-app
-alerts. To deliver alerts while the app is closed, edit the generated
-notification in Traccar and add a server-configured delivery channel such as
-email or Firebase push.
 
 The exact unmodified-server protocol, migration behavior, security rules, and
 an optional first-class server design are documented in

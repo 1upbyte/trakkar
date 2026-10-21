@@ -11,7 +11,7 @@ class LiveTrackingService {
   LiveTrackingService({
     required this.sessionCookie,
     required this.uniqueId,
-    this.endpoint = const String.fromEnvironment('LIVE_TRACKING_URL'),
+    required this.endpoint,
     http.Client? client,
     this.channel = const MethodChannel('trakkar/live_tracking'),
   }) : _client = client ?? http.Client(),
@@ -41,7 +41,7 @@ class LiveTrackingService {
   Uri _uri(String path) {
     final base = Uri.parse(endpoint);
     if (base.scheme != 'https' || base.host.isEmpty) {
-      throw const FormatException('LIVE_TRACKING_URL must use HTTPS');
+      throw const FormatException('Live tracking URL must use HTTPS');
     }
     return base.replace(
       path: '${base.path.replaceFirst(RegExp(r'/+$'), '')}$path',

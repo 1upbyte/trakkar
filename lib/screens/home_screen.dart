@@ -96,9 +96,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SettingsScreen(),
               ],
             ),
-            if (state.exitAlert != null ||
-                state.trackingHealth.hasWarning ||
-                state.lastError != null)
+            if (state.trackingHealth.hasWarning || state.lastError != null)
               Positioned(
                 top: MediaQuery.paddingOf(context).top + 8,
                 left: 16,
@@ -106,15 +104,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (state.exitAlert != null)
-                      _ExitAlertBanner(
-                        message: state.exitAlert!,
-                        onDismiss: state.dismissExitAlert,
-                      ),
-                    if (state.exitAlert != null &&
-                        (state.trackingHealth.hasWarning ||
-                            state.lastError != null))
-                      const SizedBox(height: 8),
                     if (state.trackingHealth.hasWarning)
                       _TrackingHealthBanner(state: state),
                     if (state.trackingHealth.hasWarning &&
@@ -151,37 +140,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               label: 'Settings',
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ExitAlertBanner extends StatelessWidget {
-  const _ExitAlertBanner({required this.message, required this.onDismiss});
-
-  final String message;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.primaryContainer,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 3,
-      child: ListTile(
-        leading: Icon(
-          Icons.notifications_active_rounded,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-        title: Text(
-          message,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        trailing: IconButton(
-          tooltip: 'Dismiss alert',
-          onPressed: onDismiss,
-          icon: const Icon(Icons.close_rounded),
         ),
       ),
     );

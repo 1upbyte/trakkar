@@ -7,6 +7,7 @@ class CredentialStore {
     : _storage = storage ?? const FlutterSecureStorage();
 
   static const _clientUrl = 'provisioning.clientUrl';
+  static const _liveTrackingUrl = 'provisioning.liveTrackingUrl';
   static const _managerUrl = 'provisioning.managerUrl';
   static const _managerUsername = 'provisioning.managerUsername';
   static const _managerPassword = 'provisioning.managerPassword';
@@ -18,6 +19,7 @@ class CredentialStore {
     await Future.wait(<Future<void>>[
       _storage.write(key: _clientUrl, value: values['clientUrl']),
       _storage.write(key: _managerUrl, value: values['managerUrl']),
+      _storage.write(key: _liveTrackingUrl, value: values['liveTrackingUrl']),
       _storage.write(key: _managerUsername, value: values['managerUsername']),
       _storage.write(key: _managerPassword, value: values['managerPassword']),
     ]);
@@ -33,6 +35,7 @@ class CredentialStore {
     if (values.values.any((value) => value == null || value.isEmpty)) {
       return null;
     }
+    values['liveTrackingUrl'] = await _storage.read(key: _liveTrackingUrl) ?? '';
     return ProvisioningConfig.fromStorage(
       values.map((key, value) => MapEntry(key, value!)),
     );
@@ -42,6 +45,7 @@ class CredentialStore {
     await Future.wait(<Future<void>>[
       _storage.delete(key: _clientUrl),
       _storage.delete(key: _managerUrl),
+      _storage.delete(key: _liveTrackingUrl),
       _storage.delete(key: _managerUsername),
       _storage.delete(key: _managerPassword),
     ]);
