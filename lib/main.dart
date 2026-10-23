@@ -32,7 +32,6 @@ class TrakkarApp extends StatelessWidget {
           ThemePreference.light => ThemeMode.light,
           ThemePreference.dark => ThemeMode.dark,
         },
-        home: const _AppHome(),
         onGenerateInitialRoutes: (initialRoute) => [
           MaterialPageRoute<void>(
             settings: const RouteSettings(name: '/'),
