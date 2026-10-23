@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
+import '../credential_store.dart';
+import '../traccar_api.dart';
+
 /// Map-view leases. Position collection and uploads remain native SDK work.
 class LiveTrackingService {
   LiveTrackingService({
@@ -13,8 +16,10 @@ class LiveTrackingService {
     required this.uniqueId,
     required this.endpoint,
     http.Client? client,
+    CredentialStore? credentialStore,
     this.channel = const MethodChannel('trakkar/live_tracking'),
   }) : _client = client ?? http.Client(),
+       _credentialStore = credentialStore ?? CredentialStore(),
        _viewId = List.generate(
          24,
          (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
@@ -24,6 +29,7 @@ class LiveTrackingService {
   final String uniqueId;
   final String endpoint;
   final http.Client _client;
+  final CredentialStore _credentialStore;
   final MethodChannel channel;
   final String _viewId;
   Timer? _timer;
@@ -35,6 +41,49 @@ class LiveTrackingService {
   Future<void>? _registering;
   int? _registeredDeviceId;
   String? _registeredPushToken;
+  Future<String>? _installation;
+
+  Future<String> _installationToken() =>
+      _installation ??= _loadInstallationToken();
+
+  Future<String> _loadInstallationToken() async {
+    final saved = await _credentialStore.readInstallationToken(
+      endpoint,
+      uniqueId,
+    );
+    if (saved != null) return saved;
+    final random = Random.secure();
+    final token = base64Url
+        .encode(List.generate(32, (_) => random.nextInt(256)))
+        .replaceAll('=', '');
+    await _credentialStore.saveInstallationToken(endpoint, uniqueId, token);
+    return token;
+  }
+
+  /// Onboarding alone can replace another installation after confirmation.
+  Future<void> claim({bool replace = false}) async {
+    if (!enabled) return;
+    final response = await _client
+        .post(
+          _uri('/v1/devices/claim'),
+          headers: _headers,
+          body: jsonEncode({
+            'uniqueId': uniqueId,
+            'installationToken': await _installationToken(),
+            'replace': replace,
+          }),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      throw TraccarApiException(
+        response.statusCode == 409
+            ? 'This username is already connected to another phone. '
+                  'Go back and confirm using it on this phone.'
+            : 'Could not connect this phone to live tracking. Please try again.',
+        statusCode: response.statusCode,
+      );
+    }
+  }
 
   bool get enabled => endpoint.isNotEmpty;
 
@@ -78,6 +127,7 @@ class LiveTrackingService {
                   ? 'ios'
                   : 'android',
               'pushToken': token,
+              'installationToken': await _installationToken(),
             }),
           )
           .timeout(const Duration(seconds: 10));
@@ -159,7 +209,10 @@ class LiveTrackingService {
             .delete(
               _uri('/v1/devices'),
               headers: _headers,
-              body: jsonEncode({'deviceId': _registeredDeviceId}),
+              body: jsonEncode({
+                'deviceId': _registeredDeviceId,
+                'installationToken': await _installationToken(),
+              }),
             )
             .timeout(const Duration(seconds: 5));
       } on Object {

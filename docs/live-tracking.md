@@ -78,26 +78,12 @@ Use Node 24 or later for local development. The container includes Node 24.
    `TRACCAR_MANAGER_URL` to its service name and manager port.
 2. Edit the inline `environment` options in `sidecar/compose.yaml` and create
    `sidecar/secrets/`. No `.env` file is needed.
-3. Create `sidecar/secrets/device-owners.json`, mapping **Traccar numeric device IDs**
-   to **Traccar numeric user IDs**, for example:
-
-   ```json
-   { "12": 4, "15": 7 }
-   ```
-
-   This mapping is operator managed. Sharing a device permits viewing, but must not
-   permit replacing its push token. Registration therefore requires both a matching
-   SDK unique ID in the authenticated user's device list and this owner mapping.
-   Add the phones to Traccar and assign their owners before testing. The SDK unique
-   ID on `main` is the device username entered during onboarding; it is separate
-   from the Traccar manager account login. Restart the sidecar
-   after editing ownership. Removing a mapping also invalidates its device token.
-4. Mount a Firebase service-account JSON file as `firebase-service-account.json` and
+3. Mount a Firebase service-account JSON file as `firebase-service-account.json` and
    your APNs key as `AuthKey.p8`. Fill in the Apple key ID, team ID, and bundle ID.
    Set `APNS_SANDBOX=true` for development provisioning, `false` for TestFlight/store.
    The supplied service sends Android **normal-priority data messages**. No Firebase
    or Apple credentials belong in the mobile application or Git.
-5. Run:
+4. Run:
 
    ```sh
    cd sidecar
@@ -105,13 +91,13 @@ Use Node 24 or later for local development. The container includes Node 24.
    docker compose up -d
    ```
 
-6. Expose the service through an HTTPS reverse proxy. The host binding is
+5. Expose the service through an HTTPS reverse proxy. The host binding is
    `127.0.0.1:8081`, so a host proxy can reach it. A proxy in Docker can instead join
    the same network and use `http://live-tracking:8080`. Forward `/v1/*` unchanged.
    Do not log `X-Traccar-Session` or `Authorization` headers. Internal Traccar traffic
    may use HTTP on the private Docker network; mobile-to-sidecar traffic must use
    HTTPS. This service is tied to one configured Traccar instance.
-7. Set the public sidecar URL (for example `https://live.example.com`) in the
+6. Set the public sidecar URL (for example `https://live.example.com`) in the
    app's **Live tracking URL (optional)** login field, or generate a base64 QR
    code with this UTF-8 payload:
 
@@ -122,10 +108,39 @@ Use Node 24 or later for local development. The container includes Node 24.
    Existing installations can reset their connection and log in again with the
    updated settings. Legacy four-field QR codes leave live tracking disabled.
 
-SQLite registrations survive container restarts in the named volume. Device API
-bearer tokens are stored only as hashes on the server. Viewer leases are ephemeral;
-a sidecar restart ends them. Run one sidecar instance: leases and push coalescing
-are held in process memory. No migration or changes to stock Traccar are required.
+Device ownership is recorded automatically during onboarding; there is no
+`device-owners.json` file or per-user container configuration. The username entered
+in the app is the SDK's Traccar `uniqueId`, separate from the shared manager login.
+
+When an existing username is entered, the app shows a warning. Choosing **Use on
+this phone** revokes the previous phone's live-tracking token immediately, even
+before a new push token is available. The existing Traccar device, history, picture,
+and sharing are preserved; its display name is updated. Stop ordinary tracking on
+the old phone to avoid two SDKs uploading locations under the same username. The
+sidecar cannot remotely disable ordinary SDK uploads.
+
+Each installation keeps a random credential in secure storage. Normal reconnects
+and push-token refreshes must present that credential, so a replaced phone cannot
+silently reclaim its registration or unregister the replacement. Explicit takeover
+is permitted for any authenticated account with access to the device. The warning
+is a confirmation, not proof of personal identity; shared manager credentials allow
+users to deliberately take over any accessible username. First names can repeat;
+only duplicate device usernames trigger takeover.
+
+When a live-tracking URL is configured, onboarding must successfully claim the
+device before completing. A sidecar outage during ordinary use still leaves normal
+SDK tracking available. Installation credentials are retained across local setup
+resets, scoped to the sidecar URL and username.
+
+SQLite claims and registrations survive container restarts in the named volume.
+Installation credentials and device API bearer tokens are stored only as hashes
+on the server. Viewer leases are ephemeral; a sidecar restart ends them. Run one
+sidecar instance: leases and push coalescing
+are held in process memory. No changes to stock Traccar are required. Existing
+SQLite databases gain the claims table automatically. Deploy the updated app with
+the updated sidecar: older clients cannot register without an installation
+credential. Existing registrations remain usable until a new installation claims
+them. An old `DEVICE_OWNERS_FILE` setting or JSON file is no longer used.
 
 ## Container publishing
 
@@ -144,7 +159,7 @@ particular revision, replace `latest` in `compose.yaml` with its `sha-<full-comm
 If the GHCR package is private, authenticate on the deployment host using a GitHub
 personal access token with `read:packages` and `docker login ghcr.io`. Alternatively,
 make the package public in its GitHub package settings to allow unauthenticated pulls.
-Push credentials and device ownership configuration remain mounted at runtime from
+Push-provider credentials remain mounted at runtime from
 `sidecar/secrets/`; they are excluded from the Docker build context.
 
 ## Android setup and behavior
@@ -266,6 +281,10 @@ Before calling the deployment live, test with two provisioned physical devices:
 5. Test Android Doze, iOS background handoff, lost connectivity, revoked location
    permission, and an unauthorized account attempting registration/viewing.
 6. Reset the tracked app and verify its old device token no longer enables tracking.
+7. On a second phone, enter the same username, cancel the warning, then repeat and
+   confirm takeover. Verify the numeric Traccar device ID and history are retained,
+   the old token is rejected, and reopening/resetting the old app cannot replace or
+   unregister the new phone without an explicit takeover.
 
 Build/test results do not establish APNs/FCM delivery or iOS handoff reliability.
 Those require real signing, server credentials, and physical-device validation.

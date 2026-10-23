@@ -82,9 +82,13 @@ provide an App Store fallback.
 3. Enter a first name and username.
 4. The username becomes the Traccar device `uniqueId` reported by the official
    tracking SDK.
-5. If that `uniqueId` exists, Trakkar asks for confirmation before reusing it
-   and updating its display name. Otherwise, it creates the device through
-   `POST /api/devices`.
+5. If that `uniqueId` exists, Trakkar warns before using its profile on this phone
+   and updating its display name. Its history, picture, and sharing are preserved.
+   Otherwise, it creates the device through `POST /api/devices`.
+6. When live tracking is configured, the sidecar records this phone automatically.
+   Confirming a duplicate username revokes the old phone's live-tracking connection;
+   no device-owner JSON mapping is needed. Stop tracking on the old phone to prevent
+   ordinary location uploads from both phones under the same username.
 
 Provisioning credentials are stored using Android Keystore/iOS Keychain through
 `flutter_secure_storage`. The WebSocket uses only the in-memory `JSESSIONID`

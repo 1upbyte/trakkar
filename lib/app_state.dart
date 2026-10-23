@@ -219,7 +219,22 @@ class AppState extends ChangeNotifier {
       }
       if (existing == null) {
         await api.createDevice(name: cleanName, uniqueId: cleanUsername);
-      } else {
+      }
+
+      if (config.liveTrackingUrl != null) {
+        final registration = LiveTrackingService(
+          sessionCookie: api.sessionCookie!,
+          uniqueId: cleanUsername,
+          endpoint: config.liveTrackingUrl.toString(),
+          credentialStore: _credentialStore,
+        );
+        try {
+          await registration.claim(replace: replace);
+        } finally {
+          registration.dispose();
+        }
+      }
+      if (existing != null) {
         await api.updateDeviceName(existing, cleanName);
       }
 
@@ -383,6 +398,7 @@ class AppState extends ChangeNotifier {
       sessionCookie: cookie,
       uniqueId: deviceUsername,
       endpoint: api.config.liveTrackingUrl?.toString() ?? '',
+      credentialStore: _credentialStore,
     );
     _liveTracking!.setDevices(devices.map((device) => device.id));
     unawaited(_liveTracking!.register());

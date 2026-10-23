@@ -6,7 +6,6 @@ services:
     environment:
       PORT: "8080"
       TRACCAR_MANAGER_URL: "http://traccar:8082"
-      DEVICE_OWNERS_FILE: "/run/secrets/device-owners.json"
       DATABASE_PATH: "/data/live-tracking.sqlite"
       FCM_SERVICE_ACCOUNT_FILE: "/run/secrets/firebase-service-account.json"
       APNS_KEY_FILE: "/run/secrets/AuthKey.p8"

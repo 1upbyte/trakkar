@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/provisioning_config.dart';
@@ -13,6 +15,23 @@ class CredentialStore {
   static const _managerPassword = 'provisioning.managerPassword';
 
   final FlutterSecureStorage _storage;
+
+  String _installationKey(String endpoint, String uniqueId) {
+    final scope = jsonEncode([
+      endpoint.replaceFirst(RegExp(r'/+$'), ''),
+      uniqueId,
+    ]);
+    return 'liveTracking.installation.${base64Url.encode(utf8.encode(scope))}';
+  }
+
+  Future<String?> readInstallationToken(String endpoint, String uniqueId) =>
+      _storage.read(key: _installationKey(endpoint, uniqueId));
+
+  Future<void> saveInstallationToken(
+    String endpoint,
+    String uniqueId,
+    String token,
+  ) => _storage.write(key: _installationKey(endpoint, uniqueId), value: token);
 
   Future<void> saveProvisioning(ProvisioningConfig config) async {
     final values = config.toStorage();
@@ -35,7 +54,8 @@ class CredentialStore {
     if (values.values.any((value) => value == null || value.isEmpty)) {
       return null;
     }
-    values['liveTrackingUrl'] = await _storage.read(key: _liveTrackingUrl) ?? '';
+    values['liveTrackingUrl'] =
+        await _storage.read(key: _liveTrackingUrl) ?? '';
     return ProvisioningConfig.fromStorage(
       values.map((key, value) => MapEntry(key, value!)),
     );

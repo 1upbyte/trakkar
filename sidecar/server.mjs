@@ -1,6 +1,5 @@
 import {createServer} from 'node:http';
 import {randomBytes,createHash} from 'node:crypto';
-import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {pathToFileURL} from 'node:url';
 import {Leases} from './leases.mjs';
@@ -8,12 +7,14 @@ import {PushSender} from './push.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const fail = status => Object.assign(new Error('request_failed'),{status});
-export function createSidecar({managerUrl,owners,database = ':memory:',push = new PushSender(),fetcher = fetch,now = Date.now} = {}) {
-  if (!managerUrl || !owners) throw new Error('TRACCAR_MANAGER_URL and DEVICE_OWNERS_FILE are required');
+export function createSidecar({managerUrl,database = ':memory:',push = new PushSender(),fetcher = fetch,now = Date.now} = {}) {
+  if (!managerUrl) throw new Error('TRACCAR_MANAGER_URL is required');
   const db = new DatabaseSync(database);
   db.exec(`CREATE TABLE IF NOT EXISTS registrations (
     deviceId INTEGER PRIMARY KEY, userId INTEGER NOT NULL, platform TEXT NOT NULL,
     pushToken TEXT NOT NULL, accessHash TEXT UNIQUE NOT NULL, lastPush INTEGER NOT NULL DEFAULT 0)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS device_claims (
+    deviceId INTEGER PRIMARY KEY, userId INTEGER NOT NULL, installationHash TEXT NOT NULL)`);
   const leases = new Leases({now});
   const inFlight = new Set();
   const activeKicks = new Map();
@@ -48,6 +49,23 @@ export function createSidecar({managerUrl,owners,database = ':memory:',push = ne
       return value;
     } catch {throw fail(400);}
   }
+  function installationHash(input) {
+    if (typeof input.installationToken!=='string' || !/^[A-Za-z0-9_-]{43}$/.test(input.installationToken)) throw fail(400);
+    return hash(input.installationToken);
+  }
+  function claim(deviceId,userId,input,replace = false) {
+    const nextHash=installationHash(input);
+    const previous=db.prepare('SELECT * FROM device_claims WHERE deviceId=?').get(deviceId);
+    if (previous && previous.installationHash!==nextHash && !replace) throw fail(409);
+    db.prepare(`INSERT INTO device_claims(deviceId,userId,installationHash) VALUES(?,?,?)
+      ON CONFLICT(deviceId) DO UPDATE SET userId=excluded.userId,installationHash=excluded.installationHash`)
+      .run(deviceId,userId,nextHash);
+    if (replace || !previous || previous.installationHash!==nextHash) {
+      // A confirmed transfer revokes the old phone before the new push token is available.
+      db.prepare('DELETE FROM registrations WHERE deviceId=?').run(deviceId);
+      activeKicks.delete(deviceId);
+    }
+  }
   async function send(deviceId) {
     const device=db.prepare('SELECT * FROM registrations WHERE deviceId=?').get(deviceId);
     if (!device || inFlight.has(deviceId)) return;
@@ -59,12 +77,17 @@ export function createSidecar({managerUrl,owners,database = ':memory:',push = ne
     inFlight.add(deviceId);
     try {
       await push.send(device,until);
-      activeKicks.set(deviceId,leases.until(deviceId));
-      db.prepare('UPDATE registrations SET lastPush=? WHERE deviceId=?').run(now(),deviceId);
+      const updated=db.prepare('UPDATE registrations SET lastPush=? WHERE deviceId=? AND accessHash=?')
+        .run(now(),deviceId,device.accessHash);
+      if (updated.changes) activeKicks.set(deviceId,leases.until(deviceId));
     } catch (error) {
       // Only a safe error category; never print session cookies or push tokens.
       console.error('Live tracking push failed:', /^((fcm|apns)_\w+)$/.test(error.message) ? error.message : 'provider_error');
-    } finally {inFlight.delete(deviceId);}
+    } finally {
+      inFlight.delete(deviceId);
+      const current=db.prepare('SELECT accessHash FROM registrations WHERE deviceId=?').get(deviceId);
+      if (current && current.accessHash!==device.accessHash) void send(deviceId);
+    }
   }
   const server=createServer(async (request,response) => {
     response.setHeader('Content-Type','application/json');
@@ -76,22 +99,31 @@ export function createSidecar({managerUrl,owners,database = ':memory:',push = ne
         const token=request.headers.authorization?.replace(/^Bearer /,'');
         if (!token) throw fail(401);
         const device=db.prepare('SELECT * FROM registrations WHERE accessHash=?').get(hash(token));
-        if (!device || owners[String(device.deviceId)]!==device.userId) throw fail(401);
+        if (!device) throw fail(401);
         const until=leases.until(device.deviceId);
         if (until>now()) activeKicks.set(device.deviceId,until);
         response.end(JSON.stringify({expiresAt:until,serverTime:now()}));return;
       }
       const {user,devices}=await authenticate(request);
+      if (path==='/v1/devices/claim' && request.method==='POST') {
+        const input=await body(request);
+        const device=devices.find(d => d.uniqueId===input.uniqueId);
+        if (!device) throw fail(403);
+        if (input.replace!==undefined && typeof input.replace!=='boolean') throw fail(400);
+        claim(device.id,user.id,input,input.replace===true);
+        response.end(JSON.stringify({deviceId:device.id}));return;
+      }
       if (path==='/v1/devices' && request.method==='POST') {
         const input=await body(request);
         const device=devices.find(d => d.uniqueId===input.uniqueId);
-        if (!device || owners[String(device.id)]!==user.id) throw fail(403);
+        if (!device) throw fail(403);
         if (!['android','ios'].includes(input.platform) || typeof input.pushToken!=='string' ||
           input.pushToken.length<16 || input.pushToken.length>4096) throw fail(400);
+        claim(device.id,user.id,input);
         const token=randomBytes(32).toString('base64url');
         db.prepare(`INSERT INTO registrations(deviceId,userId,platform,pushToken,accessHash)
           VALUES(?,?,?,?,?) ON CONFLICT(deviceId) DO UPDATE SET userId=excluded.userId,
-          platform=excluded.platform,pushToken=excluded.pushToken,accessHash=excluded.accessHash`)
+          platform=excluded.platform,pushToken=excluded.pushToken,accessHash=excluded.accessHash,lastPush=0`)
           .run(device.id,user.id,input.platform,input.pushToken,hash(token));
         response.end(JSON.stringify({deviceId:device.id,deviceToken:token}));
         activeKicks.delete(device.id);
@@ -99,7 +131,12 @@ export function createSidecar({managerUrl,owners,database = ':memory:',push = ne
       }
       if (path==='/v1/devices' && request.method==='DELETE') {
         const input=await body(request);
-        db.prepare('DELETE FROM registrations WHERE deviceId=? AND userId=?').run(input.deviceId,user.id);
+        if (!Number.isSafeInteger(input.deviceId)) throw fail(400);
+        if (!devices.some(d => d.id===input.deviceId)) throw fail(403);
+        const owner=db.prepare('SELECT * FROM device_claims WHERE deviceId=?').get(input.deviceId);
+        if (!owner || owner.installationHash!==installationHash(input)) throw fail(403);
+        db.prepare('DELETE FROM registrations WHERE deviceId=?').run(input.deviceId);
+        activeKicks.delete(input.deviceId);
         response.end('{}');return;
       }
       const match=path.match(/^\/v1\/views\/([A-Za-z0-9-]{16,80})$/);
@@ -128,8 +165,7 @@ export function createSidecar({managerUrl,owners,database = ':memory:',push = ne
   return server;
 }
 if (process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
-  const owners=JSON.parse(readFileSync(process.env.DEVICE_OWNERS_FILE,'utf8'));
-  createSidecar({managerUrl:process.env.TRACCAR_MANAGER_URL,owners,
+  createSidecar({managerUrl:process.env.TRACCAR_MANAGER_URL,
     database:process.env.DATABASE_PATH ?? '/data/live-tracking.sqlite'})
     .listen(Number(process.env.PORT ?? 8080),'0.0.0.0');
 }

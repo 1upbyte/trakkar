@@ -38,7 +38,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (config != null) {
       _clientUrlController.text = config.clientUrl.toString();
       _managerUrlController.text = config.managerUrl.toString();
-      _liveTrackingUrlController.text = config.liveTrackingUrl?.toString() ?? '';
+      _liveTrackingUrlController.text =
+          config.liveTrackingUrl?.toString() ?? '';
       _managerUsernameController.text = config.managerUsername;
       _managerPasswordController.text = config.managerPassword;
       _showManual = true;
@@ -113,8 +114,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           title: const Text('Username already in use'),
           content: Text(
             '“${conflict.device.uniqueId}” is currently connected as '
-            '“${conflict.device.name}”. Continuing will make this phone the '
-            'location source for that device and update its name.',
+            '“${conflict.device.name}”. Use this profile on this phone? '
+            'This replaces its live tracking connection and updates its name. '
+            'Its history and sharing will be kept. Stop sharing on the old '
+            'phone to avoid mixed locations.',
           ),
           actions: [
             TextButton(
@@ -123,7 +126,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Replace'),
+              child: const Text('Use on this phone'),
             ),
           ],
         ),

@@ -2,14 +2,17 @@ import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:trakkar/services/traccar_api.dart';
 import 'package:trakkar/services/tracking/live_tracking_service.dart';
 
 void main() {
   const channel = MethodChannel('trakkar/live_tracking');
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
   testWidgets('renews only while visible and releases when hidden', (
     tester,
@@ -66,6 +69,7 @@ void main() {
     );
     service.setDevices([1]);
     service.setVisible(true);
+    await service.claim(replace: true);
     await service.register();
     await tester.pump(const Duration(seconds: 60));
     service.dispose();
@@ -105,4 +109,77 @@ void main() {
     expect(registrations, 1);
     service.dispose();
   });
+
+  testWidgets(
+    'onboarding claims without a push token and remembers the installation',
+    (tester) async {
+      final requests = <http.Request>[];
+      var pushToken = 'initial-push-token';
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            return call.method == 'pushToken' ? pushToken : null;
+          });
+      LiveTrackingService create() => LiveTrackingService(
+        sessionCookie: 'JSESSIONID=test',
+        uniqueId: 'username',
+        endpoint: 'https://live.test',
+        client: MockClient((request) async {
+          requests.add(request);
+          return http.Response(
+            request.url.path == '/v1/devices/claim'
+                ? '{"deviceId":12}'
+                : '{"deviceId":12,"deviceToken":"device-token"}',
+            200,
+          );
+        }),
+      );
+      final onboarding = create();
+      await onboarding.claim(replace: true);
+      expect(requests.single.url.path, '/v1/devices/claim');
+      final claim = jsonDecode(requests.single.body) as Map<String, dynamic>;
+      expect(claim['replace'], isTrue);
+      expect(
+        claim['installationToken'],
+        matches(RegExp(r'^[A-Za-z0-9_-]{43}$')),
+      );
+      expect(claim.containsKey('pushToken'), isFalse);
+      onboarding.dispose();
+
+      final reconnected = create();
+      await reconnected.register();
+      pushToken = 'refreshed-push-token';
+      await reconnected.register();
+      await reconnected.unregister();
+      for (final request in requests.skip(1)) {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['installationToken'], claim['installationToken']);
+        expect(body.containsKey('replace'), isFalse);
+      }
+      expect(requests.last.method, 'DELETE');
+      reconnected.dispose();
+    },
+  );
+
+  testWidgets(
+    'failed takeover is reported instead of silently completing onboarding',
+    (tester) async {
+      final service = LiveTrackingService(
+        sessionCookie: 'JSESSIONID=test',
+        uniqueId: 'username',
+        endpoint: 'https://live.test',
+        client: MockClient((_) async => http.Response('{}', 409)),
+      );
+      await expectLater(
+        service.claim(),
+        throwsA(
+          isA<TraccarApiException>().having(
+            (error) => error.statusCode,
+            'statusCode',
+            409,
+          ),
+        ),
+      );
+      service.dispose();
+    },
+  );
 }
