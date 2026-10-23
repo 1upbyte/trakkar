@@ -1,0 +1,88 @@
+name: Android release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_name:
+        description: Release name shown on GitHub
+        required: true
+        type: string
+      description:
+        description: Release notes shown on GitHub
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.7"
+          channel: stable
+          cache: true
+
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+
+      - name: Configure Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          : "${ANDROID_KEYSTORE_BASE64:?Set the ANDROID_KEYSTORE_BASE64 Actions secret}"
+          : "${ANDROID_KEYSTORE_PASSWORD:?Set the ANDROID_KEYSTORE_PASSWORD Actions secret}"
+          : "${ANDROID_KEY_ALIAS:?Set the ANDROID_KEY_ALIAS Actions secret}"
+          : "${ANDROID_KEY_PASSWORD:?Set the ANDROID_KEY_PASSWORD Actions secret}"
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/trakkar-upload-key.jks
+          printf 'storeFile=trakkar-upload-key.jks\nstorePassword=%s\nkeyPassword=%s\nkeyAlias=%s\n' \
+            "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_PASSWORD" "$ANDROID_KEY_ALIAS" \
+            > android/key.properties
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Create release tag
+        id: release
+        shell: bash
+        run: |
+          version="$(awk '/^version: / { print $2; exit }' pubspec.yaml)"
+          if [[ -z "$version" ]]; then
+            echo "Could not read the app version from pubspec.yaml" >&2
+            exit 1
+          fi
+          echo "tag=v${version}-run-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NAME: ${{ inputs.release_name }}
+          RELEASE_DESCRIPTION: ${{ inputs.description }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: >-
+          gh release create "$RELEASE_TAG"
+          build/app/outputs/flutter-apk/app-release.apk
+          --target "$GITHUB_SHA"
+          --title "$RELEASE_NAME"
+          --notes "$RELEASE_DESCRIPTION"

@@ -190,8 +190,23 @@ flutter build apk --debug
 flutter build ios --simulator --debug
 ```
 
-The iOS build command requires a complete Xcode installation. Signing settings
-and final store assets must be configured before release builds.
+The iOS build command requires a complete Xcode installation. iOS release
+signing and final store assets must be configured before store submission.
+
+To build and publish an Android APK manually, open **Actions → Android release
+→ Run workflow** and enter the GitHub release name and description. The workflow
+attaches `app-release.apk` to a GitHub release with a unique tag.
+
+The manual release workflow signs with a stable release keystore and requires
+these GitHub Actions repository secrets: `ANDROID_KEYSTORE_BASE64`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`.
+This checkout has an ignored keystore at `android/trakkar-upload-key.jks` and
+local credentials in `android/key.properties`. Create the base64 secret on macOS
+with `base64 -i android/trakkar-upload-key.jks | tr -d '\n'`; use the matching
+values from `android/key.properties` for the other secrets. Local release builds
+use that keystore when the properties file exists and fall back to the debug key
+otherwise. Keep the keystore and passwords backed up securely; the workflow does
+not commit them.
 
 ## Friend map live tracking
 

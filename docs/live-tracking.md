@@ -164,10 +164,10 @@ Push-provider credentials remain mounted at runtime from
 
 ## Android setup and behavior
 
-Add your Firebase Android app for `com.oneupbyte.trakkar`, download
-`google-services.json`, and place it in `android/app/`. It is ignored by Git. The
-Google Services Gradle plugin is applied only when that file exists. Without it,
-ordinary tracking still builds but FCM registration is unavailable.
+Add your Firebase Android app for `com.oneupbyte.trakkar` and place its
+`google-services.json` in `android/app/`. The Google Services Gradle plugin is
+applied only when that file exists. Without it, ordinary tracking still builds
+but FCM registration is unavailable.
 
 The native handler uses the SDK's existing configuration API. It only changes an
 already enabled tracker, and does not launch a foreground service or permission
