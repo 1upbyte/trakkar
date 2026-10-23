@@ -1,3 +1,6 @@
+import com.android.build.api.dsl.ApplicationExtension
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -7,13 +10,13 @@ plugins {
 // Firebase is optional until deployment configuration is supplied.
 if (file("google-services.json").exists()) apply(plugin = "com.google.gms.google-services")
 
-val keystoreProperties = java.util.Properties()
+val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
-android {
+extensions.configure<ApplicationExtension> {
     namespace = "com.oneupbyte.trakkar"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
