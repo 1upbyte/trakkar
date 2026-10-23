@@ -47,5 +47,3 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 
-# Firebase configuration remains local across checkouts.
-android/app/google-services.json

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "221203568859",
+    "project_id": "trakkar-app",
+    "storage_bucket": "trakkar-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:221203568859:android:84ef6a60c65ab5b81454fe",
+        "android_client_info": {
+          "package_name": "com.oneupbyte.trakkar"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJ5zuq8-CDXcesqIEwSxIl6lmBzf_leLE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
