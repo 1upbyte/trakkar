@@ -38,6 +38,11 @@ development.
 
 On a configured phone, open **Settings → Copy setup link**, then paste the link
 into a private message. The friend must already have Trakkar installed.
+If the messaging app does not make the link tappable, paste it into the
+**Setup link** field on Trakkar's login page and tap **Use setup link**.
+Beside **Copy setup link**, **Share QR code** displays a scannable code and
+offers **Share image** to send it through the system share sheet. The other
+phone can scan it with **Scan server code**; legacy server QR codes still work.
 
 The format is:
 

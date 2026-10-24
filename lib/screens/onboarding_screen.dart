@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../models/provisioning_config.dart';
 import '../user_facing_error.dart';
+import 'setup_link_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({this.initialConfig, super.key});
@@ -18,6 +19,7 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
+  final _setupLinkController = TextEditingController();
   final _clientUrlController = TextEditingController();
   final _liveTrackingUrlController = TextEditingController();
   final _managerUrlController = TextEditingController();
@@ -48,6 +50,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   void dispose() {
+    _setupLinkController.dispose();
     _clientUrlController.dispose();
     _managerUrlController.dispose();
     _liveTrackingUrlController.dispose();
@@ -62,6 +65,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (_handlingScan) return;
     _handlingScan = true;
     try {
+      if (value.trim().startsWith('trakkar:')) {
+        _openSetupLink(value);
+        setState(() => _scanning = false);
+        return;
+      }
       await context.read<AppState>().acceptQr(value);
       if (mounted) {
         setState(() {
@@ -78,6 +86,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       }
     } finally {
       _handlingScan = false;
+    }
+  }
+
+  void _openSetupLink(String value) {
+    final link = value.trim();
+    try {
+      ProvisioningConfig.fromSetupLink(link);
+      setState(() => _connectionError = null);
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/setup'),
+          builder: (_) => SetupLinkScreen(link: link),
+        ),
+      );
+    } on FormatException {
+      setState(() {
+        _connectionError = 'This setup link is invalid or incomplete.';
+      });
     }
   }
 
@@ -248,6 +274,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               icon: const Icon(Icons.qr_code_scanner_rounded),
               label: const Text('Scan server code'),
             ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _setupLinkController,
+            enabled: !state.busy,
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.go,
+            autocorrect: false,
+            enableSuggestions: false,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Setup link',
+              hintText: 'Paste your trakkar://setup link',
+              prefixIcon: Icon(Icons.link_rounded),
+            ),
+            onSubmitted: state.busy ? null : _openSetupLink,
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: state.busy
+                ? null
+                : () => _openSetupLink(_setupLinkController.text),
+            icon: const Icon(Icons.login_rounded),
+            label: const Text('Use setup link'),
           ),
           const SizedBox(height: 12),
           Center(

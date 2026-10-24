@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 import 'package:trakkar/app_state.dart';
+import 'package:trakkar/main.dart';
 import 'package:trakkar/models/provisioning_config.dart';
 import 'package:trakkar/screens/setup_link_screen.dart';
+import 'package:trakkar/screens/onboarding_screen.dart';
 
 class _SetupState extends AppState {
   int logins = 0;
@@ -91,8 +95,83 @@ void main() {
 
   testWidgets('malformed links show a safe error', (tester) async {
     await open(tester, 'trakkar://setup?data=invalid');
-    expect(find.text('This setup link is invalid or incomplete.'), findsOneWidget);
+    expect(
+      find.text('This setup link is invalid or incomplete.'),
+      findsOneWidget,
+    );
     expect(state.logins, 0);
     expect(state.resets, 0);
+  });
+
+  testWidgets('pasted setup link opens review without logging in', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: state,
+        child: const MaterialApp(home: Scaffold(body: OnboardingScreen())),
+      ),
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Setup link'),
+      ' $link ',
+    );
+    await tester.ensureVisible(find.text('Use setup link'));
+    await tester.tap(find.text('Use setup link'));
+    await tester.pumpAndSettle();
+    expect(find.text('Log in with this setup?'), findsOneWidget);
+    expect(state.logins, 0);
+    expect(state.resets, 0);
+  });
+
+  testWidgets('invalid pasted link shows safe error', (tester) async {
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: state,
+        child: const MaterialApp(home: Scaffold(body: OnboardingScreen())),
+      ),
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Setup link'),
+      'trakkar://setup?data=private-invalid-value',
+    );
+    await tester.ensureVisible(find.text('Use setup link'));
+    await tester.tap(find.text('Use setup link'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.text('This setup link is invalid or incomplete.'),
+    );
+    expect(find.byType(SetupLinkScreen), findsNothing);
+    expect(
+      find.text('This setup link is invalid or incomplete.'),
+      findsOneWidget,
+    );
+    expect(state.logins, 0);
+  });
+
+  testWidgets('full URI opens review at startup and while running', (
+    tester,
+  ) async {
+    final links = StreamController<Uri>();
+    addTearDown(links.close);
+    links.add(Uri.parse(link));
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: state,
+        child: TrakkarApp(setupLinks: links.stream),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Log in with this setup?'), findsOneWidget);
+    expect(state.logins, 0);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    links.add(Uri.parse('https://other.test'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SetupLinkScreen), findsNothing);
+    links.add(Uri.parse(link));
+    await tester.pumpAndSettle();
+    expect(find.text('Log in with this setup?'), findsOneWidget);
+    expect(state.logins, 0);
   });
 }

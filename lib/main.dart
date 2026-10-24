@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,18 +12,60 @@ import 'screens/setup_link_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  final links = AppLinks();
   final state = AppState();
-  runApp(ChangeNotifierProvider.value(value: state, child: const TrakkarApp()));
+  runApp(
+    ChangeNotifierProvider.value(
+      value: state,
+      child: TrakkarApp(setupLinks: links.uriLinkStream),
+    ),
+  );
   unawaited(state.bootstrap());
 }
 
-class TrakkarApp extends StatelessWidget {
-  const TrakkarApp({super.key});
+class TrakkarApp extends StatefulWidget {
+  const TrakkarApp({this.setupLinks, super.key});
+
+  final Stream<Uri>? setupLinks;
+
+  @override
+  State<TrakkarApp> createState() => _TrakkarAppState();
+}
+
+class _TrakkarAppState extends State<TrakkarApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription<Uri>? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    // app_links delivers the initial link as well as links received while open.
+    _subscription = widget.setupLinks?.listen(
+      (uri) {
+        if (uri.scheme != 'trakkar' || uri.host != 'setup') return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _navigatorKey.currentState?.push(_setupRoute(uri.toString()));
+        });
+        WidgetsBinding.instance.ensureVisualUpdate();
+      },
+      onError: (Object _) {
+        // Platform errors can contain credentials; do not log them.
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) => MaterialApp(
+        navigatorKey: _navigatorKey,
         title: 'trakkar',
         debugShowCheckedModeBanner: false,
         theme: _theme(Brightness.light),
@@ -32,14 +75,7 @@ class TrakkarApp extends StatelessWidget {
           ThemePreference.light => ThemeMode.light,
           ThemePreference.dark => ThemeMode.dark,
         },
-        onGenerateInitialRoutes: (initialRoute) => [
-          MaterialPageRoute<void>(
-            settings: const RouteSettings(name: '/'),
-            builder: (_) => const _AppHome(),
-          ),
-          if (initialRoute != '/') _setupRoute(initialRoute),
-        ],
-        onGenerateRoute: (settings) => _setupRoute(settings.name ?? ''),
+        home: const _AppHome(),
       ),
     );
   }

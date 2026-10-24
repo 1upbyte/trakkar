@@ -48,6 +48,9 @@ dependencies:
   # Building selection uses the decoder from this tested version.
   flutter_map_vector_tiles: 2.8.1
   image_cropper: ^12.2.1
+  app_links: ^7.2.2
+  qr_flutter: ^4.1.0
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_test:
