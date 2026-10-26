@@ -47,14 +47,44 @@ void main() {
     expect(jsonDecode(requests.last.body)['deviceIds'], [12, 13]);
     expect(requests.first.headers['X-Traccar-Session'], 'JSESSIONID=test');
     expect(native.any((call) => call.method == 'register'), isTrue);
+    expect(native.where((call) => call.method == 'reconcile').length, 1);
     await tester.pump(const Duration(seconds: 15));
     expect(requests.where((r) => r.method == 'PUT').length, 2);
     expect(requests.where((r) => r.method == 'POST').length, 1);
+    expect(native.where((call) => call.method == 'reconcile').length, 2);
     service.setVisible(false);
     await tester.pump();
     expect(requests.last.method, 'DELETE');
     await tester.pump(const Duration(seconds: 45));
     expect(requests.where((r) => r.method == 'PUT').length, 2);
+    expect(native.where((call) => call.method == 'reconcile').length, 2);
+    service.dispose();
+  });
+
+  testWidgets('failed view renewal does not activate native live tracking', (
+    tester,
+  ) async {
+    final native = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          native.add(call);
+          return call.method == 'pushToken' ? 'native-push-token' : null;
+        });
+    final service = LiveTrackingService(
+      sessionCookie: 'JSESSIONID=test',
+      uniqueId: 'local-phone',
+      endpoint: 'https://live.test',
+      client: MockClient((request) async {
+        return request.method == 'POST'
+            ? http.Response('{"deviceId":12,"deviceToken":"scoped-token"}', 200)
+            : http.Response('{}', 503);
+      }),
+    );
+    service.setDevices([12]);
+    service.setVisible(true);
+    await tester.pump();
+    expect(native.any((call) => call.method == 'register'), isTrue);
+    expect(native.any((call) => call.method == 'reconcile'), isFalse);
     service.dispose();
   });
 

@@ -1,6 +1,7 @@
 package com.oneupbyte.trakkar.live
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.traccar.client.*
@@ -51,31 +52,49 @@ object LiveTrackingController {
     }
 
     fun kick(context: Context, until: Long) {
-        if (until <= System.currentTimeMillis() || until > System.currentTimeMillis() + 60000) return
+        if (until <= System.currentTimeMillis() || until > System.currentTimeMillis() + 60000) {
+            Log.w("TrakkarLive", "activation_rejected reason=expiry_out_of_range")
+            return
+        }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (prefs.getString("token", null) == null) return
+        if (prefs.getString("token", null) == null) {
+            Log.w("TrakkarLive", "activation_rejected reason=not_registered")
+            return
+        }
         expiresAt = maxOf(expiresAt, until)
         if (job?.isActive == true) return
         val epoch = ++generation
         job = scope.launch {
             try {
-                val tracker = sharedTracker() ?: return@launch
+                val tracker = sharedTracker() ?: run {
+                    Log.w("TrakkarLive", "activation_rejected reason=tracker_unavailable")
+                    return@launch
+                }
                 // Do not restart tracking that the person has stopped.
-                if (!tracker.state.value.enabled) return@launch
-                val base = baseline(context) ?: return@launch
+                if (!tracker.state.value.enabled) {
+                    Log.w("TrakkarLive", "activation_rejected reason=tracking_disabled")
+                    return@launch
+                }
+                val base = baseline(context) ?: run {
+                    Log.w("TrakkarLive", "activation_rejected reason=baseline_missing")
+                    return@launch
+                }
                 prefs.edit().putBoolean("temporary", true).commit()
                 tracker.updateConfig(base.copy(location = base.location.copy(
                     accuracy = Accuracy.HIGH, distanceMeters = 0, intervalSeconds = 5,
                     angleDegrees = 0, stopDetection = false,
                 )))
+                Log.i("TrakkarLive", "live_profile_activated")
                 while (isActive && epoch == generation && System.currentTimeMillis() < expiresAt) {
                     val remaining = expiresAt - System.currentTimeMillis()
                     delay(minOf(10000L, remaining).coerceAtLeast(1))
                     // Failures do not extend the old lease. Server cancellation shortens it.
                     fetchExpiry(context)?.let { expiresAt = it }
                 }
+            } catch (error: CancellationException) {
+                throw error
             } catch (_: Exception) {
-                // Ordinary tracking continues; no credential or location logging.
+                Log.w("TrakkarLive", "live_profile_failed")
             } finally {
                 if (epoch == generation) withContext(NonCancellable) { restore(context) }
             }
@@ -101,6 +120,7 @@ object LiveTrackingController {
         try {
             sharedTracker()?.updateConfig(base)
             prefs.edit().putBoolean("temporary", false).commit()
+            Log.i("TrakkarLive", "baseline_restored")
         } catch (_: Exception) { /* retry on next process launch */ }
         expiresAt = 0
     }

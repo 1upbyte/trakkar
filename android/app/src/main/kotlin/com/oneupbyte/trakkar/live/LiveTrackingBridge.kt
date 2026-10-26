@@ -11,6 +11,10 @@ object LiveTrackingBridge {
     fun install(context: Context, messenger: BinaryMessenger) {
         MethodChannel(messenger, "trakkar/live_tracking").setMethodCallHandler { call, result ->
             when (call.method) {
+                "reconcile" -> {
+                    LiveTrackingController.reconcile(context)
+                    result.success(null)
+                }
                 "configure" -> CoroutineScope(Dispatchers.Main).launch {
                     LiveTrackingController.configure(context, call.arguments as Map<*, *>)
                     LiveTrackingController.reconcile(context)

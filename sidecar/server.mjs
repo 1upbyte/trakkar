@@ -19,6 +19,7 @@ export function createSidecar({managerUrl,database = ':memory:',push = new PushS
   const inFlight = new Set();
   const activeKicks = new Map();
   const rate = new Map();
+  const diagnostic = (event, fields = {}) => console.info(JSON.stringify({event, ...fields}));
   async function traccar(path,cookie) {
     const response = await fetcher(`${managerUrl.replace(/\/$/,'')}/api/${path}`, {
       headers:{Cookie:cookie,Accept:'application/json'},signal:AbortSignal.timeout(10000),redirect:'error',
@@ -68,21 +69,33 @@ export function createSidecar({managerUrl,database = ':memory:',push = new PushS
   }
   async function send(deviceId) {
     const device=db.prepare('SELECT * FROM registrations WHERE deviceId=?').get(deviceId);
-    if (!device || inFlight.has(deviceId)) return;
+    if (!device || inFlight.has(deviceId)) {
+      diagnostic('push_skipped', {deviceId, reason: !device ? 'not_registered' : 'in_flight'});
+      return;
+    }
     const until=leases.until(deviceId);
-    if ((activeKicks.get(deviceId) ?? 0)>now()) return;
+    if ((activeKicks.get(deviceId) ?? 0)>now()) {
+      diagnostic('push_skipped', {deviceId, reason: 'active_session'});
+      return;
+    }
     const interval=device.platform==='ios' ? 180000 : 15000;
-    if (device.lastPush && now()-device.lastPush<interval) return;
+    if (device.lastPush && now()-device.lastPush<interval) {
+      diagnostic('push_skipped', {deviceId, reason: 'cooldown'});
+      return;
+    }
     if (until<=now()) return;
     inFlight.add(deviceId);
+    diagnostic('push_attempt', {deviceId, platform: device.platform, expiresAt: until});
     try {
       await push.send(device,until);
+      diagnostic('push_accepted', {deviceId, platform: device.platform});
       const updated=db.prepare('UPDATE registrations SET lastPush=? WHERE deviceId=? AND accessHash=?')
         .run(now(),deviceId,device.accessHash);
       if (updated.changes) activeKicks.set(deviceId,leases.until(deviceId));
     } catch (error) {
       // Only a safe error category; never print session cookies or push tokens.
-      console.error('Live tracking push failed:', /^((fcm|apns)_\w+)$/.test(error.message) ? error.message : 'provider_error');
+      console.error(JSON.stringify({event: 'push_failed', deviceId, platform: device.platform,
+        reason: /^((fcm|apns)_\w+)$/.test(error.message) ? error.message : 'provider_error'}));
     } finally {
       inFlight.delete(deviceId);
       const current=db.prepare('SELECT accessHash FROM registrations WHERE deviceId=?').get(deviceId);
@@ -101,6 +114,7 @@ export function createSidecar({managerUrl,database = ':memory:',push = new PushS
         const device=db.prepare('SELECT * FROM registrations WHERE accessHash=?').get(hash(token));
         if (!device) throw fail(401);
         const until=leases.until(device.deviceId);
+        diagnostic('device_session_checked', {deviceId: device.deviceId, active: until>now(), expiresAt: until});
         if (until>now()) activeKicks.set(device.deviceId,until);
         response.end(JSON.stringify({expiresAt:until,serverTime:now()}));return;
       }
@@ -127,6 +141,7 @@ export function createSidecar({managerUrl,database = ':memory:',push = new PushS
           .run(device.id,user.id,input.platform,input.pushToken,hash(token));
         response.end(JSON.stringify({deviceId:device.id,deviceToken:token}));
         activeKicks.delete(device.id);
+        diagnostic('device_registered', {deviceId: device.id, platform: input.platform});
         void send(device.id);return;
       }
       if (path==='/v1/devices' && request.method==='DELETE') {

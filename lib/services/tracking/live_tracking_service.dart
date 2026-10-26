@@ -174,13 +174,23 @@ class LiveTrackingService {
     try {
       await register();
       if (!_visible || _disposed || _resetting) return;
-      await _client
+      final response = await _client
           .put(
             _uri('/v1/views/$_viewId'),
             headers: _headers,
             body: jsonEncode({'deviceIds': _devices.toList()}),
           )
           .timeout(const Duration(seconds: 10));
+      // The open Android app can recover a missed/delayed FCM activation by
+      // reading its own authorized lease after the viewer lease exists.
+      if (response.statusCode == 200 &&
+          defaultTargetPlatform == TargetPlatform.android &&
+          _registeredDeviceId != null &&
+          _visible &&
+          !_disposed &&
+          !_resetting) {
+        await channel.invokeMethod<void>('reconcile');
+      }
     } on Object {
       debugPrint('Live tracking session renewal unavailable.');
     } finally {

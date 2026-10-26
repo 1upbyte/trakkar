@@ -172,7 +172,14 @@ but FCM registration is unavailable.
 The native handler uses the SDK's existing configuration API. It only changes an
 already enabled tracker, and does not launch a foreground service or permission
 prompt from a push. The existing Traccar foreground location service carries the
-ongoing tracking work. The handler rejects expired or excessively long requests;
+ongoing tracking work.
+While the Android map is visible, each successful viewer renewal also asks the
+native controller to check this phone's authorized device session. This recovers
+from a missed or delayed activation push without restarting stopped tracking.
+The controller still reads the device-scoped lease; the viewer response cannot
+activate a device directly.
+
+The handler rejects expired or excessively long requests;
 the server can renew the active session only in bounded 30-second increments.
 
 A temporary-profile marker is persisted before switching. On process startup the
@@ -256,6 +263,23 @@ API requests fail closed if Traccar is unavailable. Device renewals use scoped
 opaque tokens and calculate remaining lease time against the server clock.
 
 ## Verification
+
+To diagnose Android activation, deploy a sidecar image containing the diagnostic
+logging and install the matching Android build. Watch the server with
+`docker compose logs -f --timestamps live-tracking` and the connected phone with
+`adb logcat -s TrakkarLive:I '*:S'`. Close all viewer maps for at least 35 seconds,
+then open a map showing the tracked device. For an isolated background push test,
+keep the tracked phone's map closed and use a second phone as the viewer.
+
+The sidecar logs `device_registered`, `push_attempt`, `push_accepted`,
+`push_failed`, and `push_skipped` with a device ID and safe reason where relevant.
+`push_accepted` means the provider accepted the request, not that Android received
+it. `device_session_checked` records the phone reading its lease; the foreground
+fallback can also cause this event, so it does not prove push delivery.
+Android logs `push_received`, `activation_rejected` with a reason, and
+`live_profile_activated`. Logs omit credentials, push tokens, and coordinates.
+If activation succeeds but positions remain stale, inspect the SDK logs for
+location collection and upload failures next.
 
 Automated checks:
 
