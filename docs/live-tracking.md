@@ -1,9 +1,16 @@
 # Friend map live tracking
 
-Opening the Map tab requests a short-lived live tracking session for the devices
-shown on the map. The app renews that session every 15 seconds while the tab is
-visible and the app is resumed. Leaving the tab or backgrounding the app releases
-the session. A disconnected viewer's session expires after 30 seconds.
+When a live-tracking URL is configured, opening the Map tab requests a short-lived
+live tracking session for all devices in the account's device list, including the
+viewer's own phone if present. Those phones can enter live tracking even when
+their own maps are closed. The app renews that session every 15 seconds while the
+tab is visible and the app is resumed. These renewals maintain the viewing session;
+positions arrive through `/api/socket`, with no separate 15-second position polling
+or 30-second local location timer. Leaving the tab or backgrounding the app releases
+the session. A disconnected viewer's session expires after 30 seconds. Phones
+restore normal tracking once all viewers' sessions end, as detected by the native
+lease check or expiry. Without a live-tracking URL, map visibility does not change
+the normal tracking profile.
 
 The Docker sidecar authenticates each viewer against Traccar and verifies access
 to every requested device. Multiple viewers share a device session: one viewer
@@ -11,8 +18,9 @@ leaving does not stop another viewer's session. A push starts a session; devices
 then check the sidecar every 10 seconds to obtain renewals or cancellation. There
 is no push per location update or per viewer renewal. The native temporary profile
 requests high accuracy, zero distance threshold, a five-second interval, and no
-stationary stop detection. The normal profile restores medium accuracy, 100 metres,
-600 seconds, and the SDK's normal stop detection. These are SDK inputs: iOS can
+stationary stop detection. The normal profile restores medium accuracy, zero distance
+filter, 600 seconds, and the SDK's normal stop detection. A positive distance filter
+would make SDK 1.0.11 override the interval with zero. These are SDK inputs: iOS can
 report each available fix when the distance threshold is zero, and neither OS
 guarantees a five-second cadence.
 

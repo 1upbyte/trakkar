@@ -62,7 +62,9 @@ class TrackerService {
       deviceId: deviceId,
       location: const LocationConfig(
         accuracy: Accuracy.medium,
-        distanceMeters: 100,
+        // SDK 1.0.11 forces intervalSeconds to zero for any positive distance.
+        // Use time-based updates so Android requests retain this interval.
+        distanceMeters: 0,
         intervalSeconds: 600,
         stopDetection: true,
         stopTimeoutSeconds: 120,

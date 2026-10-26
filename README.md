@@ -105,13 +105,25 @@ The app loads initial state from `GET /api/devices`, `GET /api/positions`,
 `GET /api/geofences`, and `GET /api/server`, then consumes live `devices` and
 `positions` updates from `/api/socket` while the app is visible. The manager
 socket closes in the background and reconnects on resume; repeated failures use
-an exponential backoff capped at five minutes. While the map tab is visible and
-the app is in the foreground, this phone asks the tracking SDK for a fresh
-position every 30 seconds and polls all server positions every 15 seconds.
-Polling stops when the map is hidden or the app leaves the foreground. Normal
-background tracking uses a 10-minute/100-metre request. After two stationary
-minutes the SDK pauses frequent GPS work and monitors a 100-metre stationary
-region so leaving it wakes tracking again.
+an exponential backoff capped at five minutes.
+
+When live tracking is configured, opening the Map tab in the foreground requests
+live tracking for the account's devices, including this phone if it is in that
+list. Participating phones temporarily request location updates every five
+seconds, even if their own maps are closed. Viewer sessions renew every 15 seconds;
+this renews the live tracking request rather than polling positions. Map positions
+arrive through `/api/socket`. There is no separate 30-second location timer or
+15-second position polling loop. Leaving the Map tab or backgrounding the app
+releases that viewer's session. Once all viewers leave or their sessions expire,
+phones restore normal tracking. Without a live-tracking URL, opening the map
+does not change the tracking profile.
+
+Normal background tracking requests time-based 10-minute updates with no distance filter.
+The SDK overrides the interval with zero when a positive distance filter is set.
+Android uses that interval for native location requests; iOS controls its own
+location delivery cadence. After two stationary minutes the SDK pauses frequent
+GPS work and monitors a 100-metre stationary region so leaving it wakes tracking
+again.
 
 People appear as screen-upright profile-picture circles without permanent name
 labels, even when the map is rotated. The default view centers on this phone's
@@ -142,9 +154,9 @@ After driving begins, the car indicator remains until a full minute of newly
 reported sub-10 mph speed has elapsed, preventing short stops and GPS jitter
 from flipping the icon. Motion uses the standard Traccar position attribute
 when available and also requires at least 1 mph. The official Traccar
-Client SDK is configured for 100-metre / 10-minute movement updates and retains
-its stop detection to pause frequent GPS work while stationary. The visible
-map still requests a fresh position every 30 seconds.
+Client SDK retains stop detection in the normal background profile to pause
+frequent GPS work while stationary; the temporary live tracking profile disables
+stop detection.
 
 Use the bottom sheet or long-press the map to create a named place and choose
 its radius. These names are tagged circular Traccar geofences, so every app

@@ -56,8 +56,9 @@ public struct LiveTrackingState: Codable {
   }
 
   func config(live: Bool) -> Config {
-    Config(serverUrl: serverUrl, deviceId: deviceId,
-      location: LocationConfig(accuracy: live ? .high : .medium, distanceMeters: live ? 0 : 100,
+    // A positive distance makes the SDK discard intervalSeconds.
+    return Config(serverUrl: serverUrl, deviceId: deviceId,
+      location: LocationConfig(accuracy: live ? .high : .medium, distanceMeters: 0,
         intervalSeconds: live ? 5 : 600, angleDegrees: 0, stopDetection: !live,
         stopTimeoutSeconds: 120, stationaryRadiusMeters: 100, heartbeatIntervalSeconds: 0),
       wakeLock: false, buffer: true, preferPlatformProviders: false,
