@@ -7,7 +7,7 @@ import {PushSender} from './push.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const fail = status => Object.assign(new Error('request_failed'),{status});
-export function createSidecar({managerUrl,database = ':memory:',push = new PushSender(),fetcher = fetch,now = Date.now} = {}) {
+export function createSidecar({managerUrl,database = ':memory:',push = new PushSender(),fetcher = fetch,now = Date.now,env = process.env} = {}) {
   if (!managerUrl) throw new Error('TRACCAR_MANAGER_URL is required');
   const db = new DatabaseSync(database);
   db.exec(`CREATE TABLE IF NOT EXISTS registrations (
@@ -19,7 +19,10 @@ export function createSidecar({managerUrl,database = ':memory:',push = new PushS
   const inFlight = new Set();
   const activeKicks = new Map();
   const rate = new Map();
-  const diagnostic = (event, fields = {}) => console.info(JSON.stringify({event, ...fields}));
+  const debug = env.TRAKKAR_DEUG === '1';
+  const diagnostic = (event, fields = {}, level = 'info') => {
+    if (debug) console[level](JSON.stringify({event, ...fields}));
+  };
   async function traccar(path,cookie) {
     const response = await fetcher(`${managerUrl.replace(/\/$/,'')}/api/${path}`, {
       headers:{Cookie:cookie,Accept:'application/json'},signal:AbortSignal.timeout(10000),redirect:'error',
@@ -94,8 +97,8 @@ export function createSidecar({managerUrl,database = ':memory:',push = new PushS
       if (updated.changes) activeKicks.set(deviceId,leases.until(deviceId));
     } catch (error) {
       // Only a safe error category; never print session cookies or push tokens.
-      console.error(JSON.stringify({event: 'push_failed', deviceId, platform: device.platform,
-        reason: /^((fcm|apns)_\w+)$/.test(error.message) ? error.message : 'provider_error'}));
+      diagnostic('push_failed', {deviceId, platform: device.platform,
+        reason: /^((fcm|apns)_\w+)$/.test(error.message) ? error.message : 'provider_error'}, 'error');
     } finally {
       inFlight.delete(deviceId);
       const current=db.prepare('SELECT accessHash FROM registrations WHERE deviceId=?').get(deviceId);

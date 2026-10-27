@@ -27,10 +27,10 @@ const installationToken='a'.repeat(43);
 const replacementToken='b'.repeat(43);
 const registration={uniqueId:'phone',platform:'android',pushToken:'valid-push-token-123',installationToken};
 
-async function fixture(t,{database=':memory:',push} = {}) {
+async function fixture(t,{database=':memory:',push,env} = {}) {
   let now=1000000;
   const pushes=[];
-  const server=createSidecar({managerUrl:'http://traccar:8082',database,now:()=>now,
+  const server=createSidecar({managerUrl:'http://traccar:8082',database,now:()=>now,env,
     push:push ?? {send:async(device,until)=>pushes.push({deviceId:device.deviceId,pushToken:device.pushToken,until})},
     fetcher:async(url,options)=> {
       const user=options.headers.Cookie==='JSESSIONID=owner' ? 1 : 2;
@@ -45,6 +45,39 @@ async function fixture(t,{database=':memory:',push} = {}) {
     headers:{'X-Traccar-Session':`JSESSIONID=${user}`,'Content-Type':'application/json'},
     body:body===undefined ? undefined : JSON.stringify(body)});
   return {call,base,pushes,server,advance:ms=>{now+=ms;}};
+}
+
+for (const value of [undefined,'0','true','1']) {
+  test(`diagnostics require TRAKKAR_DEUG=1 (value: ${value ?? 'unset'})`,async t=> {
+    const info=t.mock.method(console,'info',()=>{});
+    const error=t.mock.method(console,'error',()=>{});
+    let reject=false;
+    const {call,base,advance}=await fixture(t,{
+      env:value===undefined ? {} : {TRAKKAR_DEUG:value},
+      push:{send:async()=>{if (reject) throw new Error('sensitive provider response');}},
+    });
+    const {deviceToken}=await (await call('/v1/devices','POST',registration)).json();
+    const view='/v1/views/abcdefghijklmnop';
+    await call(view,'PUT',{deviceIds:[10]});
+    await call(view,'PUT',{deviceIds:[10]});
+    await fetch(base+'/v1/device-session',{headers:{Authorization:`Bearer ${deviceToken}`}});
+    reject=true;
+    advance(30001);
+    await call(view,'PUT',{deviceIds:[10]});
+    await new Promise(resolve=>setImmediate(resolve));
+    if (value==='1') {
+      const events=info.mock.calls.map(call=>JSON.parse(call.arguments[0]).event);
+      for (const event of ['device_registered','push_skipped','push_attempt','push_accepted','device_session_checked']) {
+        assert.ok(events.includes(event),event);
+      }
+      assert.deepEqual(error.mock.calls.map(call=>JSON.parse(call.arguments[0])),[
+        {event:'push_failed',deviceId:10,platform:'android',reason:'provider_error'},
+      ]);
+    } else {
+      assert.equal(info.mock.callCount(),0);
+      assert.equal(error.mock.callCount(),0);
+    }
+  });
 }
 
 test('registration automatically claims accessible devices without an owner mapping',async t=> {

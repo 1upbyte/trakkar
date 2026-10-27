@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     environment:
       PORT: "8080"
+      TRAKKAR_DEUG: "${TRAKKAR_DEUG:-0}"
       TRACCAR_MANAGER_URL: "http://traccar:8082"
       DATABASE_PATH: "/data/live-tracking.sqlite"
       FCM_SERVICE_ACCOUNT_FILE: "/run/secrets/firebase-service-account.json"

@@ -272,8 +272,12 @@ opaque tokens and calculate remaining lease time against the server clock.
 
 ## Verification
 
-To diagnose Android activation, deploy a sidecar image containing the diagnostic
-logging and install the matching Android build. Watch the server with
+To diagnose Android activation, enable sidecar diagnostics with
+`docker run -e TRAKKAR_DEUG=1 ...`, or start Compose with
+`TRAKKAR_DEUG=1 docker compose up -d live-tracking`. The variable name is
+`TRAKKAR_DEUG`; only the exact value `1` enables diagnostics, and they are off by
+default. Install an Android **debug** build (`flutter build apk --debug`);
+release and profile builds omit these Android diagnostic logs. Watch the server with
 `docker compose logs -f --timestamps live-tracking` and the connected phone with
 `adb logcat -s TrakkarLive:I '*:S'`. Close all viewer maps for at least 35 seconds,
 then open a map showing the tracked device. For an isolated background push test,

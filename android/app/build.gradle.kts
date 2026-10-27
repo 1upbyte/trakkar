@@ -21,6 +21,10 @@ extensions.configure<ApplicationExtension> {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     if (keystorePropertiesFile.exists()) {
         signingConfigs {
             create("release") {

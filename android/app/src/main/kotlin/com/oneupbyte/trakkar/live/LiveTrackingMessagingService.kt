@@ -3,13 +3,14 @@ package com.oneupbyte.trakkar.live
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import android.util.Log
+import com.oneupbyte.trakkar.BuildConfig
 
 class LiveTrackingMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         if (message.data["type"] != "live_tracking") return
-        Log.i("TrakkarLive", "push_received")
+        if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.i("TrakkarLive", "push_received")
         val until = message.data["expiresAt"]?.toLongOrNull() ?: run {
-            Log.w("TrakkarLive", "push_rejected reason=invalid_expiry")
+            if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.w("TrakkarLive", "push_rejected reason=invalid_expiry")
             return
         }
         LiveTrackingController.kick(applicationContext, until)

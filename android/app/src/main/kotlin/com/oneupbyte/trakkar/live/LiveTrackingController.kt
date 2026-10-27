@@ -2,6 +2,7 @@ package com.oneupbyte.trakkar.live
 
 import android.content.Context
 import android.util.Log
+import com.oneupbyte.trakkar.BuildConfig
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.traccar.client.*
@@ -53,12 +54,12 @@ object LiveTrackingController {
 
     fun kick(context: Context, until: Long) {
         if (until <= System.currentTimeMillis() || until > System.currentTimeMillis() + 60000) {
-            Log.w("TrakkarLive", "activation_rejected reason=expiry_out_of_range")
+            if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.w("TrakkarLive", "activation_rejected reason=expiry_out_of_range")
             return
         }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getString("token", null) == null) {
-            Log.w("TrakkarLive", "activation_rejected reason=not_registered")
+            if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.w("TrakkarLive", "activation_rejected reason=not_registered")
             return
         }
         expiresAt = maxOf(expiresAt, until)
@@ -67,16 +68,16 @@ object LiveTrackingController {
         job = scope.launch {
             try {
                 val tracker = sharedTracker() ?: run {
-                    Log.w("TrakkarLive", "activation_rejected reason=tracker_unavailable")
+                    if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.w("TrakkarLive", "activation_rejected reason=tracker_unavailable")
                     return@launch
                 }
                 // Do not restart tracking that the person has stopped.
                 if (!tracker.state.value.enabled) {
-                    Log.w("TrakkarLive", "activation_rejected reason=tracking_disabled")
+                    if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.w("TrakkarLive", "activation_rejected reason=tracking_disabled")
                     return@launch
                 }
                 val base = baseline(context) ?: run {
-                    Log.w("TrakkarLive", "activation_rejected reason=baseline_missing")
+                    if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.w("TrakkarLive", "activation_rejected reason=baseline_missing")
                     return@launch
                 }
                 prefs.edit().putBoolean("temporary", true).commit()
@@ -84,7 +85,7 @@ object LiveTrackingController {
                     accuracy = Accuracy.HIGH, distanceMeters = 0, intervalSeconds = 5,
                     angleDegrees = 0, stopDetection = false,
                 )))
-                Log.i("TrakkarLive", "live_profile_activated")
+                if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.i("TrakkarLive", "live_profile_activated")
                 while (isActive && epoch == generation && System.currentTimeMillis() < expiresAt) {
                     val remaining = expiresAt - System.currentTimeMillis()
                     delay(minOf(10000L, remaining).coerceAtLeast(1))
@@ -94,7 +95,7 @@ object LiveTrackingController {
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                Log.w("TrakkarLive", "live_profile_failed")
+                if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.w("TrakkarLive", "live_profile_failed")
             } finally {
                 if (epoch == generation) withContext(NonCancellable) { restore(context) }
             }
@@ -120,7 +121,7 @@ object LiveTrackingController {
         try {
             sharedTracker()?.updateConfig(base)
             prefs.edit().putBoolean("temporary", false).commit()
-            Log.i("TrakkarLive", "baseline_restored")
+            if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.i("TrakkarLive", "baseline_restored")
         } catch (_: Exception) { /* retry on next process launch */ }
         expiresAt = 0
     }
