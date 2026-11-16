@@ -30,14 +30,19 @@ public struct LiveTrackingState: Codable {
     guard let url, let data = try? Data(contentsOf: url) else { return nil }
     return try? JSONDecoder().decode(Self.self, from: data)
   }
-  public func save(creating: Bool = false, expectedRevision: String? = nil) throws {
+  public mutating func save(creating: Bool = false, expectedRevision: String? = nil) throws {
+    var saved = self
+    saved.revision = UUID().uuidString
     try Self.withLock {
       guard let url = Self.url else { throw LiveTrackingError.appGroupUnavailable }
       guard creating || Self.load()?.revision == (expectedRevision ?? revision) else {
         throw LiveTrackingError.stateChanged
       }
-      try JSONEncoder().encode(self).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+      try JSONEncoder().encode(saved).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
+    // Only advance the caller's snapshot after the write succeeds. Every save
+    // invalidates snapshots held across awaits or by the other process.
+    self = saved
   }
   public static func clear() throws {
     try withLock {
@@ -121,7 +126,7 @@ public final class LiveTrackingCoordinator {
     guard var state = LiveTrackingState.load() else { return }
     let revision = state.revision
     state.enabled = enabled
-    if !enabled { state.expiresAt = 0; state.revision = UUID().uuidString }
+    if !enabled { state.expiresAt = 0 }
     try state.save(expectedRevision: revision)
     updateAuthorization(enabled: enabled)
     if enabled { resume() } else { await stop() }
@@ -173,7 +178,8 @@ public final class LiveTrackingCoordinator {
           if state.expiresAt <= now { break }
           let sleep = min(10_000, state.expiresAt - now)
           try await Task.sleep(nanoseconds: UInt64(max(1, sleep)) * 1_000_000)
-          if let expiry = await state.fetchExpiry(), var latest = LiveTrackingState.load() {
+          if let expiry = await state.fetchExpiry(), var latest = LiveTrackingState.load(),
+             latest.revision == state.revision {
             latest.expiresAt = expiry
             try latest.save()
           }
