@@ -65,7 +65,6 @@ class _MapScreenState extends State<MapScreen>
   Timer? _buildingRefresh;
   String? _buildingError;
   final List<BuildingFootprint> _selectedBuildings = [];
-  double _rotation = 0;
   final List<LatLng> _draftBoundary = <LatLng>[];
   PersistentBottomSheetController? _personSheetController;
 
@@ -599,10 +598,8 @@ class _MapScreenState extends State<MapScreen>
                   final zoomChanged = _zoom != camera.zoom;
                   _zoom = camera.zoom;
                   _scheduleBuildings();
-                  if (zoomChanged ||
-                      wasSatelliteZoom != isSatelliteZoom ||
-                      _rotation != camera.rotation) {
-                    setState(() => _rotation = camera.rotation);
+                  if (zoomChanged || wasSatelliteZoom != isSatelliteZoom) {
+                    setState(() {});
                   }
                 },
                 onLongPress: _drawingPlace
@@ -836,59 +833,15 @@ class _MapScreenState extends State<MapScreen>
             ),
           if (!_drawingPlace)
             Positioned(
-              top: MediaQuery.paddingOf(context).top + 14,
               right: 16,
-              child: Column(
-                children: [
-                  FloatingActionButton.small(
-                    heroTag: 'refreshMap',
-                    onPressed: state.refresh,
-                    tooltip: 'Refresh positions',
-                    child: const Icon(Icons.refresh),
-                  ),
-                  const SizedBox(height: 10),
-                  FloatingActionButton.small(
-                    heroTag: 'fitMap',
-                    onPressed: () => _fitPositions(state),
-                    tooltip: 'Show everyone',
-                    child: const Icon(Icons.zoom_out_map_rounded),
-                  ),
-                ],
+              bottom: 32,
+              child: FloatingActionButton.small(
+                heroTag: 'fitMap',
+                onPressed: () => _fitPositions(state),
+                tooltip: 'Show everyone',
+                child: const Icon(Icons.zoom_out_map_rounded),
               ),
             ),
-          Positioned(
-            right: 16,
-            bottom: _drawingPlace ? 190 : 32,
-            child: FloatingActionButton.small(
-              heroTag: 'compass',
-              tooltip: 'Point north',
-              onPressed: () => _animateCamera(
-                _mapController.camera.center,
-                _zoom,
-                rotation: 0,
-              ),
-              child: Transform.rotate(
-                angle: _rotation * math.pi / 180,
-                child: const Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'N',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Icon(
-                      Icons.north_rounded,
-                      size: 24,
-                      color: Colors.redAccent,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
           if (_drawingPlace)
             Positioned(
               left: 16,
