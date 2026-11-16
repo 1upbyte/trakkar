@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../widgets/platform_controls.dart';
+import '../widgets/liquid_glass.dart';
 import 'map_screen.dart';
 import 'people_screen.dart';
 import 'places_screen.dart';
@@ -69,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (!didPop && _index != 0) _selectDestination(0);
       },
       child: Scaffold(
+        extendBody: isIOS(context),
         body: Stack(
           children: [
             _TabStack(
@@ -112,31 +115,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
           ],
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: _selectDestination,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.map_outlined),
-              selectedIcon: Icon(Icons.map_rounded),
-              label: 'Map',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.group_outlined),
-              selectedIcon: Icon(Icons.group_rounded),
-              label: 'People',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.place_outlined),
-              selectedIcon: Icon(Icons.place_rounded),
-              label: 'Places',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.tune_rounded),
-              label: 'Settings',
-            ),
-          ],
-        ),
+        bottomNavigationBar: isIOS(context)
+            ? LiquidGlassTabBar(currentIndex: _index, onTap: _selectDestination)
+            : NavigationBar(
+                selectedIndex: _index,
+                onDestinationSelected: _selectDestination,
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.map_outlined),
+                    selectedIcon: Icon(Icons.map_rounded),
+                    label: 'Map',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.group_outlined),
+                    selectedIcon: Icon(Icons.group_rounded),
+                    label: 'People',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.place_outlined),
+                    selectedIcon: Icon(Icons.place_rounded),
+                    label: 'Places',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.tune_rounded),
+                    label: 'Settings',
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -193,12 +198,12 @@ class _TrackingHealthBanner extends StatelessWidget {
                 if (health.needsLocation ||
                     health.needsPreciseLocation ||
                     health.needsActivity)
-                  TextButton(
+                  PlatformButton.text(
                     onPressed: state.openLocationSettings,
                     child: const Text('Permission settings'),
                   ),
                 if (health.needsBattery)
-                  TextButton(
+                  PlatformButton.text(
                     onPressed: state.openBatterySettings,
                     child: const Text('Battery settings'),
                   ),

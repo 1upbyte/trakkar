@@ -1,7 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../widgets/platform_controls.dart';
 
 class PlacesScreen extends StatelessWidget {
   const PlacesScreen({this.selectedPlaceId, this.onAdd, super.key});
@@ -37,10 +39,44 @@ class PlacesScreen extends StatelessWidget {
                         child: Text(
                           'Named places',
                           style: Theme.of(context).textTheme.headlineMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                              ?.copyWith(
+                                fontWeight: isIOS(context)
+                                    ? FontWeight.w700
+                                    : FontWeight.w800,
+                              ),
                         ),
                       ),
-                      if (onAdd != null)
+                      if (onAdd != null && isIOS(context))
+                        CupertinoButton(
+                          padding: const EdgeInsets.all(12),
+                          onPressed: () async {
+                            final auto = await showCupertinoModalPopup<bool>(
+                              context: context,
+                              builder: (context) => CupertinoActionSheet(
+                                title: const Text('Add place'),
+                                actions: [
+                                  CupertinoActionSheetAction(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text('Auto'),
+                                  ),
+                                  CupertinoActionSheetAction(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('Manual'),
+                                  ),
+                                ],
+                                cancelButton: CupertinoActionSheetAction(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Cancel'),
+                                ),
+                              ),
+                            );
+                            if (auto != null) onAdd!(auto);
+                          },
+                          child: const Text('Add'),
+                        )
+                      else if (onAdd != null)
                         PopupMenuButton<bool>(
                           tooltip: 'Add place',
                           onSelected: onAdd,
@@ -106,28 +142,30 @@ class PlacesScreen extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
-                        '${place.isPolygon ? 'Drawn area  •  ${place.boundary.length} corners' : '${place.latitude.toStringAsFixed(5)}, '
+                        place.isPolygon
+                            ? 'Drawn area  •  ${place.boundary.length} corners'
+                            : '${place.latitude.toStringAsFixed(5)}, '
                                   '${place.longitude.toStringAsFixed(5)}  •  '
-                                  '${place.radiusMeters.round()} m'}',
+                                  '${place.radiusMeters.round()} m',
                       ),
                       trailing: IconButton(
                         tooltip: 'Delete place',
                         onPressed: () async {
-                          final confirmed = await showDialog<bool>(
+                          final confirmed = await showAdaptiveDialog<bool>(
                             context: context,
-                            builder: (context) => AlertDialog(
+                            builder: (context) => PlatformAlertDialog(
                               title: Text('Delete ${place.name}?'),
                               content: const Text(
                                 'This removes the shared name for everyone on '
                                 'this Traccar account.',
                               ),
                               actions: [
-                                TextButton(
+                                PlatformButton.text(
                                   onPressed: () =>
                                       Navigator.pop(context, false),
                                   child: const Text('Cancel'),
                                 ),
-                                FilledButton(
+                                PlatformButton(
                                   onPressed: () => Navigator.pop(context, true),
                                   child: const Text('Delete'),
                                 ),

@@ -25,6 +25,16 @@ import TrakkarLiveTrackingSDK
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LiquidGlass") {
+      registrar.register(
+        LiquidGlassFactory(messenger: registrar.messenger()),
+        withId: "com.oneupbyte.trakkar/liquid-glass"
+      )
+      registrar.register(
+        SystemControlFactory(messenger: registrar.messenger()),
+        withId: "com.oneupbyte.trakkar/system-control"
+      )
+    }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LiveTrackingBridge") {
       LiveTrackingBridge.register(with: registrar)
     }

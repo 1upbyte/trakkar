@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
@@ -6,6 +7,8 @@ import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import '../models/theme_preference.dart';
+import '../widgets/platform_controls.dart';
+import '../widgets/ios_system_control.dart';
 import 'setup_qr_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -121,14 +124,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           Text(
             'Settings',
-            style: Theme.of(context).textTheme.headlineMedium
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: isIOS(context) ? FontWeight.w700 : FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 24),
           Text(
             'Account',
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: isIOS(context) ? FontWeight.w700 : FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 10),
           Card(
@@ -190,7 +195,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             Text(
                               state.firstName,
                               style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w800),
+                                  ?.copyWith(
+                                    fontWeight: isIOS(context)
+                                        ? FontWeight.w700
+                                        : FontWeight.w800,
+                                  ),
                             ),
                             Text('@${state.deviceUsername}'),
                             const SizedBox(height: 2),
@@ -204,7 +213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                   const Divider(height: 30),
-                  SwitchListTile(
+                  PlatformSwitchTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Share my location'),
                     subtitle: const Text('Powered only by Traccar Client SDK'),
@@ -214,7 +223,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton.icon(
+                    child: PlatformButton.outlinedIcon(
                       onPressed: state.busy
                           ? null
                           : () async {
@@ -238,8 +247,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
           Text(
             'Appearance',
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: isIOS(context) ? FontWeight.w700 : FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 10),
           Card(
@@ -252,20 +262,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
-                    child: SegmentedButton<ThemePreference>(
-                      segments: ThemePreference.values
-                          .map(
-                            (preference) => ButtonSegment(
-                              value: preference,
-                              label: Text(preference.label),
+                    child: isIOS(context) && usesIOSSystemControls
+                        ? SizedBox(
+                            height: 40,
+                            child: IOSSystemControl(
+                              kind: 'segments',
+                              configuration: {
+                                'labels': ThemePreference.values
+                                    .map((value) => value.label)
+                                    .toList(),
+                                'value': ThemePreference.values.indexOf(
+                                  state.themePreference,
+                                ),
+                                'label': 'Appearance',
+                              },
+                              onChanged: (value) {
+                                if (value is int &&
+                                    value >= 0 &&
+                                    value < ThemePreference.values.length) {
+                                  state.setThemePreference(
+                                    ThemePreference.values[value],
+                                  );
+                                }
+                              },
                             ),
                           )
-                          .toList(growable: false),
-                      selected: {state.themePreference},
-                      onSelectionChanged: (selection) {
-                        state.setThemePreference(selection.single);
-                      },
-                    ),
+                        : isIOS(context)
+                        ? CupertinoSlidingSegmentedControl<ThemePreference>(
+                            groupValue: state.themePreference,
+                            children: {
+                              for (final preference in ThemePreference.values)
+                                preference: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
+                                  child: Text(preference.label),
+                                ),
+                            },
+                            onValueChanged: (value) {
+                              if (value != null) {
+                                state.setThemePreference(value);
+                              }
+                            },
+                          )
+                        : SegmentedButton<ThemePreference>(
+                            segments: ThemePreference.values
+                                .map(
+                                  (preference) => ButtonSegment(
+                                    value: preference,
+                                    label: Text(preference.label),
+                                  ),
+                                )
+                                .toList(growable: false),
+                            selected: {state.themePreference},
+                            onSelectionChanged: (selection) {
+                              state.setThemePreference(selection.single);
+                            },
+                          ),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -279,8 +332,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
           Text(
             'Map appearance',
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: isIOS(context) ? FontWeight.w700 : FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -293,7 +347,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             child: Column(
               children: [
-                SwitchListTile(
+                PlatformSwitchTile(
                   title: const Text('Dark map'),
                   subtitle: const Text(
                     'Use a dark street map. Satellite imagery keeps its natural colors.',
@@ -301,7 +355,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: state.darkMap,
                   onChanged: (value) => _saveMapAppearance(darkMap: value),
                 ),
-                SwitchListTile(
+                PlatformSwitchTile(
                   title: const Text('Satellite at street level'),
                   subtitle: const Text(
                     'Show satellite imagery automatically when zoomed in.',
@@ -313,7 +367,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           satelliteAutoAtStreetZoom: value,
                         ),
                 ),
-                SwitchListTile(
+                PlatformSwitchTile(
                   title: const Text('Always satellite'),
                   subtitle: const Text(
                     'Show satellite imagery at every zoom level.',
@@ -330,7 +384,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Text(
                         'Satellite starts at zoom ${state.satelliteZoom.toStringAsFixed(1)}',
                       ),
-                      Slider(
+                      PlatformSlider(
                         value: state.satelliteZoom,
                         min: 2,
                         max: 21,
@@ -355,8 +409,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
           Text(
             'Connection',
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: isIOS(context) ? FontWeight.w700 : FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 10),
           Card(
@@ -389,16 +444,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             spacing: 12,
             runSpacing: 8,
             children: [
-              OutlinedButton.icon(
+              PlatformButton.outlinedIcon(
                 icon: const Icon(Icons.link_rounded),
                 label: const Text('Copy setup link'),
                 onPressed: state.provisioning == null
                     ? null
                     : () async {
                         final config = state.provisioning!;
-                        final confirmed = await showDialog<bool>(
+                        final confirmed = await showAdaptiveDialog<bool>(
                           context: context,
-                          builder: (context) => AlertDialog(
+                          builder: (context) => PlatformAlertDialog(
                             title: const Text('Share this account setup?'),
                             content: const Text(
                               'This link includes your manager login and password. '
@@ -406,11 +461,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               'Share it only with people you trust.',
                             ),
                             actions: [
-                              TextButton(
+                              PlatformButton.text(
                                 onPressed: () => Navigator.pop(context, false),
                                 child: const Text('Cancel'),
                               ),
-                              FilledButton(
+                              PlatformButton(
                                 onPressed: () => Navigator.pop(context, true),
                                 child: const Text('Copy link'),
                               ),
@@ -428,12 +483,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         }
                       },
               ),
-              OutlinedButton.icon(
+              PlatformButton.outlinedIcon(
                 icon: const Icon(Icons.qr_code_rounded),
                 label: const Text('Share QR code'),
                 onPressed: state.provisioning == null
                     ? null
-                    : () => showDialog<void>(
+                    : () => showAdaptiveDialog<void>(
                         context: context,
                         builder: (_) =>
                             SetupQrDialog(config: state.provisioning!),
@@ -442,25 +497,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           const SizedBox(height: 28),
-          OutlinedButton.icon(
+          PlatformButton.outlinedIcon(
             style: OutlinedButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () async {
-              final confirmed = await showDialog<bool>(
+              final confirmed = await showAdaptiveDialog<bool>(
                 context: context,
-                builder: (context) => AlertDialog(
+                builder: (context) => PlatformAlertDialog(
                   title: const Text('Reset Trakkar?'),
                   content: const Text(
                     'This stops tracking and removes the server credentials, '
                     'profile, and named places stored on this phone.',
                   ),
                   actions: [
-                    TextButton(
+                    PlatformButton.text(
                       onPressed: () => Navigator.pop(context, false),
                       child: const Text('Cancel'),
                     ),
-                    FilledButton(
+                    PlatformButton(
                       onPressed: () => Navigator.pop(context, true),
                       child: const Text('Reset'),
                     ),

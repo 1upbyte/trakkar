@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/provisioning_config.dart';
+import '../widgets/platform_controls.dart';
 
 class SetupQrDialog extends StatefulWidget {
   const SetupQrDialog({required this.config, super.key});
@@ -58,7 +59,7 @@ class _SetupQrDialogState extends State<SetupQrDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return PlatformAlertDialog(
       title: const Text('Share setup QR code'),
       content: SingleChildScrollView(
         child: Column(
@@ -92,12 +93,12 @@ class _SetupQrDialogState extends State<SetupQrDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        PlatformButton.text(
           onPressed: _sharing ? null : () => Navigator.pop(context),
           child: const Text('Close'),
         ),
         Builder(
-          builder: (buttonContext) => FilledButton.icon(
+          builder: (buttonContext) => PlatformButton.icon(
             onPressed: _sharing ? null : () => _share(buttonContext),
             icon: const Icon(Icons.share_rounded),
             label: Text(_sharing ? 'Sharing…' : 'Share image'),

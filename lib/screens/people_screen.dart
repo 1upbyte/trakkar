@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
-import '../widgets/location_label.dart';
 import '../models/traccar_device.dart';
 import '../models/traccar_position.dart';
+import '../widgets/location_label.dart';
+import '../widgets/platform_controls.dart';
 
 class PeopleScreen extends StatefulWidget {
   const PeopleScreen({super.key});
@@ -68,8 +69,9 @@ class _PeopleScreenState extends State<PeopleScreen> {
           children: [
             Text(
               'People',
-              style: Theme.of(context).textTheme.headlineMedium
-                  ?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: isIOS(context) ? FontWeight.w700 : FontWeight.w800,
+              ),
             ),
             const SizedBox(height: 6),
             Text(

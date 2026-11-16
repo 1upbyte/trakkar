@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -86,6 +88,88 @@ class _TrakkarAppState extends State<TrakkarApp> {
       seedColor: seed,
       brightness: brightness,
     );
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final dark = brightness == Brightness.dark;
+      final background = dark ? Colors.black : const Color(0xFFF2F2F7);
+      final surface = dark ? const Color(0xFF1C1C1E) : Colors.white;
+      final primary = dark ? const Color(0xFF52C7BC) : seed;
+      final iosColors = colors.copyWith(
+        primary: primary,
+        surface: surface,
+        surfaceContainerHighest: dark
+            ? const Color(0xFF2C2C2E)
+            : const Color(0xFFE5E5EA),
+      );
+      return ThemeData(
+        platform: TargetPlatform.iOS,
+        brightness: brightness,
+        colorScheme: iosColors,
+        fontFamily: '.SF Pro Text',
+        useMaterial3: true,
+        scaffoldBackgroundColor: background,
+        cupertinoOverrideTheme: CupertinoThemeData(
+          brightness: brightness,
+          primaryColor: primary,
+          scaffoldBackgroundColor: background,
+          barBackgroundColor: surface.withValues(alpha: .94),
+        ),
+        splashFactory: NoSplash.splashFactory,
+        highlightColor: Colors.transparent,
+        textTheme: TextTheme(
+          headlineMedium: TextStyle(
+            fontFamily: '.SF Pro Display',
+            fontSize: 34,
+            fontWeight: FontWeight.w700,
+            letterSpacing: .35,
+            color: iosColors.onSurface,
+          ),
+          titleLarge: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: iosColors.onSurface,
+          ),
+          bodyLarge: const TextStyle(fontSize: 17),
+          bodyMedium: const TextStyle(fontSize: 15),
+        ),
+        cardTheme: CardThemeData(
+          color: surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        dividerTheme: DividerThemeData(
+          color: dark ? const Color(0xFF38383A) : const Color(0xFFC6C6C8),
+          thickness: .5,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: surface,
+          floatingLabelBehavior: FloatingLabelBehavior.never,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 15,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+        ),
+        appBarTheme: AppBarTheme(
+          backgroundColor: background,
+          surfaceTintColor: Colors.transparent,
+          centerTitle: true,
+          elevation: 0,
+          titleTextStyle: TextStyle(
+            color: iosColors.onSurface,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
     return ThemeData(
       colorScheme: colors,
       useMaterial3: true,
@@ -141,7 +225,7 @@ class _LoadingScreen extends StatelessWidget {
           children: [
             _BrandMark(size: 72),
             SizedBox(height: 24),
-            CircularProgressIndicator(),
+            CircularProgressIndicator.adaptive(),
           ],
         ),
       ),

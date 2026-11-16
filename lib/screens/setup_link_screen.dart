@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import '../models/provisioning_config.dart';
+import '../widgets/platform_controls.dart';
 import 'onboarding_screen.dart';
 
 class SetupLinkScreen extends StatefulWidget {
@@ -65,9 +66,11 @@ class _SetupLinkScreenState extends State<SetupLinkScreen> {
       child: Scaffold(
         appBar: AppBar(title: const Text('Set up Trakkar')),
         body: config == null
-            ? const Center(child: Text('This setup link is invalid or incomplete.'))
+            ? const Center(
+                child: Text('This setup link is invalid or incomplete.'),
+              )
             : waiting || _closing
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CircularProgressIndicator.adaptive())
             : _started
             ? OnboardingScreen(initialConfig: config)
             : SingleChildScrollView(
@@ -98,7 +101,7 @@ class _SetupLinkScreenState extends State<SetupLinkScreen> {
                       ),
                     ],
                     const SizedBox(height: 24),
-                    FilledButton(
+                    PlatformButton(
                       onPressed: state.busy ? null : () => _continue(state),
                       child: Text(
                         state.phase == AppPhase.ready

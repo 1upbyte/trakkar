@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
@@ -10,14 +11,16 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
-import '../widgets/location_label.dart';
-import '../widgets/building_highlights.dart';
 import '../models/named_place.dart';
-import '../services/building_lookup.dart';
-import '../services/named_place_store.dart';
-import 'places_screen.dart';
 import '../models/traccar_device.dart';
 import '../models/traccar_position.dart';
+import '../services/building_lookup.dart';
+import '../services/named_place_store.dart';
+import '../widgets/building_highlights.dart';
+import '../widgets/location_label.dart';
+import '../widgets/platform_controls.dart';
+import '../widgets/liquid_glass.dart';
+import 'places_screen.dart';
 
 const _streetStyleUri = 'https://tiles.openfreemap.org/styles/positron';
 const _darkStreetStyleUri = 'https://tiles.openfreemap.org/styles/dark';
@@ -197,21 +200,21 @@ class _MapScreenState extends State<MapScreen>
   Future<bool> _addPlace(LatLng point) async {
     final name = TextEditingController();
     final radius = TextEditingController(text: '150');
-    final result = await showDialog<bool>(
+    final result = await showAdaptiveDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => PlatformAlertDialog(
         title: const Text('Name this place'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+            PlatformTextField(
               controller: name,
               autofocus: true,
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(labelText: 'Place name'),
             ),
             const SizedBox(height: 12),
-            TextField(
+            PlatformTextField(
               controller: radius,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
@@ -222,11 +225,11 @@ class _MapScreenState extends State<MapScreen>
           ],
         ),
         actions: [
-          TextButton(
+          PlatformButton.text(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
+          PlatformButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Save'),
           ),
@@ -306,22 +309,22 @@ class _MapScreenState extends State<MapScreen>
         .where((name) => name.isNotEmpty)
         .toSet();
     final name = TextEditingController(text: names.join(' / '));
-    final save = await showDialog<bool>(
+    final save = await showAdaptiveDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => PlatformAlertDialog(
         title: const Text('Name this place'),
-        content: TextField(
+        content: PlatformTextField(
           controller: name,
           autofocus: true,
           textCapitalization: TextCapitalization.words,
           decoration: const InputDecoration(labelText: 'Place name'),
         ),
         actions: [
-          TextButton(
+          PlatformButton.text(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
+          PlatformButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Save'),
           ),
@@ -786,17 +789,24 @@ class _MapScreenState extends State<MapScreen>
                     },
                   ),
                 ),
-                RichAttributionWidget(
-                  showFlutterMapAttribution: false,
-                  attributions: [
-                    TextSourceAttribution(
-                      showSatellite
-                          ? '© MapTiler · © OpenStreetMap contributors'
-                          : attribution?.isNotEmpty ?? false
-                          ? attribution!
-                          : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
-                    ),
-                  ],
+                Padding(
+                  padding: EdgeInsets.only(
+                    bottom: isIOS(context)
+                        ? MediaQuery.paddingOf(context).bottom
+                        : 0,
+                  ),
+                  child: RichAttributionWidget(
+                    showFlutterMapAttribution: false,
+                    attributions: [
+                      TextSourceAttribution(
+                        showSatellite
+                            ? '© MapTiler · © OpenStreetMap contributors'
+                            : attribution?.isNotEmpty ?? false
+                            ? attribution!
+                            : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -806,7 +816,7 @@ class _MapScreenState extends State<MapScreen>
               top: MediaQuery.paddingOf(context).top + 72,
               left: 16,
               right: 16,
-              child: Card(
+              child: MapGlassCard(
                 child: ListTile(
                   leading: const Icon(Icons.map_outlined),
                   title: Text(
@@ -821,7 +831,7 @@ class _MapScreenState extends State<MapScreen>
                   ),
                   trailing: satelliteMissingKey
                       ? null
-                      : TextButton(
+                      : PlatformButton.text(
                           onPressed: () {
                             setState(() => _baseMapError = null);
                             unawaited(_loadBaseMap());
@@ -834,20 +844,40 @@ class _MapScreenState extends State<MapScreen>
           if (!_drawingPlace)
             Positioned(
               right: 16,
-              bottom: 32,
-              child: FloatingActionButton.small(
-                heroTag: 'fitMap',
-                onPressed: () => _fitPositions(state),
-                tooltip: 'Show everyone',
-                child: const Icon(Icons.zoom_out_map_rounded),
-              ),
+              bottom: isIOS(context)
+                  ? MediaQuery.paddingOf(context).bottom + 16
+                  : 32,
+              child: isIOS(context)
+                  ? Semantics(
+                      label: 'Show everyone',
+                      button: true,
+                      child: LiquidGlass(
+                        radius: 28,
+                        child: CupertinoButton(
+                          padding: const EdgeInsets.all(16),
+                          onPressed: () => _fitPositions(state),
+                          child: Icon(
+                            CupertinoIcons.arrow_up_left_arrow_down_right,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    )
+                  : FloatingActionButton.small(
+                      heroTag: 'fitMap',
+                      onPressed: () => _fitPositions(state),
+                      tooltip: 'Show everyone',
+                      child: const Icon(Icons.zoom_out_map_rounded),
+                    ),
             ),
           if (_drawingPlace)
             Positioned(
               left: 16,
               right: 16,
-              bottom: 18,
-              child: Card(
+              bottom: isIOS(context)
+                  ? MediaQuery.paddingOf(context).bottom + 12
+                  : 18,
+              child: MapGlassCard(
                 elevation: 4,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 10, 10),
@@ -870,7 +900,7 @@ class _MapScreenState extends State<MapScreen>
                         const SizedBox(height: 6),
                         const Text('Blue: selectable · Green: selected'),
                         if (_buildingError != null)
-                          TextButton(
+                          PlatformButton.text(
                             onPressed: () {
                               if (_baseMapStyle == null) {
                                 unawaited(_loadBaseMap());
@@ -889,7 +919,7 @@ class _MapScreenState extends State<MapScreen>
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          TextButton(
+                          PlatformButton.text(
                             onPressed: _cancelDrawingPlace,
                             child: const Text('Cancel'),
                           ),
@@ -910,7 +940,7 @@ class _MapScreenState extends State<MapScreen>
                             icon: const Icon(Icons.undo_rounded),
                           ),
                           const Spacer(),
-                          FilledButton.icon(
+                          PlatformButton.icon(
                             onPressed:
                                 _buildingBusy || _draftBoundary.length < 3
                                 ? null
@@ -927,7 +957,7 @@ class _MapScreenState extends State<MapScreen>
             ),
           if (state.positions.isEmpty)
             Center(
-              child: Card(
+              child: MapGlassCard(
                 child: Padding(
                   padding: const EdgeInsets.all(22),
                   child: Column(
@@ -1232,8 +1262,9 @@ class _PersonSheet extends StatelessWidget {
             Text(
               device.name,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineMedium
-                  ?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: isIOS(context) ? FontWeight.w700 : FontWeight.w800,
+              ),
             ),
             const SizedBox(height: 8),
             LocationLabel(position: position, address: address, showAge: false),
@@ -1250,7 +1281,7 @@ class _PersonSheet extends StatelessWidget {
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.tonalIcon(
+              child: PlatformButton.tonalIcon(
                 onPressed: () async {
                   final saved = await onNamePlace();
                   if (saved && context.mounted) Navigator.pop(context);

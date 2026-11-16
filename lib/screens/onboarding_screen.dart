@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../models/provisioning_config.dart';
 import '../user_facing_error.dart';
+import '../widgets/platform_controls.dart';
 import 'setup_link_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -134,9 +135,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
     } on DeviceConflictException catch (conflict) {
       if (!mounted) return;
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showAdaptiveDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (context) => PlatformAlertDialog(
           title: const Text('Username already in use'),
           content: Text(
             '“${conflict.device.uniqueId}” is currently connected as '
@@ -146,11 +147,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             'phone to avoid mixed locations.',
           ),
           actions: [
-            TextButton(
+            PlatformButton.text(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Choose another'),
             ),
-            FilledButton(
+            PlatformButton(
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Use on this phone'),
             ),
@@ -267,7 +268,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           SizedBox(
             width: double.infinity,
             height: 56,
-            child: FilledButton.icon(
+            child: PlatformButton.icon(
               onPressed: state.busy
                   ? null
                   : () => setState(() => _scanning = true),
@@ -276,7 +277,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          TextField(
+          PlatformTextField(
             controller: _setupLinkController,
             enabled: !state.busy,
             keyboardType: TextInputType.url,
@@ -292,7 +293,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             onSubmitted: state.busy ? null : _openSetupLink,
           ),
           const SizedBox(height: 8),
-          OutlinedButton.icon(
+          PlatformButton.outlinedIcon(
             onPressed: state.busy
                 ? null
                 : () => _openSetupLink(_setupLinkController.text),
@@ -301,7 +302,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 12),
           Center(
-            child: TextButton(
+            child: PlatformButton.text(
               onPressed: () => setState(() => _showManual = !_showManual),
               child: Text(
                 _showManual
@@ -319,7 +320,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             secondChild: Column(
               children: [
                 const SizedBox(height: 8),
-                TextField(
+                PlatformTextField(
                   controller: _clientUrlController,
                   keyboardType: TextInputType.url,
                   textInputAction: TextInputAction.next,
@@ -331,7 +332,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                PlatformTextField(
                   controller: _managerUrlController,
                   keyboardType: TextInputType.url,
                   textInputAction: TextInputAction.next,
@@ -343,7 +344,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                PlatformTextField(
                   controller: _liveTrackingUrlController,
                   keyboardType: TextInputType.url,
                   textInputAction: TextInputAction.next,
@@ -356,7 +357,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                PlatformTextField(
                   controller: _managerUsernameController,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
@@ -368,7 +369,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                PlatformTextField(
                   controller: _managerPasswordController,
                   obscureText: !_showManagerPassword,
                   textInputAction: TextInputAction.done,
@@ -397,12 +398,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
-                  child: OutlinedButton(
+                  child: PlatformButton.outlined(
                     onPressed: state.busy ? null : _acceptManual,
                     child: state.busy
                         ? const SizedBox.square(
                             dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator.adaptive(
+                              strokeWidth: 2,
+                            ),
                           )
                         : const Text('Connect'),
                   ),
@@ -441,8 +444,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 24),
           Text(
             'Make it yours',
-            style: Theme.of(context).textTheme.headlineMedium
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: isIOS(context) ? FontWeight.w700 : FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 10),
           Text(
@@ -456,7 +460,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           AutofillGroup(
             child: Column(
               children: [
-                TextField(
+                PlatformTextField(
                   controller: _firstNameController,
                   textCapitalization: TextCapitalization.words,
                   autofillHints: const [AutofillHints.givenName],
@@ -466,7 +470,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                TextField(
+                PlatformTextField(
                   controller: _usernameController,
                   autocorrect: false,
                   textCapitalization: TextCapitalization.none,
@@ -483,14 +487,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           SizedBox(
             width: double.infinity,
             height: 56,
-            child: FilledButton(
+            child: PlatformButton(
               onPressed: state.busy ? null : _submitProfile,
               child: state.busy
                   ? const SizedBox.square(
                       dimension: 22,
-                      child: CircularProgressIndicator(
+                      child: CircularProgressIndicator.adaptive(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
                       ),
                     )
                   : const Text('Start sharing'),
