@@ -108,6 +108,7 @@ public final class LiveTrackingCoordinator {
     state.temporary = false
     state.expiresAt = 0
     try state.save(creating: true)
+    updateAuthorization(enabled: state.enabled)
     let previous = task
     previous?.cancel()
     await previous?.value
@@ -122,6 +123,7 @@ public final class LiveTrackingCoordinator {
     state.enabled = enabled
     if !enabled { state.expiresAt = 0; state.revision = UUID().uuidString }
     try state.save(expectedRevision: revision)
+    updateAuthorization(enabled: enabled)
     if enabled { resume() } else { await stop() }
   }
 
@@ -135,10 +137,13 @@ public final class LiveTrackingCoordinator {
 
   /// Called at native launch, including a Core Location background launch.
   public func resume() {
+    // Recreate Always authorization synchronously at background launch, before
+    // SDK initialization or a network request can suspend this task.
+    updateAuthorization(enabled: LiveTrackingState.load()?.enabled == true)
     guard task == nil, let state = LiveTrackingState.load(), state.enabled else { return }
     observe()
     task = Task {
-      defer { task = nil; activity = nil; authorization = nil }
+      defer { task = nil; activity = nil }
       guard var state = LiveTrackingState.load(), state.enabled else { return }
       do {
         guard var tracker = try await TrackerKt.sharedTracker() else { return }
@@ -151,7 +156,6 @@ public final class LiveTrackingCoordinator {
         if let expiry = await state.fetchExpiry() { state.expiresAt = expiry }
         guard state.expiresAt > Date().timeIntervalSince1970 * 1000 else { return }
         guard #available(iOS 18.0, *) else { return }
-        authorization = CLServiceSession(authorization: .always)
         activity = CLBackgroundActivitySession()
         state.temporary = true
         try state.save()
@@ -179,6 +183,19 @@ public final class LiveTrackingCoordinator {
     }
   }
 
+  private func updateAuthorization(enabled: Bool) {
+    guard #available(iOS 18.0, *) else { return }
+    // Let the SDK own the initial permission prompt. Keep the authorization
+    // session between viewer leases until tracking is explicitly stopped.
+    guard enabled, CLLocationManager().authorizationStatus != .notDetermined else {
+      authorization = nil
+      return
+    }
+    if authorization == nil {
+      authorization = CLServiceSession(authorization: .always)
+    }
+  }
+
   private func restore() async {
     guard var state = LiveTrackingState.load(), state.temporary else { return }
     do {
@@ -197,7 +214,11 @@ public final class LiveTrackingCoordinator {
     await previous?.value
     await restore()
   }
-  public func clear() async throws { await stop(); try LiveTrackingState.clear() }
+  public func clear() async throws {
+    authorization = nil
+    await stop()
+    try LiveTrackingState.clear()
+  }
 }
 
 /// An extension has a separate SDK instance/database. Seed it with shared config,
@@ -217,6 +238,9 @@ public final class LocationPushReporter {
             expiry > Date().timeIntervalSince1970 * 1000,
             expiry <= Date().timeIntervalSince1970 * 1000 + 60_000,
             var state = LiveTrackingState.load(), state.enabled, state.deviceToken != nil else { return }
+      if #available(iOS 18.0, *) {
+        authorization = CLServiceSession(authorization: .always)
+      }
       // Confirm the session at the authenticated server; a push cannot extend it alone.
       guard let confirmed = await state.fetchExpiry(), confirmed > Date().timeIntervalSince1970 * 1000 else { return }
       state.expiresAt = confirmed
@@ -226,9 +250,6 @@ public final class LocationPushReporter {
       do {
         let tracker = try await TrackerKt.sharedTracker(config: state.config(live: false))
         try await tracker.stop()
-        if #available(iOS 18.0, *) {
-          authorization = CLServiceSession(authorization: .always)
-        }
         // Start the modern location service so Core Location can hand delivery to
         // the main app. Its launch path re-creates sessions and reads the lease.
         if #available(iOS 17.0, *) {

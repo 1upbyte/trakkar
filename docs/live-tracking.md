@@ -246,6 +246,13 @@ app restores its Core Location sessions at launch, reads the shared lease, and
 switches the SDK into the temporary profile. Native timers/session polling handle
 expiry without depending on Flutter's UI isolate.
 
+On iOS 18 and later, the main app retains its Always authorization service session
+while tracking is enabled, including between viewer leases, and recreates it
+synchronously on background launch. The extension establishes its authorization
+session before fetching the lease. Only the high-frequency background activity
+session ends when the viewer lease ends; stopping tracking or resetting setup
+also releases the authorization session.
+
 **High-frequency background handoff requires iOS 18 or later in this implementation**
 (`CLServiceSession` plus `CLBackgroundActivitySession`). On iOS 15–17 the extension
 can request a single SDK fix but the temporary continuous profile is not activated.
