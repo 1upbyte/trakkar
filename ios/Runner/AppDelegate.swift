@@ -40,9 +40,10 @@ import TrakkarLiveTrackingSDK
           self?.requestAlwaysLocationIfNeeded()
           result(nil)
         case "getTrackingHealth":
-          let status = CLLocationManager().authorizationStatus
+          let manager = CLLocationManager()
           result([
-            "locationAlways": status == .authorizedAlways,
+            "locationAlways": manager.authorizationStatus == .authorizedAlways,
+            "locationPrecise": manager.accuracyAuthorization == .fullAccuracy,
             "activityRecognitionOkay": true,
             "batteryOptimizationOkay": true,
             "batteryOptimizationRelevant": false,

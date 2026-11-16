@@ -6,6 +6,30 @@ import 'package:trakkar/services/tracker_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('reduced precision is actionable even with Always access', () {
+    final health = TrackingHealth.fromMap(const {
+      'locationAlways': true,
+      'locationPrecise': false,
+      'batteryOptimizationOkay': true,
+    });
+    expect(health.needsLocation, isFalse);
+    expect(health.needsPreciseLocation, isTrue);
+    expect(health.hasWarning, isTrue);
+
+    final restored = TrackingHealth.fromMap(const {
+      'locationAlways': true,
+      'locationPrecise': true,
+      'batteryOptimizationOkay': true,
+    });
+    expect(restored.hasWarning, isFalse);
+    final android = TrackingHealth.fromMap(const {
+      'locationAlways': true,
+      'batteryOptimizationOkay': true,
+    });
+    expect(android.hasWarning, isFalse);
+    expect(const TrackingHealth.unchecked().needsPreciseLocation, isFalse);
+  });
+
   test('tracking health reports each actionable platform issue', () {
     final health = TrackingHealth.fromMap(const {
       'locationAlways': false,

@@ -191,7 +191,8 @@ continues to be performed exclusively by the Traccar SDK.
 
 While signed in, Trakkar checks the settings required for reliable background
 tracking whenever the app opens or returns from system settings. A red banner
-links to permission settings when iOS is not set to Always, Android is not set
+links to permission settings when iOS is not set to Always or Precise Location is
+disabled, Android is not set
 to Allow all the time, or Android's Physical activity permission is missing.
 On Android 6 and newer it also links to the system battery optimization list
 until Trakkar is exempt. iOS has no equivalent per-app battery optimization

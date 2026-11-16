@@ -8,6 +8,7 @@ class TrackingHealth {
   const TrackingHealth({
     required this.checked,
     required this.locationAlways,
+    this.locationPrecise = true,
     required this.activityRecognitionOkay,
     required this.batteryOptimizationOkay,
     required this.batteryOptimizationRelevant,
@@ -16,6 +17,7 @@ class TrackingHealth {
   const TrackingHealth.unchecked()
     : checked = false,
       locationAlways = true,
+      locationPrecise = true,
       activityRecognitionOkay = true,
       batteryOptimizationOkay = true,
       batteryOptimizationRelevant = false;
@@ -24,6 +26,8 @@ class TrackingHealth {
     return TrackingHealth(
       checked: true,
       locationAlways: map['locationAlways'] == true,
+      // Android and older bridges omit this iOS permission field.
+      locationPrecise: map['locationPrecise'] != false,
       // Older iOS bridges do not return this Android-only field.
       activityRecognitionOkay: map['activityRecognitionOkay'] != false,
       batteryOptimizationOkay: map['batteryOptimizationOkay'] == true,
@@ -33,15 +37,18 @@ class TrackingHealth {
 
   final bool checked;
   final bool locationAlways;
+  final bool locationPrecise;
   final bool activityRecognitionOkay;
   final bool batteryOptimizationOkay;
   final bool batteryOptimizationRelevant;
 
   bool get needsLocation => checked && !locationAlways;
+  bool get needsPreciseLocation => checked && !locationPrecise;
   bool get needsActivity => checked && !activityRecognitionOkay;
   bool get needsBattery =>
       checked && batteryOptimizationRelevant && !batteryOptimizationOkay;
-  bool get hasWarning => needsLocation || needsActivity || needsBattery;
+  bool get hasWarning =>
+      needsLocation || needsPreciseLocation || needsActivity || needsBattery;
 }
 
 class TrackerService {

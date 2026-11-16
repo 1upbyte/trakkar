@@ -152,6 +152,7 @@ class _TrackingHealthBanner extends StatelessWidget {
     final health = state.trackingHealth;
     final details = <String>[
       if (health.needsLocation) 'set Location to Always / Allow all the time',
+      if (health.needsPreciseLocation) 'enable Precise Location',
       if (health.needsActivity) 'allow the Physical activity permission',
       if (health.needsBattery)
         'set battery use to Unrestricted / Not optimized',
@@ -189,7 +190,9 @@ class _TrackingHealthBanner extends StatelessWidget {
               spacing: 6,
               runSpacing: 2,
               children: [
-                if (health.needsLocation || health.needsActivity)
+                if (health.needsLocation ||
+                    health.needsPreciseLocation ||
+                    health.needsActivity)
                   TextButton(
                     onPressed: state.openLocationSettings,
                     child: const Text('Permission settings'),
