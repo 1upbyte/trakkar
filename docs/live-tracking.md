@@ -257,6 +257,11 @@ While the iOS app is visible, successful viewer renewals also reconcile this
 phone's authenticated device lease. This recovers a missed activation push,
 including during the APNs kick cooldown, without restarting stopped tracking.
 
+iOS treats the push as a wake-up hint and confirms the lease with the sidecar.
+It does not compare the push's server timestamp with the phone's clock. The
+remaining lease is calculated from the server's expiry and server time, capped
+at 30 seconds, so an incorrectly set phone clock does not reject valid pushes.
+
 **High-frequency background handoff requires iOS 18 or later in this implementation**
 (`CLServiceSession` plus `CLBackgroundActivitySession`). On iOS 15–17 the extension
 can request a single SDK fix but the temporary continuous profile is not activated.

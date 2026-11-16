@@ -234,14 +234,13 @@ public final class LocationPushReporter {
     task = Task {
       defer { authorization = nil; completion() }
       guard payload["type"] as? String == "live_tracking",
-            let raw = payload["expiresAt"] as? String, let expiry = Double(raw),
-            expiry > Date().timeIntervalSince1970 * 1000,
-            expiry <= Date().timeIntervalSince1970 * 1000 + 60_000,
             var state = LiveTrackingState.load(), state.enabled, state.deviceToken != nil else { return }
       if #available(iOS 18.0, *) {
         authorization = CLServiceSession(authorization: .always)
       }
-      // Confirm the session at the authenticated server; a push cannot extend it alone.
+      // The payload is only a wake-up hint. Do not compare its server timestamp
+      // with the phone's clock; fetchExpiry uses the server-relative lifetime.
+      // Delayed pushes and revoked tokens cannot activate an inactive lease.
       guard let confirmed = await state.fetchExpiry(), confirmed > Date().timeIntervalSince1970 * 1000 else { return }
       state.expiresAt = confirmed
       do { try state.save() } catch { return }
