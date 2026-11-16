@@ -30,6 +30,7 @@ class IOSLiveTrackingTests(unittest.TestCase):
         )
         source = source.replace("Task.sleep(nanoseconds:", "NativeTestRuntime.sleep(nanoseconds:")
         source = source.replace("mach_continuous_time()", "NativeTestRuntime.continuousTicks")
+        source = source.replace("Darwin.open(lock.path,", "NativeTestRuntime.openLock(lock.path,")
         fixture = Path(__file__).with_name("ios_platform_stubs.swift").read_text()
         cases = Path(__file__).with_name("ios_live_tracking_cases.swift").read_text()
         (directory / "Regression.swift").write_text(fixture + "\n" + source + "\n" + cases)
@@ -53,6 +54,18 @@ class IOSLiveTrackingTests(unittest.TestCase):
 
     def test_stale_lease_write_preserves_new_registration(self):
         self.run_case("registration")
+
+    def test_registration_during_activation_is_reconciled(self):
+        self.run_case("activation-registration")
+
+    def test_extension_write_during_activation_is_reconciled(self):
+        self.run_case("activation-extension")
+
+    def test_disable_during_activation_cannot_reactivate_tracking(self):
+        self.run_case("activation-disabled")
+
+    def test_stop_preserves_a_write_interleaved_before_lock_acquisition(self):
+        self.run_case("disable-contention")
 
     def test_stale_extension_write_preserves_temporary_marker(self):
         self.run_case("temporary")

@@ -6,6 +6,38 @@ import 'package:trakkar/services/tracker_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'iOS stop reports native disable failure and still stops SDK tracking',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      const live = MethodChannel('trakkar/live_tracking');
+      const sdk = MethodChannel('traccar_client_sdk');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final calls = <String>[];
+      messenger.setMockMethodCallHandler(live, (call) async {
+        calls.add('native.${call.method}');
+        expect(call.arguments, {'enabled': false});
+        throw PlatformException(code: 'live_tracking');
+      });
+      messenger.setMockMethodCallHandler(sdk, (call) async {
+        calls.add('sdk.${call.method}');
+        return null;
+      });
+      addTearDown(() {
+        messenger.setMockMethodCallHandler(live, null);
+        messenger.setMockMethodCallHandler(sdk, null);
+      });
+
+      await expectLater(
+        TrackerService().stop(),
+        throwsA(isA<PlatformException>()),
+      );
+      expect(calls, ['native.setEnabled', 'sdk.stop']);
+    },
+  );
+
   test('reduced precision is actionable even with Always access', () {
     final health = TrackingHealth.fromMap(const {
       'locationAlways': true,
@@ -46,7 +78,7 @@ void main() {
   });
 
   test(
-    'non-Android setup keeps time-based SDK updates without a distance filter',
+    'iOS setup disables the SDK distance trigger to throttle uploads by time',
     () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       addTearDown(() => debugDefaultTargetPlatformOverride = null);
@@ -72,8 +104,7 @@ void main() {
         final config = Map<String, dynamic>.from(call.arguments as Map);
         final location = Map<String, dynamic>.from(config['location'] as Map);
         expect(location['accuracy'], 'MEDIUM');
-        // A positive distance would make SDK 1.0.11 use a zero interval.
-        expect(location['distanceMeters'], 0);
+        expect(location['distanceMeters'], 0x7fffffff);
         expect(location['intervalSeconds'], 600);
         expect(location['stopDetection'], isTrue);
         expect(location['stopTimeoutSeconds'], 120);

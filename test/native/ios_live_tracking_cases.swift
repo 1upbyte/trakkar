@@ -12,6 +12,62 @@ struct NativeRegressions {
       var stale = LiveTrackingState.load()!
       var current = LiveTrackingState.load()!
       switch CommandLine.arguments[1] {
+      case "disable-contention":
+        NativeTestRuntime.beforeLock = {
+          var latest = LiveTrackingState.load()!
+          latest.deviceToken = "new-token"
+          latest.expiresAt = 30_000
+          try! latest.save()
+        }
+        try await LiveTrackingCoordinator.shared.setEnabled(false)
+        guard let disabled = LiveTrackingState.load(), !disabled.enabled,
+              disabled.deviceToken == "new-token", disabled.expiresAt == 0 else {
+          throw Failure.message("a competing writer defeated stop or lost registration")
+        }
+      case "cadence-config":
+        for live in [false, true] {
+          let location = current.config(live: live).location
+          print("CADENCE \(location.distanceMeters) \(location.intervalSeconds)")
+        }
+      case "activation-registration", "activation-extension", "activation-disabled":
+        current.endpoint = "https://sidecar.test"
+        try current.save()
+        _ = try await TrackerKt.sharedTracker(config: current.config(live: false))
+        NativeTestRuntime.virtualSleep = true
+        NativeTestRuntime.beforeReply = {
+          switch CommandLine.arguments[1] {
+          case "activation-registration":
+            try LiveTrackingCoordinator.shared.register(endpoint: "https://sidecar.test", token: "new-token")
+          case "activation-extension":
+            // Model the other process publishing its confirmed lease while the
+            // main process is waiting for its own HTTP response.
+            var latest = LiveTrackingState.load()!
+            latest.expiresAt = 30_000
+            try latest.save()
+            LiveTrackingCoordinator.shared.resume()
+          default:
+            var latest = LiveTrackingState.load()!
+            latest.enabled = false
+            latest.expiresAt = 0
+            try latest.save()
+          }
+        }
+        LiveTrackingCoordinator.shared.resume()
+        await LiveTrackingCoordinator.shared.waitForTestSession()
+        let activated = NativeTestRuntime.profiles.contains { $0.location.accuracy == .high }
+        if CommandLine.arguments[1] == "activation-disabled" {
+          guard !activated, LiveTrackingState.load()?.enabled == false else {
+            throw Failure.message("an in-flight lease reactivated disabled tracking")
+          }
+        } else {
+          guard activated, TrackerKt.tracker?.config.location.accuracy == .medium else {
+            throw Failure.message("a concurrent state update discarded activation or prevented restoration")
+          }
+          if CommandLine.arguments[1] == "activation-registration",
+             LiveTrackingState.load()?.deviceToken != "new-token" {
+            throw Failure.message("activation overwrote the new registration")
+          }
+        }
       case "registration":
         current.deviceToken = "new-token"
         try current.save()
@@ -29,13 +85,22 @@ struct NativeRegressions {
           throw Failure.message("stale extension write erased the live-profile recovery marker")
         }
       case "disabled":
-        let revision = current.revision
-        current.enabled = false
-        try current.save(expectedRevision: revision)
+        try await LiveTrackingCoordinator.shared.setEnabled(false)
+        guard let disabled = LiveTrackingState.load(), !disabled.enabled,
+              disabled.deviceToken == current.deviceToken, disabled.expiresAt == 0 else {
+          throw Failure.message("stop did not persist disabled state and preserve registration")
+        }
         do {
           try stale.save()
           throw Failure.message("disabled state accepted an in-flight write")
         } catch LiveTrackingError.stateChanged { }
+        let reporter = LocationPushReporter()
+        await withCheckedContinuation { continuation in
+          reporter.receive(payload: ["type": "live_tracking"]) { continuation.resume() }
+        }
+        guard NativeTestRuntime.uploads.isEmpty else {
+          throw Failure.message("a push uploaded a position after tracking stopped")
+        }
       case "sequential":
         let revision = current.revision
         current.deviceToken = "new-token"
@@ -112,5 +177,7 @@ enum Failure: Error { case message(String) }
 // The harness compiles this in the production source's file, allowing tests to
 // await the coordinator's real task without changing its public interface.
 extension LiveTrackingCoordinator {
-  fileprivate func waitForTestSession() async { await task?.value }
+  fileprivate func waitForTestSession() async {
+    while let pending = task { await pending.value }
+  }
 }

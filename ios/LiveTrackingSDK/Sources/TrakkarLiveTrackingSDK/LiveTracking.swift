@@ -47,15 +47,30 @@ public struct LiveTrackingState: Codable {
     var saved = self
     saved.revision = UUID().uuidString
     try Self.withLock {
-      guard let url = Self.url else { throw LiveTrackingError.appGroupUnavailable }
       guard creating || Self.load()?.revision == (expectedRevision ?? revision) else {
         throw LiveTrackingError.stateChanged
       }
-      try JSONEncoder().encode(saved).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+      try saved.write()
     }
     // Only advance the caller's snapshot after the write succeeds. Every save
     // invalidates snapshots held across awaits or by the other process.
     self = saved
+  }
+  private func write() throws {
+    guard let url = Self.url else { throw LiveTrackingError.appGroupUnavailable }
+    try JSONEncoder().encode(self).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+  }
+  static func updatingEnabled(_ enabled: Bool) throws -> Self? {
+    // Read and mutate under one cross-process lock. A lease write from the
+    // extension must not make an explicit stop fail its revision check.
+    try withLock {
+      guard var state = load() else { return nil }
+      state.enabled = enabled
+      if !enabled { state.expiresAt = 0 }
+      state.revision = UUID().uuidString
+      try state.write()
+      return state
+    }
   }
   public static func clear() throws {
     try withLock {
@@ -74,9 +89,11 @@ public struct LiveTrackingState: Codable {
   }
 
   func config(live: Bool) -> Config {
-    // A positive distance makes the SDK discard intervalSeconds.
+    // SDK 1.0.11's iOS provider always requests unfiltered fixes; LocationFilter
+    // uses the original interval and distance, combined with OR. Use a distance
+    // larger than any on Earth so only the time trigger accepts ordinary fixes.
     return Config(serverUrl: serverUrl, deviceId: deviceId,
-      location: LocationConfig(accuracy: live ? .high : .medium, distanceMeters: 0,
+      location: LocationConfig(accuracy: live ? .high : .medium, distanceMeters: Int32.max,
         intervalSeconds: live ? 5 : 600, angleDegrees: 0, stopDetection: !live,
         stopTimeoutSeconds: 120, stationaryRadiusMeters: 100, heartbeatIntervalSeconds: 0),
       wakeLock: false, buffer: true, preferPlatformProviders: false,
@@ -106,6 +123,7 @@ public enum LiveTrackingError: Error { case appGroupUnavailable, stateChanged }
 public final class LiveTrackingCoordinator {
   public static let shared = LiveTrackingCoordinator()
   private var task: Task<Void, Never>?
+  private var reconcileRequested = false
   private var activity: Any?
   private var authorization: Any?
   private var observing = false
@@ -138,11 +156,7 @@ public final class LiveTrackingCoordinator {
   }
 
   public func setEnabled(_ enabled: Bool) async throws {
-    guard var state = LiveTrackingState.load() else { return }
-    let revision = state.revision
-    state.enabled = enabled
-    if !enabled { state.expiresAt = 0 }
-    try state.save(expectedRevision: revision)
+    guard try LiveTrackingState.updatingEnabled(enabled) != nil else { return }
     updateAuthorization(enabled: enabled)
     if enabled { resume() } else { await stop() }
   }
@@ -160,10 +174,20 @@ public final class LiveTrackingCoordinator {
     // Recreate Always authorization synchronously at background launch, before
     // SDK initialization or a network request can suspend this task.
     updateAuthorization(enabled: LiveTrackingState.load()?.enabled == true)
-    guard task == nil, let state = LiveTrackingState.load(), state.enabled else { return }
+    guard let state = LiveTrackingState.load(), state.enabled else { return }
+    guard task == nil else {
+      reconcileRequested = true
+      return
+    }
     observe()
     task = Task {
-      defer { task = nil; activity = nil }
+      defer {
+        task = nil
+        activity = nil
+        let retry = reconcileRequested
+        reconcileRequested = false
+        if retry && !Task.isCancelled { resume() }
+      }
       guard var state = LiveTrackingState.load(), state.enabled else { return }
       do {
         guard var tracker = try await TrackerKt.sharedTracker() else { return }
@@ -202,6 +226,10 @@ public final class LiveTrackingCoordinator {
             try latest.save()
           }
         }
+      } catch LiveTrackingError.stateChanged {
+        // A registration or extension write invalidated our snapshot. Read
+        // the current registration and revalidate its lease after restoring.
+        reconcileRequested = true
       } catch { /* Restore the SDK profile below, including cancellation. */ }
       await restore()
     }

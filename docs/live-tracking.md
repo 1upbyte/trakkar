@@ -17,12 +17,15 @@ to every requested device. Multiple viewers share a device session: one viewer
 leaving does not stop another viewer's session. A push starts a session; devices
 then check the sidecar every 10 seconds to obtain renewals or cancellation. There
 is no push per location update or per viewer renewal. The native temporary profile
-requests high accuracy, zero distance threshold, a five-second interval, and no
-stationary stop detection. The normal profile restores medium accuracy, zero distance
-filter, 600 seconds, and the SDK's normal stop detection. A positive distance filter
-would make SDK 1.0.11 override the interval with zero. These are SDK inputs: iOS can
-report each available fix when the distance threshold is zero, and neither OS
-guarantees a five-second cadence.
+requests high accuracy, a five-second interval, and no stationary stop detection.
+The normal profile restores medium accuracy, 600 seconds, and the SDK's normal stop
+detection. Android uses zero distance so SDK 1.0.11 retains the provider interval.
+iOS uses `Int32.max` distance: the SDK's upload filter ORs time and distance, and
+zero distance would accept every fix. This unreachable distance leaves the original
+five/600-second time trigger in control of ordinary iOS uploads. The iOS provider
+still collects unfiltered fixes; this is upload throttling, not a GPS sleep timer.
+First fixes and stationary transitions can upload immediately. Neither OS guarantees
+an exact five-second cadence.
 
 Positions are collected and uploaded through Traccar Client SDK 1.0.11. Map marker
 updates continue through the existing Traccar `/api/socket` connection. The sidecar
@@ -256,6 +259,15 @@ also releases the authorization session.
 While the iOS app is visible, successful viewer renewals also reconcile this
 phone's authenticated device lease. This recovers a missed activation push,
 including during the APNs kick cooldown, without restarting stopped tracking.
+Reconciliation requests received during a lease check are coalesced and retried
+after the current task ends. A conflicting registration or extension state write
+also triggers reconciliation against the latest registration rather than dropping
+the activation.
+
+Explicit enable/disable updates read and write shared state under one cross-process
+lock, so an extension lease write cannot invalidate a stop operation. A native
+disable failure is reported to the app while ordinary SDK tracking is still stopped;
+the app must not report successful shutdown while push reporting may remain enabled.
 
 iOS treats the push as a wake-up hint and confirms the lease with the sidecar.
 It does not compare the push's server timestamp with the phone's clock. The

@@ -33,3 +33,20 @@ continuous clock, network availability, and sleep scheduler. They exercise clock
 jumps in both directions, elapsed time during suspension, and offline recovery of
 a temporary profile with a deadline persisted before restart. A test-only accessor
 waits for the coordinator's task; no production control flow is replaced.
+
+Activation cases inject a registration or extension write during the actual lease
+request and verify that live mode starts and later restores the baseline. They also
+check that disabling during a request prevents activation, and that a push after
+an explicit stop does not upload.
+
+Verify normal and live upload cadence against the pinned SDK's unmodified
+`LocationFilter` and configuration classes:
+
+```sh
+python3 test/native/verify_ios_cadence.py /path/to/traccar-client-sdk
+```
+
+This uses the Kotlin compiler dependencies in the Gradle cache. It reads both
+profiles from the production Swift adapter, submits fixes once per second with
+both movement and unchanged coordinates, and verifies acceptance at 600/5 seconds.
+The Flutter tracker-service test separately checks the initial iOS configuration.

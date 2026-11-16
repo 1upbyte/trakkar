@@ -80,9 +80,10 @@ class TrackerService {
       deviceId: deviceId,
       location: const LocationConfig(
         accuracy: Accuracy.medium,
-        // SDK 1.0.11 forces intervalSeconds to zero for any positive distance.
-        // Use time-based updates so Android requests retain this interval.
-        distanceMeters: 0,
+        // iOS providers ignore the SDK's effective interval. Its upload filter
+        // uses the original config and ORs time with distance, so zero accepts
+        // every fix. An unreachable distance leaves only the time trigger.
+        distanceMeters: 0x7fffffff,
         intervalSeconds: 600,
         stopDetection: true,
         stopTimeoutSeconds: 120,
@@ -141,8 +142,18 @@ class TrackerService {
   }
 
   Future<void> stop() async {
-    await _invokeLive('setEnabled', {'enabled': false});
-    await _sdk.stop();
+    try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        // Disabling the extension is part of stopping location sharing. Report
+        // failure so callers cannot claim it stopped while pushes remain enabled.
+        await const MethodChannel('trakkar/live_tracking')
+            .invokeMethod<void>('setEnabled', {'enabled': false});
+      } else {
+        await _invokeLive('setEnabled', {'enabled': false});
+      }
+    } finally {
+      await _sdk.stop();
+    }
   }
 
   Future<void> _invokeLive(String method, Map<String, Object> arguments) async {

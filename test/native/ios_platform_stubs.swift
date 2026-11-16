@@ -6,7 +6,7 @@ import Darwin
 enum Accuracy: Equatable { case medium, high }
 struct LocationConfig: Equatable {
   var accuracy: Accuracy
-  var distanceMeters: Int
+  var distanceMeters: Int32
   var intervalSeconds: Int
   var angleDegrees: Int
   var stopDetection: Bool
@@ -42,6 +42,7 @@ final class Tracker {
   init(config: Config) { self.config = config }
   func stop() async throws {}
   func updateConfig(newConfig: Config) async throws -> Tracker {
+    NativeTestRuntime.profiles.append(newConfig)
     let replacement = Tracker(config: newConfig)
     TrackerKt.tracker = replacement
     return replacement
@@ -77,6 +78,18 @@ enum NativeTestRuntime {
     return UInt64(uptime * 1_000_000_000 * Double(timebase.denom) / Double(timebase.numer))
   }
   static var uploads: [Config] = []
+  static var profiles: [Config] = []
+  static var beforeReply: (() async throws -> Void)?
+  static var beforeLock: (() -> Void)?
+  static func openLock(_ path: String, _ flags: Int32, _ mode: mode_t) -> Int32 {
+    // A competing process may finish a write just before this process obtains
+    // the file lock. Inject that ordering at the platform boundary.
+    if let hook = beforeLock {
+      beforeLock = nil
+      hook()
+    }
+    return Darwin.open(path, flags, mode)
+  }
   static var virtualSleep = false
   static var wallAdjustment: Double = 0
   static var networkAvailable = true
@@ -106,6 +119,10 @@ enum NativeTestRuntime {
 final class URLSession {
   static let shared = URLSession()
   func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+    if let hook = NativeTestRuntime.beforeReply {
+      NativeTestRuntime.beforeReply = nil
+      try await hook()
+    }
     guard NativeTestRuntime.networkAvailable else { throw URLError(.notConnectedToInternet) }
     let response = HTTPURLResponse(url: request.url!, statusCode: 200,
                                   httpVersion: nil, headerFields: nil)!
