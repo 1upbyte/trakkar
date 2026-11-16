@@ -27,3 +27,9 @@ This compiles the SDK's unmodified `sharedTracker(config)` function with its rea
 coroutine mutex on the JVM. Only platform bootstrap and configuration data objects
 are substituted. It confirms that a second configuration leaves the cached
 tracker unchanged; the separate Swift regression exercises the production reporter.
+
+Clock cases run the production coordinator with a controllable wall clock,
+continuous clock, network availability, and sleep scheduler. They exercise clock
+jumps in both directions, elapsed time during suspension, and offline recovery of
+a temporary profile with a deadline persisted before restart. A test-only accessor
+waits for the coordinator's task; no production control flow is replaced.

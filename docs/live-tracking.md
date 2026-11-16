@@ -261,6 +261,11 @@ iOS treats the push as a wake-up hint and confirms the lease with the sidecar.
 It does not compare the push's server timestamp with the phone's clock. The
 remaining lease is calculated from the server's expiry and server time, capped
 at 30 seconds, so an incorrectly set phone clock does not reject valid pushes.
+The native deadline uses Mach continuous time, which includes device sleep and
+is unaffected by wall-clock changes. A failed renewal cannot extend that deadline.
+After a process launch, the app confirms the lease with the server again before
+activating; a deadline persisted before a reboot cannot reactivate live tracking
+while offline. Ordinary SDK tracking remains available during a sidecar outage.
 
 **High-frequency background handoff requires iOS 18 or later in this implementation**
 (`CLServiceSession` plus `CLBackgroundActivitySession`). On iOS 15–17 the extension
@@ -334,6 +339,7 @@ cd sidecar
 npm test
 cd ..
 flutter test test/services/live_tracking_service_test.dart test/services/tracker_service_test.dart
+python3 -m unittest discover -s test/native -p 'test_*.py' -v
 flutter analyze lib/services/tracking lib/services/tracker_service.dart lib/app_state.dart lib/screens/home_screen.dart
 flutter build apk --debug
 flutter build ios --simulator --debug --no-codesign

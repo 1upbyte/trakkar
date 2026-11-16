@@ -29,7 +29,7 @@ class IOSLiveTrackingTests(unittest.TestCase):
             "NativeTestRuntime.directory",
         )
         source = source.replace("Task.sleep(nanoseconds:", "NativeTestRuntime.sleep(nanoseconds:")
-        source = source.replace("ProcessInfo.processInfo.systemUptime", "NativeTestRuntime.uptime")
+        source = source.replace("mach_continuous_time()", "NativeTestRuntime.continuousTicks")
         fixture = Path(__file__).with_name("ios_platform_stubs.swift").read_text()
         cases = Path(__file__).with_name("ios_live_tracking_cases.swift").read_text()
         (directory / "Regression.swift").write_text(fixture + "\n" + source + "\n" + cases)
@@ -65,6 +65,18 @@ class IOSLiveTrackingTests(unittest.TestCase):
 
     def test_reused_extension_uploads_with_current_account(self):
         self.run_case("extension-account")
+
+    def test_clock_rollback_does_not_extend_offline_lease(self):
+        self.run_case("clock-backward")
+
+    def test_clock_jump_does_not_end_lease_early(self):
+        self.run_case("clock-forward")
+
+    def test_offline_restart_does_not_trust_persisted_deadline(self):
+        self.run_case("offline-restart")
+
+    def test_suspension_counts_toward_lease_lifetime(self):
+        self.run_case("clock-suspended")
 
 
 if __name__ == "__main__":

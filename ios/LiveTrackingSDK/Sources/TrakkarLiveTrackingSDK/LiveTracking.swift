@@ -4,6 +4,17 @@ import Foundation
 import Darwin
 import TraccarClientSDK
 
+private enum LiveTrackingClock {
+  // Unlike wall time, this advances through device sleep and cannot jump when
+  // someone changes the time. Values are shared by processes within one boot.
+  static var milliseconds: Double {
+    var timebase = mach_timebase_info_data_t()
+    mach_timebase_info(&timebase)
+    return Double(mach_continuous_time()) * Double(timebase.numer)
+      / Double(timebase.denom) / 1_000_000
+  }
+}
+
 /// Native SDK adapter shared by Runner and its location push extension.
 /// All reported positions are acquired and uploaded by TraccarClientSDK.
 public struct LiveTrackingState: Codable {
@@ -13,6 +24,8 @@ public struct LiveTrackingState: Codable {
   public var deviceToken: String?
   public var revision = UUID().uuidString
   public var enabled = false
+  // Monotonic milliseconds, not the sidecar's epoch timestamp. Startup always
+  // revalidates the lease before using this value, including after a reboot.
   public var expiresAt: Double = 0
   public var temporary = false
 
@@ -75,12 +88,14 @@ public struct LiveTrackingState: Codable {
           let url = URL(string: "\(endpoint.trimmingCharacters(in: CharacterSet(charactersIn: "/")))/v1/device-session") else { return nil }
     var request = URLRequest(url: url, timeoutInterval: 3)
     request.setValue("Bearer \(deviceToken)", forHTTPHeaderField: "Authorization")
+    let startedAt = LiveTrackingClock.milliseconds
     do {
       let (data, response) = try await URLSession.shared.data(for: request)
       guard (response as? HTTPURLResponse)?.statusCode == 200 else { return 0 }
       let reply = try JSONDecoder().decode(LeaseReply.self, from: data)
       let remaining = min(30_000, max(0, reply.expiresAt - reply.serverTime))
-      return Date().timeIntervalSince1970 * 1000 + remaining
+      // Include time spent waiting for the response in the bounded lifetime.
+      return startedAt + remaining
     } catch { return nil }
   }
 }
@@ -158,8 +173,11 @@ public final class LiveTrackingCoordinator {
           state.temporary = false
           try state.save()
         }
-        if let expiry = await state.fetchExpiry() { state.expiresAt = expiry }
-        guard state.expiresAt > Date().timeIntervalSince1970 * 1000 else { return }
+        // Persisted monotonic deadlines may be from a previous boot. Never
+        // activate using a saved deadline when the server cannot be reached.
+        guard let expiry = await state.fetchExpiry() else { return }
+        state.expiresAt = expiry
+        guard state.expiresAt > LiveTrackingClock.milliseconds else { return }
         guard #available(iOS 18.0, *) else { return }
         activity = CLBackgroundActivitySession()
         state.temporary = true
@@ -174,7 +192,7 @@ public final class LiveTrackingCoordinator {
         while !Task.isCancelled {
           guard let current = LiveTrackingState.load(), current.enabled else { break }
           state = current
-          let now = Date().timeIntervalSince1970 * 1000
+          let now = LiveTrackingClock.milliseconds
           if state.expiresAt <= now { break }
           let sleep = min(10_000, state.expiresAt - now)
           try await Task.sleep(nanoseconds: UInt64(max(1, sleep)) * 1_000_000)
@@ -247,7 +265,7 @@ public final class LocationPushReporter {
       // The payload is only a wake-up hint. Do not compare its server timestamp
       // with the phone's clock; fetchExpiry uses the server-relative lifetime.
       // Delayed pushes and revoked tokens cannot activate an inactive lease.
-      guard let confirmed = await state.fetchExpiry(), confirmed > Date().timeIntervalSince1970 * 1000 else { return }
+      guard let confirmed = await state.fetchExpiry(), confirmed > LiveTrackingClock.milliseconds else { return }
       state.expiresAt = confirmed
       do { try state.save() } catch { return }
       CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),

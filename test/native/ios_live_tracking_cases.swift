@@ -65,6 +65,38 @@ struct NativeRegressions {
               upload.serverUrl == "https://new.test", upload.deviceId == "new-phone" else {
           throw Failure.message("reused extension uploaded with the old server/device configuration")
         }
+      case "offline-restart":
+        current.endpoint = "https://sidecar.test"
+        current.temporary = true
+        current.expiresAt = 9_000_000
+        try current.save()
+        _ = try await TrackerKt.sharedTracker(config: current.config(live: true))
+        NativeTestRuntime.virtualSleep = true
+        NativeTestRuntime.networkAvailable = false
+        LiveTrackingCoordinator.shared.resume()
+        await LiveTrackingCoordinator.shared.waitForTestSession()
+        guard TrackerKt.tracker?.config.location.accuracy == .medium,
+              NativeTestRuntime.uptime == 0 else {
+          throw Failure.message("offline launch reactivated a persisted lease")
+        }
+      case "clock-backward", "clock-forward", "clock-suspended":
+        current.endpoint = "https://sidecar.test"
+        try current.save()
+        _ = try await TrackerKt.sharedTracker(config: current.config(live: false))
+        NativeTestRuntime.virtualSleep = true
+        NativeTestRuntime.wallAdjustment = CommandLine.arguments[1] == "clock-forward" ? 3_600 : -3_600
+        var expectedDuration: Double = 30
+        if CommandLine.arguments[1] == "clock-suspended" {
+          NativeTestRuntime.suspension = 60
+          NativeTestRuntime.virtualLimit = 120
+          expectedDuration = 70
+        }
+        LiveTrackingCoordinator.shared.resume()
+        await LiveTrackingCoordinator.shared.waitForTestSession()
+        guard !NativeTestRuntime.continuedAfterDeadline,
+              abs(NativeTestRuntime.uptime - expectedDuration) < 0.001 else {
+          throw Failure.message("clock change made a 30-second lease last \(NativeTestRuntime.uptime) seconds")
+        }
       default:
         throw Failure.message("unknown case")
       }
@@ -76,3 +108,9 @@ struct NativeRegressions {
   }
 }
 enum Failure: Error { case message(String) }
+
+// The harness compiles this in the production source's file, allowing tests to
+// await the coordinator's real task without changing its public interface.
+extension LiveTrackingCoordinator {
+  fileprivate func waitForTestSession() async { await task?.value }
+}
