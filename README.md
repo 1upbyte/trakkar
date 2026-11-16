@@ -118,6 +118,10 @@ releases that viewer's session. Once all viewers leave or their sessions expire,
 phones restore normal tracking. Without a live-tracking URL, opening the map
 does not change the tracking profile.
 
+Continuous live tracking requires iOS 18 or later. On iOS 15–17, a location push
+can request one SDK fix, but does not activate the temporary continuous tracking
+profile. Android supports continuous live tracking on all supported versions.
+
 Normal background tracking requests time-based 10-minute updates with no distance filter.
 The SDK overrides the interval with zero when a positive distance filter is set.
 Android uses that interval for native location requests; iOS controls its own
