@@ -1,6 +1,7 @@
 package com.oneupbyte.trakkar.live
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import com.oneupbyte.trakkar.BuildConfig
 import kotlinx.coroutines.*
@@ -14,7 +15,7 @@ object LiveTrackingController {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var job: Job? = null
     private var generation = 0
-    private var expiresAt = 0L
+    private var deadline = 0L
     private const val PREFS = "trakkar-live-tracking"
 
     suspend fun configure(context: Context, arguments: Map<*, *>) {
@@ -47,13 +48,13 @@ object LiveTrackingController {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             // A process killed during live mode must not retain that profile forever.
             if (prefs.getBoolean("temporary", false)) restore(context)
-            val until = fetchExpiry(context) ?: return@launch
-            if (epoch == generation && until > System.currentTimeMillis()) kick(context, until)
+            val until = fetchDeadline(context) ?: return@launch
+            if (epoch == generation && until > SystemClock.elapsedRealtime()) kick(context, until)
         }
     }
 
-    fun kick(context: Context, until: Long) {
-        if (until <= System.currentTimeMillis() || until > System.currentTimeMillis() + 60000) {
+    private fun kick(context: Context, until: Long) {
+        if (until <= SystemClock.elapsedRealtime()) {
             if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.w("TrakkarLive", "activation_rejected reason=expiry_out_of_range")
             return
         }
@@ -62,7 +63,7 @@ object LiveTrackingController {
             if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.w("TrakkarLive", "activation_rejected reason=not_registered")
             return
         }
-        expiresAt = maxOf(expiresAt, until)
+        deadline = maxOf(deadline, until)
         if (job?.isActive == true) return
         val epoch = ++generation
         job = scope.launch {
@@ -85,14 +86,14 @@ object LiveTrackingController {
                     accuracy = Accuracy.HIGH, distanceMeters = 0, intervalSeconds = 5,
                     angleDegrees = 0, stopDetection = false,
                 )))
-                LiveTrackingNotification.show(context, expiresAt - System.currentTimeMillis())
+                LiveTrackingNotification.show(context, deadline - SystemClock.elapsedRealtime())
                 if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.i("TrakkarLive", "live_profile_activated")
-                while (isActive && epoch == generation && System.currentTimeMillis() < expiresAt) {
-                    val remaining = expiresAt - System.currentTimeMillis()
+                while (isActive && epoch == generation && SystemClock.elapsedRealtime() < deadline) {
+                    val remaining = deadline - SystemClock.elapsedRealtime()
                     delay(minOf(10000L, remaining).coerceAtLeast(1))
                     // Failures do not extend the old lease. Server cancellation shortens it.
-                    fetchExpiry(context)?.let { expiresAt = it }
-                    val nextRemaining = expiresAt - System.currentTimeMillis()
+                    fetchDeadline(context)?.let { deadline = it }
+                    val nextRemaining = deadline - SystemClock.elapsedRealtime()
                     if (nextRemaining > 0) LiveTrackingNotification.show(context, nextRemaining)
                 }
             } catch (error: CancellationException) {
@@ -127,7 +128,7 @@ object LiveTrackingController {
             prefs.edit().putBoolean("temporary", false).commit()
             if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.i("TrakkarLive", "baseline_restored")
         } catch (_: Exception) { /* retry on next process launch */ }
-        expiresAt = 0
+        deadline = 0
     }
 
     private fun baseline(context: Context): Config? {
@@ -139,7 +140,7 @@ object LiveTrackingController {
             buffer = true, notification = NotificationConfig(text = "Trakkar is sharing your location"))
     }
 
-    private suspend fun fetchExpiry(context: Context): Long? = withContext(Dispatchers.IO) {
+    private suspend fun fetchDeadline(context: Context): Long? = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val endpoint = prefs.getString("endpoint", null) ?: return@withContext null
         val token = prefs.getString("token", null) ?: return@withContext null
@@ -152,9 +153,9 @@ object LiveTrackingController {
                 connection.setRequestProperty("Authorization", "Bearer $token")
                 if (connection.responseCode != 200) return@withContext 0L
                 val value = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-                // Calculate remaining time against the server clock, clamp to a bounded lease.
-                val remaining = (value.getLong("expiresAt") - value.getLong("serverTime")).coerceIn(0, 30000)
-                System.currentTimeMillis() + remaining
+                LiveTrackingLease.deadline(
+                    value.getLong("expiresAt"), value.getLong("serverTime"), SystemClock.elapsedRealtime(),
+                )
             } finally { connection.disconnect() }
         } catch (_: Exception) { null }
     }

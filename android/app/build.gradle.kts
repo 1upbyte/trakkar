@@ -69,6 +69,7 @@ extensions.configure<ApplicationExtension> {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("org.traccar:traccar-client-sdk:1.0.11")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation(platform("com.google.firebase:firebase-bom:34.4.0"))

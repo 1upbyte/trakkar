@@ -187,8 +187,12 @@ from a missed or delayed activation push without restarting stopped tracking.
 The controller still reads the device-scoped lease; the viewer response cannot
 activate a device directly.
 
-The handler rejects expired or excessively long requests;
-the server can renew the active session only in bounded 30-second increments.
+Android treats the push as a wake-up hint and fetches the current authorized
+session before changing the tracking profile. The payload's absolute expiry is
+not compared with the phone's clock. The server-relative remaining lease is
+clamped to 30 seconds and tracked with Android's monotonic elapsed clock, so clock
+skew and wall-clock adjustments cannot reject valid sessions or prolong them.
+Expired or released sessions cannot activate tracking, including delayed pushes.
 
 A temporary-profile marker is persisted before switching. On process startup the
 controller restores the baseline before checking the current server session. A
@@ -285,9 +289,9 @@ To diagnose Android activation, enable sidecar diagnostics with
 default. Install an Android **debug** build (`flutter build apk --debug`);
 release and profile builds omit these Android diagnostic logs. Watch the server with
 `docker compose logs -f --timestamps live-tracking` and the connected phone with
-`adb logcat -s TrakkarLive:I '*:S'`. Close all viewer maps for at least 35 seconds,
-then open a map showing the tracked device. For an isolated background push test,
-keep the tracked phone's map closed and use a second phone as the viewer.
+`adb logcat -s TrakkarLive:I '*:S'`. Background all viewer apps for at least 35 seconds,
+then open a viewer app whose account includes the tracked device. For an isolated background push test,
+keep the tracked phone's app backgrounded and use a second phone as the viewer.
 
 The sidecar logs `device_registered`, `push_attempt`, `push_accepted`,
 `push_failed`, and `push_skipped` with a device ID and safe reason where relevant.
@@ -314,10 +318,10 @@ flutter build ios --simulator --debug --no-codesign
 Before calling the deployment live, test with two provisioned physical devices:
 
 1. Keep the tracked phone's app in the background with tracking enabled. Open the
-   viewer's Map tab. Verify actual Traccar fix timestamps and WebSocket marker updates.
-2. Keep the map visible longer than 30 seconds: verify the session extends without
-   repeated pushes. Add another viewer, then close the first viewer's map.
-3. Close the last viewer's map or disconnect it. Verify the normal profile returns
+   viewer's app on any tab. Verify actual Traccar fix timestamps and WebSocket marker updates.
+2. Keep the viewer app open longer than 30 seconds: verify the session extends without
+   repeated pushes. Add another viewer, then background the first viewer's app.
+3. Background the last viewer's app or disconnect it. Verify the normal profile returns
    within the lease lifetime plus an in-flight network request; no permanent live mode.
 4. Stop/restart the tracked process during a session and verify baseline recovery.
 5. Test Android Doze, iOS background handoff, lost connectivity, revoked location

@@ -9,14 +9,12 @@ class LiveTrackingMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         if (message.data["type"] != "live_tracking") return
         if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.i("TrakkarLive", "push_received")
-        val until = message.data["expiresAt"]?.toLongOrNull() ?: run {
-            if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.w("TrakkarLive", "push_rejected reason=invalid_expiry")
-            return
-        }
-        LiveTrackingController.kick(applicationContext, until)
+        // A push is only a wake-up hint. Authorize against the current server
+        // lease rather than comparing its timestamp with this phone's clock.
+        LiveTrackingController.reconcile(applicationContext)
     }
     override fun onNewToken(token: String) {
-        // Flutter re-registers the current token on its next visible-map renewal.
+        // Flutter re-registers the current token on its next foreground renewal.
         applicationContext.getSharedPreferences("trakkar-fcm", MODE_PRIVATE).edit()
             .putString("pushToken", token).apply()
     }
