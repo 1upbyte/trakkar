@@ -658,32 +658,32 @@
 			};
 			name = Release;
 		};
-		A06000000000000000000023 = {isa = XCBuildConfiguration; buildSettings = {
+		A06000000000000000000023 = {isa = XCBuildConfiguration; baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */; buildSettings = {
  APPLICATION_EXTENSION_API_ONLY = YES; CLANG_ENABLE_MODULES = YES; CODE_SIGN_STYLE = Automatic;
  CODE_SIGN_ENTITLEMENTS = LocationPushService/LocationPushService.entitlements;
  APS_ENVIRONMENT = development;
  INFOPLIST_FILE = LocationPushService/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 15.0;
- CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0.0;
+ CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)"; MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
  PRODUCT_BUNDLE_IDENTIFIER = com.oneupbyte.trakkar.LocationPushService; PRODUCT_NAME = "$(TARGET_NAME)";
  SDKROOT = iphoneos; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";
  LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
  }; name = Debug; };
-		A06000000000000000000024 = {isa = XCBuildConfiguration; buildSettings = {
+		A06000000000000000000024 = {isa = XCBuildConfiguration; baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */; buildSettings = {
  APPLICATION_EXTENSION_API_ONLY = YES; CLANG_ENABLE_MODULES = YES; CODE_SIGN_STYLE = Automatic;
  CODE_SIGN_ENTITLEMENTS = LocationPushService/LocationPushService.entitlements;
  APS_ENVIRONMENT = production;
  INFOPLIST_FILE = LocationPushService/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 15.0;
- CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0.0;
+ CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)"; MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
  PRODUCT_BUNDLE_IDENTIFIER = com.oneupbyte.trakkar.LocationPushService; PRODUCT_NAME = "$(TARGET_NAME)";
  SDKROOT = iphoneos; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";
  LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
  }; name = Release; };
-		A06000000000000000000025 = {isa = XCBuildConfiguration; buildSettings = {
+		A06000000000000000000025 = {isa = XCBuildConfiguration; baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */; buildSettings = {
  APPLICATION_EXTENSION_API_ONLY = YES; CLANG_ENABLE_MODULES = YES; CODE_SIGN_STYLE = Automatic;
  CODE_SIGN_ENTITLEMENTS = LocationPushService/LocationPushService.entitlements;
  APS_ENVIRONMENT = production;
  INFOPLIST_FILE = LocationPushService/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 15.0;
- CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0.0;
+ CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)"; MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
  PRODUCT_BUNDLE_IDENTIFIER = com.oneupbyte.trakkar.LocationPushService; PRODUCT_NAME = "$(TARGET_NAME)";
  SDKROOT = iphoneos; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";
  LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
