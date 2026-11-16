@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import '../credential_store.dart';
 import '../traccar_api.dart';
 
-/// Map-view leases. Position collection and uploads remain native SDK work.
+/// Foreground viewer leases. Position collection and uploads remain native SDK work.
 class LiveTrackingService {
   LiveTrackingService({
     required this.sessionCookie,
@@ -195,7 +195,7 @@ class LiveTrackingService {
       debugPrint('Live tracking session renewal unavailable.');
     } finally {
       _busy = false;
-      // A renewal already in flight can finish after the user leaves the map.
+      // A renewal already in flight can finish after the app goes into the background.
       if (!_visible && !_disposed) await _release();
     }
   }

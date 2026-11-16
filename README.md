@@ -107,13 +107,13 @@ The app loads initial state from `GET /api/devices`, `GET /api/positions`,
 socket closes in the background and reconnects on resume; repeated failures use
 an exponential backoff capped at five minutes.
 
-When live tracking is configured, opening the Map tab in the foreground requests
+When live tracking is configured, opening the app in the foreground requests
 live tracking for the account's devices, including this phone if it is in that
 list. Participating phones temporarily request location updates every five
 seconds, even if their own maps are closed. Viewer sessions renew every 15 seconds;
 this renews the live tracking request rather than polling positions. Map positions
 arrive through `/api/socket`. There is no separate 30-second location timer or
-15-second position polling loop. Leaving the Map tab or backgrounding the app
+15-second position polling loop. Switching tabs keeps the session active. Backgrounding the app
 releases that viewer's session. Once all viewers leave or their sessions expire,
 phones restore normal tracking. Without a live-tracking URL, opening the map
 does not change the tracking profile.

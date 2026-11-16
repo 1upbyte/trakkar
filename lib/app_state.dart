@@ -58,8 +58,7 @@ class AppState extends ChangeNotifier {
   StreamSubscription<Map<String, dynamic>>? _liveSubscription;
   Timer? _reconnectTimer;
   Timer? _drivingExpiryTimer;
-  bool _appForeground = true;
-  bool _mapVisible = false;
+  bool _appForeground = false;
   LiveTrackingService? _liveTracking;
   int _liveGeneration = 0;
   int _reconnectAttempts = 0;
@@ -405,14 +404,9 @@ class AppState extends ChangeNotifier {
     _updateLiveTrackingVisibility();
   }
 
-  void setMapVisible(bool visible) {
-    _mapVisible = visible;
-    _updateLiveTrackingVisibility();
-  }
-
   void _updateLiveTrackingVisibility() {
     _liveTracking?.setVisible(
-      _mapVisible && _appForeground && phase == AppPhase.ready,
+      _appForeground && phase == AppPhase.ready,
     );
   }
 

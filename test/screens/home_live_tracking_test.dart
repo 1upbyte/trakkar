@@ -8,16 +8,10 @@ import 'package:trakkar/screens/home_screen.dart';
 
 class _VisibilityState extends AppState {
   final foreground = <bool>[];
-  final mapVisibility = <bool>[];
 
   @override
   void setAppForeground(bool visible) {
     foreground.add(visible);
-  }
-
-  @override
-  void setMapVisible(bool visible) {
-    mapVisibility.add(visible);
   }
 
   @override
@@ -26,7 +20,7 @@ class _VisibilityState extends AppState {
 
 void main() {
   testWidgets(
-    'background launches stay inactive and only the Map tab requests viewing',
+    'background launches stay inactive and all foreground tabs keep viewing',
     (tester) async {
       SharedPreferencesAsyncPlatform.instance =
           InMemorySharedPreferencesAsync.empty();
@@ -40,21 +34,26 @@ void main() {
         ),
       );
       expect(state.foreground.last, isFalse);
-      expect(state.mapVisibility.last, isTrue);
 
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
       expect(state.foreground.last, isTrue);
       await tester.tap(find.text('People').last);
       await tester.pump(const Duration(milliseconds: 250));
-      expect(state.mapVisibility.last, isFalse);
-      await tester.tap(find.text('Map').last);
+      expect(state.foreground, [false, true]);
+      await tester.tap(find.text('Settings').last);
       await tester.pump(const Duration(milliseconds: 250));
-      expect(state.mapVisibility.last, isTrue);
+
+      expect(state.foreground, [false, true]);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(state.foreground.last, isFalse);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
 
       await tester.pumpWidget(const SizedBox.shrink());
       expect(state.foreground.last, isFalse);
-      expect(state.mapVisibility.last, isFalse);
+      expect(state.foreground, [false, true, false, true, false]);
     },
   );
 }

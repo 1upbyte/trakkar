@@ -1,15 +1,15 @@
 # Friend map live tracking
 
-When a live-tracking URL is configured, opening the Map tab requests a short-lived
+When a live-tracking URL is configured, opening the app requests a short-lived
 live tracking session for all devices in the account's device list, including the
 viewer's own phone if present. Those phones can enter live tracking even when
 their own maps are closed. The app renews that session every 15 seconds while the
-tab is visible and the app is resumed. These renewals maintain the viewing session;
+app is resumed, across all tabs. These renewals maintain the viewing session;
 positions arrive through `/api/socket`, with no separate 15-second position polling
-or 30-second local location timer. Leaving the tab or backgrounding the app releases
+or 30-second local location timer. Backgrounding the app releases
 the session. A disconnected viewer's session expires after 30 seconds. Phones
 restore normal tracking once all viewers' sessions end, as detected by the native
-lease check or expiry. Without a live-tracking URL, map visibility does not change
+lease check or expiry. Without a live-tracking URL, app visibility does not change
 the normal tracking profile.
 
 The Docker sidecar authenticates each viewer against Traccar and verifies access
@@ -44,24 +44,24 @@ sequenceDiagram
     Phone->>Sidecar: Read authorized device lease
     Sidecar-->>Phone: Expiry and server time
     Phone->>Phone: Apply temporary SDK profile
-    loop While map viewing continues
+    loop While the app remains open
         Phone->>Traccar: SDK position uploads
         Traccar-->>Viewer: WebSocket position updates
         Viewer->>Sidecar: Renew viewing lease every 15 seconds
         Phone->>Sidecar: Recheck lease every 10 seconds
     end
-    Viewer->>Sidecar: Release lease when map is hidden
+    Viewer->>Sidecar: Release lease when the app is backgrounded
     Phone->>Phone: Restore normal profile after cancellation / expiry
 ```
 
 FCM and APNs carry an activation request and expiry, not coordinates. Position data
 travels directly from the phone's Traccar SDK to Traccar. A second viewer keeps the
-same device lease active; leaving one map does not cancel another viewer's session.
+same device lease active; backgrounding one viewer does not cancel another viewer's session.
 
 ## Components
 
 - `lib/services/tracking/live_tracking_service.dart`: registration and viewer leases.
-- `lib/app_state.dart` and `lib/screens/home_screen.dart`: map visibility,
+- `lib/app_state.dart` and `lib/screens/home_screen.dart`: foreground visibility,
   app lifecycle, authenticated session, device list, and reset.
 - `android/.../live/`: native FCM handler and temporary SDK configuration controller.
 - `ios/LiveTrackingSDK`: local native SDK adapter used by Runner and its extension.
@@ -181,7 +181,7 @@ The native handler uses the SDK's existing configuration API. It only changes an
 already enabled tracker, and does not launch a foreground service or permission
 prompt from a push. The existing Traccar foreground location service carries the
 ongoing tracking work.
-While the Android map is visible, each successful viewer renewal also asks the
+While the Android app is visible, each successful viewer renewal also asks the
 native controller to check this phone's authorized device session. This recovers
 from a missed or delayed activation push without restarting stopped tracking.
 The controller still reads the device-scoped lease; the viewer response cannot
