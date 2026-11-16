@@ -89,7 +89,7 @@ Use Node 24 or later for local development. The container includes Node 24.
 3. Mount a Firebase service-account JSON file as `firebase-service-account.json` and
    your APNs key as `AuthKey.p8`. Fill in the Apple key ID, team ID, and bundle ID.
    Set `APNS_SANDBOX=true` for development provisioning, `false` for TestFlight/store.
-   The supplied service sends Android **normal-priority data messages**. No Firebase
+   The supplied service sends Android **high-priority data messages**. No Firebase
    or Apple credentials belong in the mobile application or Git.
 4. Run:
 
@@ -196,10 +196,16 @@ failed renewal cannot extend the old expiry. Stopped tracking is not restarted b
 an incoming push. Reset clears the local native registration as well as deleting
 its sidecar registration when reachable.
 
-Normal-priority FCM delivery may be delayed in Doze. High-priority silent pushes
-are deliberately not used: FCM reserves high priority for user-visible content and
-can downgrade silent traffic. Devices with a stopped/killed service, revoked
-permissions, or aggressive battery restrictions may not activate immediately.
+Android activation uses high-priority FCM data messages so FCM can wake a sleeping
+phone. On activation the app posts a visible **Live location sharing** status on a
+low-importance channel with no sound or vibration, and removes it when live mode
+ends. On Android 8 and later the status also expires automatically unless renewed.
+This user-visible indication supports FCM's high-priority delivery requirements;
+it is not an invisible background push. Keep notifications enabled and the live
+sharing channel unblocked. Notification settings, Doze, lost connectivity,
+stopped/killed tracking services, revoked permissions, and battery restrictions
+can still prevent immediate activation. High priority improves delivery urgency;
+it does not guarantee delivery or restart tracking that someone stopped.
 See [FCM priority rules](https://firebase.google.com/docs/cloud-messaging/android-message-priority)
 and [Android foreground service restrictions](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start).
 

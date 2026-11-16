@@ -85,12 +85,15 @@ object LiveTrackingController {
                     accuracy = Accuracy.HIGH, distanceMeters = 0, intervalSeconds = 5,
                     angleDegrees = 0, stopDetection = false,
                 )))
+                LiveTrackingNotification.show(context, expiresAt - System.currentTimeMillis())
                 if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.i("TrakkarLive", "live_profile_activated")
                 while (isActive && epoch == generation && System.currentTimeMillis() < expiresAt) {
                     val remaining = expiresAt - System.currentTimeMillis()
                     delay(minOf(10000L, remaining).coerceAtLeast(1))
                     // Failures do not extend the old lease. Server cancellation shortens it.
                     fetchExpiry(context)?.let { expiresAt = it }
+                    val nextRemaining = expiresAt - System.currentTimeMillis()
+                    if (nextRemaining > 0) LiveTrackingNotification.show(context, nextRemaining)
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -115,6 +118,7 @@ object LiveTrackingController {
     }
 
     private suspend fun restore(context: Context) {
+        LiveTrackingNotification.hide(context)
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!prefs.getBoolean("temporary", false)) return
         val base = baseline(context) ?: return

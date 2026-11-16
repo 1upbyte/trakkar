@@ -33,7 +33,7 @@ export class PushSender {
     const response = await fetch(`https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`, {
       method:'POST',headers:{Authorization:`Bearer ${this.googleToken.value}`,'Content-Type':'application/json'},
       body:JSON.stringify({message:{token:device.pushToken,data:payload,
-        android:{priority:'normal',ttl:'30s',collapse_key:'live_tracking'}}}),
+        android:{priority:'high',ttl:'30s',collapse_key:'live_tracking'}}}),
       signal:AbortSignal.timeout(10000),
     });
     if (!response.ok) throw new Error(`fcm_${response.status}`);
