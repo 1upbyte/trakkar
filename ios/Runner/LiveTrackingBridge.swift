@@ -25,6 +25,11 @@ final class LiveTrackingBridge: NSObject, @preconcurrency FlutterPlugin {
         case "register":
           try LiveTrackingCoordinator.shared.register(endpoint: args["endpoint"] as! String, token: args["deviceToken"] as! String)
           result(nil)
+        case "reconcile":
+          // resume checks persisted enabled state and the authenticated device
+          // lease. A viewer renewal cannot restart stopped SDK tracking.
+          LiveTrackingCoordinator.shared.resume()
+          result(nil)
         case "pushToken":
           guard manager.authorizationStatus == .authorizedAlways else { result(nil); return }
           manager.startMonitoringLocationPushes { data, error in

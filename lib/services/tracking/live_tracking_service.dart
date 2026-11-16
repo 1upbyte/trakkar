@@ -181,10 +181,11 @@ class LiveTrackingService {
             body: jsonEncode({'deviceIds': _devices.toList()}),
           )
           .timeout(const Duration(seconds: 10));
-      // The open Android app can recover a missed/delayed FCM activation by
+      // An open phone can recover a missed/delayed activation push by
       // reading its own authorized lease after the viewer lease exists.
       if (response.statusCode == 200 &&
-          defaultTargetPlatform == TargetPlatform.android &&
+          (defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS) &&
           _registeredDeviceId != null &&
           _visible &&
           !_disposed &&

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +14,56 @@ void main() {
   const channel = MethodChannel('trakkar/live_tracking');
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  for (final platform in [TargetPlatform.iOS, TargetPlatform.android]) {
+    testWidgets('$platform recovers activation only after a successful lease', (
+      tester,
+    ) async {
+      final native = <MethodCall>[];
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        native.add(call);
+        return call.method == 'pushToken' ? 'native-push-token' : null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      var renewalStatus = 503;
+      final service = LiveTrackingService(
+        sessionCookie: 'JSESSIONID=test',
+        uniqueId: 'local-phone',
+        endpoint: 'https://live.test',
+        client: MockClient((request) async {
+          if (request.method == 'POST') {
+            return http.Response(
+              '{"deviceId":12,"deviceToken":"scoped-token"}',
+              200,
+            );
+          }
+          return http.Response('{}', renewalStatus);
+        }),
+      );
+      addTearDown(service.dispose);
+      service.setDevices([12]);
+      service.setVisible(true);
+      await tester.pump();
+      expect(native.map((call) => call.method), ['pushToken', 'register']);
+
+      // A retry succeeds without another push or device registration.
+      renewalStatus = 200;
+      await tester.pump(const Duration(seconds: 15));
+      expect(native.where((call) => call.method == 'reconcile').length, 1);
+      expect(native.where((call) => call.method == 'register').length, 1);
+
+      service.setVisible(false);
+      await tester.pump(const Duration(seconds: 30));
+      expect(native.where((call) => call.method == 'reconcile').length, 1);
+      service.setVisible(true);
+      await tester.pump();
+      expect(native.where((call) => call.method == 'reconcile').length, 2);
+      service.setVisible(false);
+      await tester.pump();
+    }, variant: TargetPlatformVariant({platform}));
+  }
 
   testWidgets('renews only while visible and releases when hidden', (
     tester,

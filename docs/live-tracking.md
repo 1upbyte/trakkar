@@ -253,6 +253,10 @@ session before fetching the lease. Only the high-frequency background activity
 session ends when the viewer lease ends; stopping tracking or resetting setup
 also releases the authorization session.
 
+While the iOS app is visible, successful viewer renewals also reconcile this
+phone's authenticated device lease. This recovers a missed activation push,
+including during the APNs kick cooldown, without restarting stopped tracking.
+
 **High-frequency background handoff requires iOS 18 or later in this implementation**
 (`CLServiceSession` plus `CLBackgroundActivitySession`). On iOS 15–17 the extension
 can request a single SDK fix but the temporary continuous profile is not activated.
