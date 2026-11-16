@@ -75,3 +75,13 @@ enum NativeTestRuntime {
     try await Task.sleep(nanoseconds: nanoseconds)
   }
 }
+
+// Authenticated sidecar replies; no coordinates or real network requests.
+final class URLSession {
+  static let shared = URLSession()
+  func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+    let response = HTTPURLResponse(url: request.url!, statusCode: 200,
+                                  httpVersion: nil, headerFields: nil)!
+    return (Data("{\"expiresAt\":1030000,\"serverTime\":1000000}".utf8), response)
+  }
+}

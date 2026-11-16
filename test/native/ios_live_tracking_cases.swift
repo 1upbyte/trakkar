@@ -49,6 +49,22 @@ struct NativeRegressions {
               LiveTrackingState.load()?.temporary == true else {
           throw Failure.message("a caller could not save successive updates")
         }
+      case "extension-account":
+        // The extension process has already handled a push for the old setup.
+        _ = try await TrackerKt.sharedTracker(config: seed.config(live: false))
+        var replacement = LiveTrackingState(serverUrl: "https://new.test", deviceId: "new-phone")
+        replacement.enabled = true
+        replacement.endpoint = "https://sidecar.test"
+        replacement.deviceToken = "new-token"
+        try replacement.save(creating: true)
+        let reporter = LocationPushReporter()
+        await withCheckedContinuation { continuation in
+          reporter.receive(payload: ["type": "live_tracking"]) { continuation.resume() }
+        }
+        guard let upload = NativeTestRuntime.uploads.last,
+              upload.serverUrl == "https://new.test", upload.deviceId == "new-phone" else {
+          throw Failure.message("reused extension uploaded with the old server/device configuration")
+        }
       default:
         throw Failure.message("unknown case")
       }

@@ -63,6 +63,9 @@ class IOSLiveTrackingTests(unittest.TestCase):
     def test_successful_writer_can_save_successive_updates(self):
         self.run_case("sequential")
 
+    def test_reused_extension_uploads_with_current_account(self):
+        self.run_case("extension-account")
+
 
 if __name__ == "__main__":
     unittest.main()

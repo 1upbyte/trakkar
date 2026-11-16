@@ -15,3 +15,15 @@ from production code. Each case runs in a separate process and temporary directo
 These tests exercise deterministic native policy; they do not establish Core
 Location authorization, APNs delivery, process reuse, or background handoff on iOS.
 Continue to build Runner and its extension and validate delivery on physical devices.
+
+The extension fixture models the pinned SDK's cached-instance contract. Verify
+that contract directly using an SDK 1.0.11 checkout and existing Gradle caches:
+
+```sh
+python3 test/native/reproduce_sdk_singleton.py /path/to/traccar-client-sdk
+```
+
+This compiles the SDK's unmodified `sharedTracker(config)` function with its real
+coroutine mutex on the JVM. Only platform bootstrap and configuration data objects
+are substituted. It confirms that a second configuration leaves the cached
+tracker unchanged; the separate Swift regression exercises the production reporter.

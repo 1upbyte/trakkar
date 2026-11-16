@@ -253,8 +253,11 @@ public final class LocationPushReporter {
       CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
         CFNotificationName("com.oneupbyte.trakkar.live.changed" as CFString), nil, nil, true)
       do {
-        let tracker = try await TrackerKt.sharedTracker(config: state.config(live: false))
-        try await tracker.stop()
+        let cached = try await TrackerKt.sharedTracker(config: state.config(live: false))
+        try await cached.stop()
+        // sharedTracker(config:) reuses its singleton without applying config.
+        // A reused extension process must adopt the current account explicitly.
+        let tracker = try await cached.updateConfig(newConfig: state.config(live: false))
         // Start the modern location service so Core Location can hand delivery to
         // the main app. Its launch path re-creates sessions and reads the lease.
         if #available(iOS 17.0, *) {
