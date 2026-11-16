@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trakkar/services/tracker_service.dart';
@@ -21,8 +22,10 @@ void main() {
   });
 
   test(
-    'uses time-based SDK updates without overriding the interval with distance',
+    'non-Android setup keeps time-based SDK updates without a distance filter',
     () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
       const channel = MethodChannel('traccar_client_sdk');
       final calls = <MethodCall>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -54,4 +57,64 @@ void main() {
       }
     },
   );
+
+  test('Android configures through one native path without rebuilding the SDK twice', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    const sdk = MethodChannel('traccar_client_sdk');
+    const live = MethodChannel('trakkar/live_tracking');
+    final calls = <String>[];
+    final connections = <Object?>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(sdk, (call) async {
+      calls.add('sdk.${call.method}');
+      return null;
+    });
+    messenger.setMockMethodCallHandler(live, (call) async {
+      calls.add('native.${call.method}');
+      connections.add(call.arguments);
+      return null;
+    });
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(sdk, null);
+      messenger.setMockMethodCallHandler(live, null);
+    });
+
+    final service = TrackerService();
+    await service.configure(
+      serverUrl: Uri.parse('https://client.test'),
+      deviceId: 'first',
+    );
+    await service.configure(
+      serverUrl: Uri.parse('https://replacement.test'),
+      deviceId: 'second',
+    );
+
+    expect(calls, ['native.configure', 'native.configure']);
+    expect(connections, [
+      {'serverUrl': 'https://client.test', 'deviceId': 'first'},
+      {'serverUrl': 'https://replacement.test', 'deviceId': 'second'},
+    ]);
+  });
+
+  test('Android configuration failure is surfaced instead of using an old connection', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    const channel = MethodChannel('trakkar/live_tracking');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (_) async {
+      throw PlatformException(code: 'tracking_configuration');
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    await expectLater(
+      TrackerService().configure(
+        serverUrl: Uri.parse('https://client.test'),
+        deviceId: 'phone',
+      ),
+      throwsA(isA<PlatformException>()),
+    );
+  });
 }

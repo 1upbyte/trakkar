@@ -16,9 +16,13 @@ object LiveTrackingBridge {
                     result.success(null)
                 }
                 "configure" -> CoroutineScope(Dispatchers.Main).launch {
-                    LiveTrackingController.configure(context, call.arguments as Map<*, *>)
-                    LiveTrackingController.reconcile(context)
-                    result.success(null)
+                    try {
+                        LiveTrackingController.configure(context, call.arguments as Map<*, *>)
+                        LiveTrackingController.reconcile(context)
+                        result.success(null)
+                    } catch (_: Exception) {
+                        result.error("tracking_configuration", "Tracking setup unavailable", null)
+                    }
                 }
                 "setEnabled" -> {
                     val enabled = (call.arguments as? Map<*, *>)?.get("enabled") == true

@@ -20,8 +20,8 @@ object LiveTrackingController {
 
     suspend fun configure(context: Context, arguments: Map<*, *>) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        // Dart has applied the normal profile; prevent an older live job from
-        // restoring another connection while account configuration changes.
+        // Cancel an older live job without restoring its connection/profile.
+        // Android configuration is owned here, including ordinary SDK setup.
         prefs.edit().putBoolean("temporary", false).commit()
         pause(context)
         val next = JSONObject(arguments)
@@ -31,7 +31,7 @@ object LiveTrackingController {
             prefs.edit().clear().commit()
         }
         prefs.edit().putString("baseline", next.toString()).commit()
-        baseline(context)?.let { sharedTracker()?.updateConfig(it) }
+        baseline(context)?.let { TrackingProfile.apply(context, it) }
     }
 
     fun register(context: Context, endpoint: String, token: String) {
@@ -82,7 +82,7 @@ object LiveTrackingController {
                     return@launch
                 }
                 prefs.edit().putBoolean("temporary", true).commit()
-                tracker.updateConfig(base.copy(location = base.location.copy(
+                TrackingProfile.apply(context, base.copy(location = base.location.copy(
                     accuracy = Accuracy.HIGH, distanceMeters = 0, intervalSeconds = 5,
                     angleDegrees = 0, stopDetection = false,
                 )))
@@ -124,7 +124,7 @@ object LiveTrackingController {
         if (!prefs.getBoolean("temporary", false)) return
         val base = baseline(context) ?: return
         try {
-            sharedTracker()?.updateConfig(base)
+            TrackingProfile.apply(context, base)
             prefs.edit().putBoolean("temporary", false).commit()
             if (BuildConfig.DEBUG && BuildConfig.BUILD_TYPE == "debug") Log.i("TrakkarLive", "baseline_restored")
         } catch (_: Exception) { /* retry on next process launch */ }

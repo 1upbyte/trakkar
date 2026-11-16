@@ -177,6 +177,14 @@ Add your Firebase Android app for `com.oneupbyte.trakkar` and place its
 applied only when that file exists. Without it, ordinary tracking still builds
 but FCM registration is unavailable.
 
+Android initializes and configures ordinary SDK tracking through the native
+controller once. Unchanged profiles do not rebuild the SDK. Profile changes are
+serialized and, when an enabled tracker requires a foreground service, wait for
+that service to enter the foreground before rebuilding it. This prevents stopping
+a service between Android's start request and its required foreground notification.
+A startup timeout is reported as a tracking setup error rather than forcing a
+rebuild while the service is still pending.
+
 The native handler uses the SDK's existing configuration API. It only changes an
 already enabled tracker, and does not launch a foreground service or permission
 prompt from a push. The existing Traccar foreground location service carries the

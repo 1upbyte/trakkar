@@ -57,6 +57,17 @@ class TrackerService {
     required Uri serverUrl,
     required String deviceId,
   }) async {
+    final connection = {
+      'serverUrl': serverUrl.toString(),
+      'deviceId': deviceId,
+    };
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      // The native controller initializes or updates the SDK once, after any
+      // pending foreground-service startup. This is required for core tracking.
+      await const MethodChannel('trakkar/live_tracking')
+          .invokeMethod<void>('configure', connection);
+      return;
+    }
     final config = Config(
       serverUrl: serverUrl.toString(),
       deviceId: deviceId,
@@ -77,10 +88,7 @@ class TrackerService {
     );
     await _sdk.init(config);
     await _sdk.setConfig(config);
-    await _invokeLive('configure', {
-      'serverUrl': serverUrl.toString(),
-      'deviceId': deviceId,
-    });
+    await _invokeLive('configure', connection);
   }
 
   Future<void> start() async {
