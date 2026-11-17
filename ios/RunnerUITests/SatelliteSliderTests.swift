@@ -10,7 +10,10 @@ final class SatelliteSliderTests: XCTestCase {
 
   private var zoomLabel: XCUIElement {
     app.descendants(matching: .any)
-      .matching(NSPredicate(format: "label BEGINSWITH %@", "Satellite starts at zoom "))
+      .matching(NSPredicate(
+        format: "label BEGINSWITH %@ OR label BEGINSWITH %@",
+        "Satellite starts at zoom ", "Satellite: "
+      ))
       .firstMatch
   }
 
@@ -21,7 +24,11 @@ final class SatelliteSliderTests: XCTestCase {
       if slider.exists {
         let frame = slider.frame
         if frame.width > 100 && frame.height > 0 && frame.minY > 80 && frame.maxY < app.frame.height - 100 {
-          return slider
+          waitForScrollToStop(slider)
+          let settled = slider.frame
+          if settled.minY > 80 && settled.maxY < app.frame.height - 100 {
+            return slider
+          }
         }
       }
       app.swipeUp()
@@ -30,8 +37,30 @@ final class SatelliteSliderTests: XCTestCase {
     return slider
   }
 
+  private func waitForScrollToStop(_ slider: XCUIElement) {
+    var previousY: CGFloat?
+    var stableSamples = 0
+    let settled = XCTNSPredicateExpectation(
+      predicate: NSPredicate { _, _ in
+        let y = slider.frame.midY
+        if let previousY, abs(y - previousY) < 0.5 {
+          stableSamples += 1
+        } else {
+          stableSamples = 0
+        }
+        previousY = y
+        return stableSamples >= 2
+      },
+      object: app
+    )
+    XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 8), .completed,
+      "Wait for Flutter's scroll inertia before calculating native touch coordinates")
+  }
+
   private func zoom() -> Double {
     let text = zoomLabel.label.components(separatedBy: "\n")[0]
+    if text == "Satellite: never" { return 1.5 }
+    if text == "Satellite: always" { return 21.5 }
     return Double(text.replacingOccurrences(of: "Satellite starts at zoom ", with: ""))!
   }
 
@@ -45,16 +74,53 @@ final class SatelliteSliderTests: XCTestCase {
   }
 
   private func drag(_ slider: XCUIElement, to fraction: CGFloat) {
-    let currentFraction = CGFloat((zoom() - 2) / 19)
+    let currentFraction = CGFloat((zoom() - 1.5) / 20)
     // UISlider's thumb center travels within half a thumb width of each end.
     let inset: CGFloat = 16
-    let width = slider.frame.width
-    let start = slider.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
-      .withOffset(CGVector(dx: inset + (width - 2 * inset) * currentFraction, dy: 0))
-    let end = slider.coordinate(withNormalizedOffset: CGVector(dx: fraction, dy: 0.5))
+    let frame = slider.frame
+    let width = frame.width
+    let origin = app.coordinate(withNormalizedOffset: .zero)
+    let start = origin.withOffset(CGVector(
+      dx: frame.minX + inset + (width - 2 * inset) * currentFraction, dy: frame.midY))
+    // Move slightly past the track to reliably reach its exact endpoints.
+    let endX = fraction <= 0 ? -40 : fraction >= 1 ? width + 40 : width * fraction
+    let end = origin.withOffset(CGVector(dx: frame.minX + endX, dy: frame.midY))
     // Real UIKit touches: adjust(toNormalizedSliderPosition:) and mocked Flutter
     // callbacks bypass the gesture arbitration that caused this regression.
     start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+  }
+
+  func testEndpointsSelectNeverAndAlwaysAndSurviveRelaunch() {
+    let slider = revealSlider()
+    for title in ["Satellite at street level", "Always satellite"] {
+      XCTAssertFalse(app.descendants(matching: .any)
+        .matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch.exists)
+    }
+
+    drag(slider, to: 0)
+    waitForZoom { $0 == 1.5 }
+    XCTAssertTrue(slider.isEnabled)
+    XCTAssertTrue(app.staticTexts["Satellite at zoom 2: off; at zoom 21: off"].exists)
+    app.terminate()
+    app.launch()
+    let never = revealSlider()
+    XCTAssertEqual(zoom(), 1.5, "Never must survive relaunch")
+    XCTAssertTrue(app.staticTexts["Satellite at zoom 2: off; at zoom 21: off"].exists)
+
+    drag(never, to: 1)
+    waitForZoom { $0 == 21.5 }
+    XCTAssertTrue(never.isEnabled)
+    XCTAssertTrue(app.staticTexts["Satellite at zoom 2: on; at zoom 21: on"].exists)
+    app.terminate()
+    app.launch()
+    let always = revealSlider()
+    XCTAssertEqual(zoom(), 21.5, "Always must survive relaunch")
+    XCTAssertTrue(app.staticTexts["Satellite at zoom 2: on; at zoom 21: on"].exists)
+
+    drag(always, to: 0.5)
+    waitForZoom { $0 >= 2 && $0 <= 21 }
+    XCTAssertTrue(app.staticTexts["Satellite at zoom 2: off; at zoom 21: on"].exists)
+    XCTAssertEqual(zoom() * 2, (zoom() * 2).rounded())
   }
 
   func testSatelliteThresholdDragPersistsAndAllowsScrolling() {

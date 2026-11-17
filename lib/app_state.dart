@@ -45,6 +45,10 @@ class AppState extends ChangeNotifier {
   static const _satelliteAutoKey = 'map.satelliteAutoAtStreetZoom';
   static const _themePreferenceKey = 'appearance.theme';
 
+  // Extra endpoint positions preserve every existing zoom threshold (2–21).
+  static const satelliteSliderMin = 1.5;
+  static const satelliteSliderMax = 21.5;
+
   final CredentialStore _credentialStore;
   final NamedPlaceStore _namedPlaceStore;
   final SharedPreferencesAsync _preferences;
@@ -638,12 +642,27 @@ class AppState extends ChangeNotifier {
   bool satelliteAtZoom(double zoom) =>
       satelliteAlways || (satelliteAutoAtStreetZoom && zoom >= satelliteZoom);
 
+  double get satelliteSliderValue => satelliteAlways
+      ? satelliteSliderMax
+      : !satelliteAutoAtStreetZoom
+      ? satelliteSliderMin
+      : satelliteZoom;
+
   Future<void> saveMapAppearance({
     bool? satelliteAutoAtStreetZoom,
     bool? darkMap,
     double? satelliteZoom,
     bool? satelliteAlways,
+    double? satelliteSliderValue,
   }) {
+    if (satelliteSliderValue != null) {
+      satelliteAlways = satelliteSliderValue >= satelliteSliderMax;
+      satelliteAutoAtStreetZoom = satelliteSliderValue > satelliteSliderMin;
+      if (satelliteSliderValue > satelliteSliderMin &&
+          satelliteSliderValue < satelliteSliderMax) {
+        satelliteZoom = satelliteSliderValue;
+      }
+    }
     this.satelliteAutoAtStreetZoom =
         satelliteAutoAtStreetZoom ?? this.satelliteAutoAtStreetZoom;
     this.darkMap = darkMap ?? this.darkMap;

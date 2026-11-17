@@ -9,7 +9,7 @@ import 'package:trakkar/screens/settings_screen.dart';
 
 void main() {
   testWidgets(
-    'map switches save immediately and permanent mode disables threshold',
+    'one enabled satellite slider selects never, always, and automatic zoom',
     (tester) async {
       SharedPreferencesAsyncPlatform.instance =
           InMemorySharedPreferencesAsync.empty();
@@ -27,12 +27,40 @@ void main() {
       expect(state.darkMap, isTrue);
       expect(await SharedPreferencesAsync().getBool('map.darkMode'), isTrue);
       expect(find.text('Save map appearance'), findsNothing);
-      await tester.scrollUntilVisible(find.text('Always satellite'), 200);
-      await tester.tap(find.text('Always satellite'));
-      await tester.pumpAndSettle();
-      expect(state.satelliteAlways, isTrue);
       await tester.scrollUntilVisible(find.byType(Slider), 150);
-      expect(tester.widget<Slider>(find.byType(Slider)).onChanged, isNull);
+      await tester.ensureVisible(find.byType(Slider));
+      await tester.pumpAndSettle();
+      expect(find.text('Satellite at street level'), findsNothing);
+      expect(find.text('Always satellite'), findsNothing);
+      expect(tester.widget<Slider>(find.byType(Slider)).onChanged, isNotNull);
+
+      await tester.drag(find.byType(Slider), const Offset(-1000, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Satellite: never'), findsOneWidget);
+      expect(state.satelliteAtZoom(21), isFalse);
+      expect(
+        await SharedPreferencesAsync().getBool('map.satelliteAutoAtStreetZoom'),
+        isFalse,
+      );
+
+      await tester.drag(find.byType(Slider), const Offset(1000, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Satellite: always'), findsOneWidget);
+      expect(state.satelliteAlways, isTrue);
+      expect(state.satelliteAtZoom(2), isTrue);
+      expect(
+        await SharedPreferencesAsync().getBool('map.satelliteAlways'),
+        isTrue,
+      );
+      expect(tester.widget<Slider>(find.byType(Slider)).onChanged, isNotNull);
+
+      await tester.tap(find.byType(Slider));
+      await tester.pumpAndSettle();
+      expect(state.satelliteAlways, isFalse);
+      expect(state.satelliteAutoAtStreetZoom, isTrue);
+      expect(state.satelliteZoom, inInclusiveRange(2, 21));
+      expect(state.satelliteAtZoom(state.satelliteZoom - 0.5), isFalse);
+      expect(state.satelliteAtZoom(state.satelliteZoom), isTrue);
     },
   );
 }

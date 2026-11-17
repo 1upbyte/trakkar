@@ -22,16 +22,12 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveMapAppearance({
     bool? darkMap,
-    bool? satelliteAutoAtStreetZoom,
-    bool? satelliteAlways,
-    double? satelliteZoom,
+    double? satelliteSliderValue,
   }) async {
     try {
       await context.read<AppState>().saveMapAppearance(
         darkMap: darkMap,
-        satelliteAutoAtStreetZoom: satelliteAutoAtStreetZoom,
-        satelliteAlways: satelliteAlways,
-        satelliteZoom: satelliteZoom,
+        satelliteSliderValue: satelliteSliderValue,
       );
     } on Object {
       if (!mounted) return;
@@ -115,6 +111,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final satelliteLabel = state.satelliteAlways
+        ? 'Satellite: always'
+        : !state.satelliteAutoAtStreetZoom
+        ? 'Satellite: never'
+        : 'Satellite starts at zoom ${state.satelliteZoom.toStringAsFixed(1)}';
 
     final ownImage = state.ownDevice == null
         ? null
@@ -356,50 +357,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: state.darkMap,
                   onChanged: (value) => _saveMapAppearance(darkMap: value),
                 ),
-                PlatformSwitchTile(
-                  title: const Text('Satellite at street level'),
-                  subtitle: const Text(
-                    'Show satellite imagery automatically when zoomed in.',
-                  ),
-                  value: state.satelliteAutoAtStreetZoom,
-                  onChanged: state.satelliteAlways
-                      ? null
-                      : (value) => _saveMapAppearance(
-                          satelliteAutoAtStreetZoom: value,
-                        ),
-                ),
-                PlatformSwitchTile(
-                  title: const Text('Always satellite'),
-                  subtitle: const Text(
-                    'Show satellite imagery at every zoom level.',
-                  ),
-                  value: state.satelliteAlways,
-                  onChanged: (value) =>
-                      _saveMapAppearance(satelliteAlways: value),
-                ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Satellite starts at zoom ${state.satelliteZoom.toStringAsFixed(1)}',
-                      ),
+                      Text(satelliteLabel),
                       PlatformSlider(
-                        value: state.satelliteZoom,
-                        min: 2,
-                        max: 21,
-                        divisions: 38,
-                        label: state.satelliteZoom.toStringAsFixed(1),
-                        onChanged:
-                            state.satelliteAlways ||
-                                !state.satelliteAutoAtStreetZoom
-                            ? null
-                            : (value) =>
-                                  _saveMapAppearance(satelliteZoom: value),
+                        value: state.satelliteSliderValue,
+                        min: AppState.satelliteSliderMin,
+                        max: AppState.satelliteSliderMax,
+                        divisions: 40,
+                        label: satelliteLabel,
+                        onChanged: (value) =>
+                            _saveMapAppearance(satelliteSliderValue: value),
+                      ),
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [Text('Never'), Text('Always')],
                       ),
                       const Text(
-                        'Lower values switch sooner; higher values switch closer in.',
+                        'Between the ends, lower zoom values switch sooner; higher values switch closer in.',
                       ),
                     ],
                   ),

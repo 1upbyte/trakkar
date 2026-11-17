@@ -28,8 +28,14 @@ Xcode scheme. XCUITest launches the real Settings screen with native UIKit
 controls and real preferences, without provisioning or a server. It drags the
 slider in both directions, checks the Flutter threshold label and half-level
 steps, relaunches to check persistence, and checks vertical scrolling starting
-over the slider. Touches come from iOS, rather than Flutter's synthetic widget
-gestures or mocked method-channel events.
+over the slider. It also checks that the removed satellite switches are absent,
+the far left selects Never, the far right selects Always, both modes survive
+relaunch, and dragging back into the middle restores automatic switching. The
+fixture shows the map's actual satellite decision at zoom 2 and 21 so those
+behaviors can be verified without downloading tiles. Every numeric threshold
+from 2 to 21 remains available between the two extra endpoint positions.
+Touches come from iOS, rather than Flutter's synthetic widget gestures or mocked
+method-channel events.
 
 Build logs and Xcode result bundles (including failure screenshots) are saved in
 `build/slider-system-test/`. The fixture replaces the simulator's installed app;
