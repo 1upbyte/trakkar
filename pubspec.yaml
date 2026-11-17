@@ -36,7 +36,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   traccar_client_sdk: 1.0.11
   flutter_map: ^8.3.2
-  flutter_map_marker_cluster: ^8.2.2
+  # Local 8.2.2 patch preserves expanded clusters across live location updates.
+  flutter_map_marker_cluster:
+    path: third_party/flutter_map_marker_cluster
   latlong2: ^0.9.1
   mobile_scanner: ^7.4.0
   flutter_secure_storage: ^10.0.0

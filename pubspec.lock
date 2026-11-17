@@ -246,10 +246,9 @@ packages:
   flutter_map_marker_cluster:
     dependency: "direct main"
     description:
-      name: flutter_map_marker_cluster
-      sha256: "04a20d9b1c3a18b67cc97c1240f75361ab98449b735ab06f2534ece0d0794733"
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/flutter_map_marker_cluster"
+      relative: true
+    source: path
     version: "8.2.2"
   flutter_map_marker_popup:
     dependency: transitive
