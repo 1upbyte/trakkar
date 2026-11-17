@@ -216,6 +216,28 @@ flutter build ios --simulator --debug
 The iOS build command requires a complete Xcode installation. iOS release
 signing and final store assets must be configured before store submission.
 
+To prepare a new TestFlight build on macOS, run:
+
+```sh
+./scripts/release_ios.sh
+```
+
+The script increments the build number in `pubspec.yaml`, keeps the version
+name unchanged, builds the production entry point with `flutter build ipa`,
+and opens the matching archive in Xcode Organizer. Choose **Distribute App →
+App Store Connect → Upload**, then follow the printed App Store Connect link
+to add the processed build to your TestFlight group. Both Runner and
+LocationPushService need signing configured with your developer team.
+If App Store Connect already has a higher build number, supply the next unused
+number explicitly, for example `./scripts/release_ios.sh 12`. A failed build
+leaves the incremented number in `pubspec.yaml`.
+
+Check the release script without building or opening Xcode:
+
+```sh
+python3 -m unittest discover -s test/scripts -p 'test_*.py' -v
+```
+
 To build and publish an Android APK manually, open **Actions → Android release
 → Run workflow** and enter the GitHub release name and description. The workflow
 attaches `app-release.apk` to a GitHub release with a unique tag.
