@@ -14,6 +14,23 @@ after expanding the pane and switching tabs. Screenshots are saved under
 For phone sizes and larger text in landscape, run
 `flutter test test/screens/person_sheet_test.dart`.
 
+## Native iOS person pane system regression
+
+```sh
+scripts/test_ios_person_pane.sh <simulator-UDID>
+```
+
+XCUITest launches the real app shell with a local sample person and native UIKit
+glass. It opens the person pane, swipes it up and down with real iOS touches,
+and verifies that the pane surface extends behind the bottom menu while its
+scrollable content and action stay above it. It also taps the action, cancels
+the dialog, switches tabs through the menu, and reopens the pane.
+
+Build logs and Xcode results, including screenshots of each pane state, are
+saved under `build/person-pane-system-test/`. Use a dedicated simulator: the
+fixture replaces its installed app. The script restores the normal Flutter
+entry point afterward; `flutter run` reinstalls the normal app.
+
 # iOS satellite slider system regression
 
 With Xcode and Flutter installed, choose an iOS simulator from

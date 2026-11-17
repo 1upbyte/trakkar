@@ -3,42 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:trakkar/app_state.dart';
 import 'package:trakkar/main.dart';
-import 'package:trakkar/models/traccar_device.dart';
-import 'package:trakkar/models/traccar_position.dart';
 import 'package:trakkar/widgets/liquid_glass.dart';
 
-class PersonSheetState extends AppState {
-  PersonSheetState() {
-    phase = AppPhase.ready;
-    devices = const [
-      TraccarDevice(
-        id: 1,
-        name: 'Alex',
-        uniqueId: 'sheet-test',
-        status: 'online',
-        raw: {},
-      ),
-    ];
-    positions = const {
-      1: TraccarPosition(
-        id: 1,
-        deviceId: 1,
-        latitude: 40.7527,
-        longitude: -73.9772,
-        valid: true,
-        address: 'Grand Central Terminal, New York',
-      ),
-    };
-  }
+import 'person_sheet_state.dart';
 
-  @override
-  void setAppForeground(bool visible) {}
-
-  @override
-  Future<void> refreshTrackingHealth() async {}
-}
-
-Future<void> openPersonSheet(WidgetTester tester) async {
+Future<void> launchPersonMap(WidgetTester tester) async {
   final state = PersonSheetState();
   addTearDown(state.dispose);
   await tester.pumpWidget(
@@ -47,7 +16,13 @@ Future<void> openPersonSheet(WidgetTester tester) async {
       child: const TrakkarApp(),
     ),
   );
+  await tester.pump();
   await tester.pump(const Duration(seconds: 1));
+  await tester.pump();
+}
+
+Future<void> openPersonSheet(WidgetTester tester) async {
+  await launchPersonMap(tester);
   await tester.tap(find.text('A').first);
   await tester.pump();
   await tester.pump(const Duration(seconds: 1));

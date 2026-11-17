@@ -25,6 +25,7 @@
 		A06000000000000000000007 /* TrakkarLiveTrackingSDK in Frameworks */ = {isa = PBXBuildFile; productRef = A06000000000000000000008 /* TrakkarLiveTrackingSDK */; };
 		A06000000000000000000009 /* LocationPushService.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A06000000000000000000010 /* LocationPushService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C51000000000000000000001 /* SatelliteSliderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C51000000000000000000002 /* SatelliteSliderTests.swift */; };
+		C52000000000000000000001 /* PersonPaneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52000000000000000000002 /* PersonPaneTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -96,6 +97,7 @@
 		A06000000000000000000012 /* LocationPushService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LocationPushService.entitlements; sourceTree = "<group>"; };
 		A06000000000000000000013 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		C51000000000000000000002 /* SatelliteSliderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SatelliteSliderTests.swift; sourceTree = "<group>"; };
+		C52000000000000000000002 /* PersonPaneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonPaneTests.swift; sourceTree = "<group>"; };
 		C51000000000000000000003 /* RunnerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -212,7 +214,10 @@
 		};
 		C51000000000000000000004 /* RunnerUITests */ = {
 			isa = PBXGroup;
-			children = (C51000000000000000000002 /* SatelliteSliderTests.swift */);
+			children = (
+				C51000000000000000000002 /* SatelliteSliderTests.swift */,
+				C52000000000000000000002 /* PersonPaneTests.swift */,
+			);
 			path = RunnerUITests;
 			sourceTree = "<group>";
 		};
@@ -445,7 +450,10 @@
 		C51000000000000000000007 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (C51000000000000000000001 /* SatelliteSliderTests.swift in Sources */);
+			files = (
+				C51000000000000000000001 /* SatelliteSliderTests.swift in Sources */,
+				C52000000000000000000001 /* PersonPaneTests.swift in Sources */,
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */

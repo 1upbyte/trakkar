@@ -32,12 +32,14 @@ const _personFocusZoom = 18.0;
 class MapScreen extends StatefulWidget {
   const MapScreen({
     required this.visible,
+    this.bottomNavigationInset = 0,
     this.placeCreationRequest = 0,
     this.autoPlace = false,
     super.key,
   });
 
   final bool visible;
+  final double bottomNavigationInset;
   final int placeCreationRequest;
   final bool autoPlace;
 
@@ -515,7 +517,7 @@ class _MapScreenState extends State<MapScreen>
           // The iOS map extends behind the glass tabs. Keep that area inside
           // the sheet's surface, but outside its scrollable content.
           final navigationInset = isIOS(this.context)
-              ? MediaQuery.paddingOf(this.context).bottom
+              ? widget.bottomNavigationInset
               : 0.0;
           // A small screen fraction can show only the avatar and cut off the
           // person's details. Reserve room for them, accounting for larger text,
@@ -781,18 +783,23 @@ class _MapScreenState extends State<MapScreen>
                             ),
                             width: 126,
                             height: 64,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: device == null
-                                  ? null
-                                  : () => _focusPerson(device, position, state),
-                              child: _AvatarMarker(
-                                name: device?.name ?? 'Unknown',
-                                driving: state.isDriving(position),
-                                position: position,
-                                imageBytes: device == null
+                            child: Semantics(
+                              identifier: 'person-marker-${entry.key}',
+                              button: true,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: device == null
                                     ? null
-                                    : state.deviceImages[device.id],
+                                    : () =>
+                                          _focusPerson(device, position, state),
+                                child: _AvatarMarker(
+                                  name: device?.name ?? 'Unknown',
+                                  driving: state.isDriving(position),
+                                  position: position,
+                                  imageBytes: device == null
+                                      ? null
+                                      : state.deviceImages[device.id],
+                                ),
                               ),
                             ),
                           );
@@ -1214,6 +1221,43 @@ class _ClusterPerson {
   final Uint8List? imageBytes;
 }
 
+/// Keep the surface behind the floating tabs while clipping all pane content
+/// above them, including native UIKit controls inside the scroll view.
+class _PersonSheetSurface extends StatelessWidget {
+  const _PersonSheetSurface({
+    required this.identifier,
+    required this.bottomInset,
+    required this.child,
+  });
+
+  final String identifier;
+  final double bottomInset;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    identifier: identifier,
+    container: true,
+    explicitChildNodes: true,
+    child: Material(
+      color: Theme.of(context).colorScheme.surface,
+      elevation: 8,
+      clipBehavior: Clip.antiAlias,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: SafeArea(
+        top: false,
+        minimum: EdgeInsets.only(bottom: bottomInset),
+        child: Semantics(
+          identifier: '$identifier-content',
+          container: true,
+          explicitChildNodes: true,
+          child: child,
+        ),
+      ),
+    ),
+  );
+}
+
 class _PersonSheet extends StatelessWidget {
   const _PersonSheet({
     required this.device,
@@ -1237,86 +1281,80 @@ class _PersonSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      elevation: 8,
-      clipBehavior: Clip.antiAlias,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: SafeArea(
-        top: false,
-        minimum: EdgeInsets.only(bottom: bottomInset),
-        child: ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          children: [
-            Center(
-              child: Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+    return _PersonSheetSurface(
+      identifier: 'person-pane',
+      bottomInset: bottomInset,
+      child: ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        children: [
+          Center(
+            child: Container(
+              width: 38,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 12),
-            CircleAvatar(
-              radius: 38,
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              child: imageBytes == null
-                  ? Text(
-                      _initial(device.name),
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    )
-                  : ClipOval(
-                      child: Image.memory(
-                        imageBytes!,
-                        width: 76,
-                        height: 76,
-                        fit: BoxFit.contain,
-                        alignment: Alignment.center,
-                        filterQuality: FilterQuality.high,
-                        gaplessPlayback: true,
-                      ),
+          ),
+          const SizedBox(height: 12),
+          CircleAvatar(
+            radius: 38,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            child: imageBytes == null
+                ? Text(
+                    _initial(device.name),
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
                     ),
+                  )
+                : ClipOval(
+                    child: Image.memory(
+                      imageBytes!,
+                      width: 76,
+                      height: 76,
+                      fit: BoxFit.contain,
+                      alignment: Alignment.center,
+                      filterQuality: FilterQuality.high,
+                      gaplessPlayback: true,
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            device.name,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: isIOS(context) ? FontWeight.w700 : FontWeight.w800,
             ),
-            const SizedBox(height: 14),
-            Text(
-              device.name,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: isIOS(context) ? FontWeight.w700 : FontWeight.w800,
-              ),
+          ),
+          const SizedBox(height: 8),
+          LocationLabel(position: position, address: address, showAge: false),
+          FutureBuilder<String>(
+            future: arrival,
+            builder: (context, snapshot) =>
+                Text(snapshot.data ?? 'Here since: checking arrival…'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _positionSummary(position),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: PlatformButton.tonalIcon(
+              onPressed: () async {
+                final saved = await onNamePlace();
+                if (saved && context.mounted) Navigator.pop(context);
+              },
+              icon: const Icon(Icons.add_location_alt_outlined),
+              label: const Text('Give this place a friendly name'),
             ),
-            const SizedBox(height: 8),
-            LocationLabel(position: position, address: address, showAge: false),
-            FutureBuilder<String>(
-              future: arrival,
-              builder: (context, snapshot) =>
-                  Text(snapshot.data ?? 'Here since: checking arrival…'),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _positionSummary(position),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: PlatformButton.tonalIcon(
-                onPressed: () async {
-                  final saved = await onNamePlace();
-                  if (saved && context.mounted) Navigator.pop(context);
-                },
-                icon: const Icon(Icons.add_location_alt_outlined),
-                label: const Text('Give this place a friendly name'),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

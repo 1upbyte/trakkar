@@ -28,7 +28,7 @@ flutter build ios --config-only --simulator --debug --target integration_test/fi
 
 xcodebuild test -workspace ios/Runner.xcworkspace -scheme SatelliteSlider \
   -configuration Debug -destination "platform=iOS Simulator,id=$device" \
-  -parallel-testing-enabled NO -collect-test-diagnostics never -only-testing:RunnerUITests \
+  -parallel-testing-enabled NO -collect-test-diagnostics never -only-testing:RunnerUITests/SatelliteSliderTests \
   -resultBundlePath "$run_dir/Results.xcresult" \
   CODE_SIGNING_ALLOWED=NO > "$run_dir/xcodebuild.log" 2>&1 || {
     tail -30 "$run_dir/xcodebuild.log"

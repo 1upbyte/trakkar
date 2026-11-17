@@ -79,6 +79,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               children: [
                 MapScreen(
                   visible: _index == 0,
+                  // Measure outside the scaffold: its body removes the system
+                  // bottom padding, and keyboard transitions change padding.
+                  bottomNavigationInset: isIOS(context)
+                      ? LiquidGlassTabBar.bottomInsetOf(context)
+                      : 0,
                   placeCreationRequest: _placeCreationRequest,
                   autoPlace: _autoPlace,
                 ),

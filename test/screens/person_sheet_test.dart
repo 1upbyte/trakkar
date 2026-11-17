@@ -13,6 +13,7 @@ void main() {
         tester.view.physicalSize = size * 3;
         tester.view.devicePixelRatio = 3;
         tester.view.padding = const FakeViewPadding(top: 177, bottom: 102);
+        tester.view.viewPadding = const FakeViewPadding(top: 177, bottom: 102);
         addTearDown(tester.view.reset);
         SharedPreferencesAsyncPlatform.instance =
             InMemorySharedPreferencesAsync.empty();
@@ -43,6 +44,7 @@ void main() {
     tester.view.physicalSize = const Size(1704, 960);
     tester.view.devicePixelRatio = 3;
     tester.view.padding = const FakeViewPadding(left: 102, right: 102);
+    tester.view.viewPadding = const FakeViewPadding(left: 102, right: 102);
     tester.platformDispatcher.textScaleFactorTestValue = 1.8;
     addTearDown(tester.view.reset);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -50,6 +52,42 @@ void main() {
         InMemorySharedPreferencesAsync.empty();
     await openPersonSheet(tester);
     await expandPersonSheet(tester);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+  testWidgets('person pane keeps menu clearance after keyboard dismissal', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1179, 2556);
+    tester.view.devicePixelRatio = 3;
+    tester.view.padding = const FakeViewPadding(top: 177, bottom: 102);
+    tester.view.viewPadding = const FakeViewPadding(top: 177, bottom: 102);
+    addTearDown(tester.view.reset);
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+    await openPersonSheet(tester);
+    await expandPersonSheet(tester);
+    await tester.tap(find.text('Give this place a friendly name'));
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    tester.view.padding = const FakeViewPadding(top: 177);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+    // Model the intermediate frames sent by iOS as the keyboard slides away.
+    for (final bottom in [720.0, 450.0, 180.0, 0.0]) {
+      tester.view.viewInsets = FakeViewPadding(bottom: bottom);
+      tester.view.padding = FakeViewPadding(
+        top: 177,
+        bottom: bottom == 0 ? 102 : 0,
+      );
+      await tester.pump(const Duration(milliseconds: 80));
+    }
+    await tester.pumpAndSettle();
+    expectPersonActionVisible(tester);
+    await tester.tap(find.text('People').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(DraggableScrollableSheet), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 }

@@ -165,6 +165,17 @@ class LiquidGlassTabBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
+  static double _heightOf(BuildContext context) =>
+      68.0 +
+      (MediaQuery.textScalerOf(context).scale(11) - 11)
+          .clamp(0.0, 22.0)
+          .toDouble();
+
+  /// Reserve the menu and home indicator even while the keyboard changes
+  /// MediaQuery.padding during a dialog's presentation or dismissal.
+  static double bottomInsetOf(BuildContext context) =>
+      _heightOf(context) + 8 + MediaQuery.viewPaddingOf(context).bottom;
+
   @override
   Widget build(BuildContext context) {
     const labels = ['Map', 'People', 'Places', 'Settings'];
@@ -180,11 +191,7 @@ class LiquidGlassTabBar extends StatelessWidget {
       CupertinoIcons.placemark_fill,
       CupertinoIcons.settings_solid,
     ];
-    final height =
-        68.0 +
-        (MediaQuery.textScalerOf(context).scale(11) - 11)
-            .clamp(0.0, 22.0)
-            .toDouble();
+    final height = _heightOf(context);
     return SafeArea(
       top: false,
       child: Padding(
@@ -193,50 +200,40 @@ class LiquidGlassTabBar extends StatelessWidget {
           heightFactor: 1,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
-            child: LiquidGlass(
-              radius: height / 2,
-              selectedIndex: currentIndex,
-              child: SizedBox(
-                height: height,
-                child: Padding(
-                  padding: const EdgeInsets.all(5),
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < labels.length; i++)
-                        Expanded(
-                          child: Semantics(
-                            selected: currentIndex == i,
-                            child: CupertinoButton(
-                              padding: EdgeInsets.zero,
-                              onPressed: () {
-                                if (currentIndex != i) {
-                                  HapticFeedback.selectionClick();
-                                }
-                                onTap(i);
-                              },
-                              child: SizedBox.expand(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      currentIndex == i
-                                          ? selectedIcons[i]
-                                          : icons[i],
-                                      size: 23,
-                                      color: currentIndex == i
-                                          ? Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                          : Theme.of(context)
-                                                .colorScheme
-                                                .onSurface,
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      labels[i],
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
+            child: Semantics(
+              identifier: 'bottom-navigation',
+              container: true,
+              explicitChildNodes: true,
+              child: LiquidGlass(
+                radius: height / 2,
+                selectedIndex: currentIndex,
+                child: SizedBox(
+                  height: height,
+                  child: Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < labels.length; i++)
+                          Expanded(
+                            child: Semantics(
+                              selected: currentIndex == i,
+                              child: CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                onPressed: () {
+                                  if (currentIndex != i) {
+                                    HapticFeedback.selectionClick();
+                                  }
+                                  onTap(i);
+                                },
+                                child: SizedBox.expand(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        currentIndex == i
+                                            ? selectedIcons[i]
+                                            : icons[i],
+                                        size: 23,
                                         color: currentIndex == i
                                             ? Theme.of(context)
                                                   .colorScheme
@@ -245,14 +242,29 @@ class LiquidGlassTabBar extends StatelessWidget {
                                                   .colorScheme
                                                   .onSurface,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        labels[i],
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: currentIndex == i
+                                              ? Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
