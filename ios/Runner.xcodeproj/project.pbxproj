@@ -24,6 +24,7 @@
 		A06000000000000000000005 /* LocationPushService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A06000000000000000000006 /* LocationPushService.swift */; };
 		A06000000000000000000007 /* TrakkarLiveTrackingSDK in Frameworks */ = {isa = PBXBuildFile; productRef = A06000000000000000000008 /* TrakkarLiveTrackingSDK */; };
 		A06000000000000000000009 /* LocationPushService.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A06000000000000000000010 /* LocationPushService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C51000000000000000000001 /* SatelliteSliderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C51000000000000000000002 /* SatelliteSliderTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -94,6 +95,8 @@
 		A06000000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A06000000000000000000012 /* LocationPushService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LocationPushService.entitlements; sourceTree = "<group>"; };
 		A06000000000000000000013 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
+		C51000000000000000000002 /* SatelliteSliderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SatelliteSliderTests.swift; sourceTree = "<group>"; };
+		C51000000000000000000003 /* RunnerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -154,6 +157,7 @@
 				A06000000000000000000014 /* LocationPushService */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
+				C51000000000000000000004 /* RunnerUITests */,
 				98FCEE0B607D5E7F31F1D4FB /* Frameworks */,
 			);
 			sourceTree = "<group>";
@@ -163,6 +167,7 @@
 			children = (
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
+				C51000000000000000000003 /* RunnerUITests.xctest */,
 				A06000000000000000000010 /* LocationPushService.appex */,
 			);
 			name = Products;
@@ -203,6 +208,12 @@
 				A06000000000000000000012 /* LocationPushService.entitlements */,
 			);
 			path = LocationPushService;
+			sourceTree = "<group>";
+		};
+		C51000000000000000000004 /* RunnerUITests */ = {
+			isa = PBXGroup;
+			children = (C51000000000000000000002 /* SatelliteSliderTests.swift */);
+			path = RunnerUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -272,6 +283,17 @@
 			productReference = A06000000000000000000010 /* LocationPushService.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		C51000000000000000000005 /* RunnerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C51000000000000000000006 /* Build configuration list for PBXNativeTarget "RunnerUITests" */;
+			buildPhases = (C51000000000000000000007 /* Sources */);
+			buildRules = ();
+			dependencies = (331C8086294A63A400263BE5 /* PBXTargetDependency */);
+			name = RunnerUITests;
+			productName = RunnerUITests;
+			productReference = C51000000000000000000003 /* RunnerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -312,6 +334,7 @@
 				97C146ED1CF9000F007C117D /* Runner */,
 				A06000000000000000000015 /* LocationPushService */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
+				C51000000000000000000005 /* RunnerUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -417,6 +440,12 @@
 			files = (
 				A06000000000000000000005 /* LocationPushService.swift in Sources */,
 			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C51000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (C51000000000000000000001 /* SatelliteSliderTests.swift in Sources */);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
@@ -824,6 +853,45 @@
 			};
 			name = Profile;
 		};
+		C51000000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oneupbyte.trakkar.RunnerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Runner;
+			};
+			name = Debug;
+		};
+		C51000000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oneupbyte.trakkar.RunnerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Runner;
+			};
+			name = Release;
+		};
+		C5100000000000000000000A /* Profile */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oneupbyte.trakkar.RunnerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Runner;
+			};
+			name = Profile;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -863,6 +931,16 @@
 				A06000000000000000000023 /* Debug */,
 				A06000000000000000000024 /* Release */,
 				A06000000000000000000025 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C51000000000000000000006 /* Build configuration list for PBXNativeTarget "RunnerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C51000000000000000000008 /* Debug */,
+				C51000000000000000000009 /* Release */,
+				C5100000000000000000000A /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

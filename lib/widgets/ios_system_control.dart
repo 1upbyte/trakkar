@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -58,6 +59,14 @@ class _IOSSystemControlState extends State<IOSSystemControl> {
   @override
   Widget build(BuildContext context) => UiKitView(
     viewType: 'com.oneupbyte.trakkar/system-control',
+    // Claim horizontal drags before the surrounding scrollable can delay or
+    // reject UIKit's slider gesture. Vertical drags still scroll the page.
+    gestureRecognizers: {
+      if (widget.kind == 'slider' && widget.onChanged != null)
+        Factory<HorizontalDragGestureRecognizer>(
+          HorizontalDragGestureRecognizer.new,
+        ),
+    },
     creationParams: _configuration,
     creationParamsCodec: const StandardMessageCodec(),
     onPlatformViewCreated: (id) {
