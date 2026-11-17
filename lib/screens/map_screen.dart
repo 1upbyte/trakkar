@@ -101,7 +101,12 @@ class _MapScreenState extends State<MapScreen>
       _buildingSession++;
       _buildingBusy = false;
       _cameraAnimation.stop();
-      _personSheetController?.close();
+      // Closing the scaffold's sheet updates its animation and local history.
+      // didUpdateWidget runs during build, so finish the tab change first.
+      final controller = _personSheetController;
+      if (controller != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => controller.close());
+      }
       if (_drawingPlace) {
         setState(() {
           _drawingPlace = false;
@@ -504,21 +509,32 @@ class _MapScreenState extends State<MapScreen>
       enableDrag: false,
       elevation: 0,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => DraggableScrollableSheet(
-        initialChildSize: 0.28,
-        minChildSize: 0.20,
-        maxChildSize: 0.72,
-        expand: false,
-        builder: (context, scrollController) => _PersonSheet(
-          device: device,
-          position: position,
-          imageBytes: state.deviceImages[device.id],
-          address: address,
-          arrival: state.arrivalSummary(position),
-          scrollController: scrollController,
-          onNamePlace: () =>
-              _addPlace(LatLng(position.latitude, position.longitude)),
-        ),
+      builder: (sheetContext) => LayoutBuilder(
+        builder: (context, constraints) {
+          // A small screen fraction can show only the avatar and cut off the
+          // person's details. Reserve room for them, accounting for larger text,
+          // while leaving the list scrollable on short screens.
+          final initialHeight = MediaQuery.textScalerOf(context).scale(460);
+          return DraggableScrollableSheet(
+            initialChildSize: (initialHeight / constraints.maxHeight).clamp(
+              0.28,
+              0.85,
+            ),
+            minChildSize: 0.20,
+            maxChildSize: 0.85,
+            expand: false,
+            builder: (context, scrollController) => _PersonSheet(
+              device: device,
+              position: position,
+              imageBytes: state.deviceImages[device.id],
+              address: address,
+              arrival: state.arrivalSummary(position),
+              scrollController: scrollController,
+              onNamePlace: () =>
+                  _addPlace(LatLng(position.latitude, position.longitude)),
+            ),
+          );
+        },
       ),
     );
     setState(() => _personSheetController = controller);
