@@ -83,4 +83,126 @@ void main() {
     expect(restored.boundary, original.boundary);
     expect(restored.isPolygon, isTrue);
   });
+
+  group('named building margin', () {
+    const building = NamedPlace(
+      id: 'building',
+      name: 'Building',
+      latitude: 40.001,
+      longitude: -73.9995,
+      boundary: [
+        LatLng(40, -74),
+        LatLng(40, -73.999),
+        LatLng(40.002, -73.999),
+        LatLng(40.002, -74),
+      ],
+    );
+
+    test('includes fixes within 20 meters of each edge', () {
+      for (final point in const [
+        LatLng(40.001, -74.0001),
+        LatLng(40.001, -73.9989),
+        LatLng(39.9999, -73.9995),
+        LatLng(40.0021, -73.9995),
+        LatLng(40.001, -74),
+      ]) {
+        expect(
+          NamedPlaceStore.nearest([building], point.latitude, point.longitude),
+          same(building),
+        );
+      }
+      for (final point in const [
+        LatLng(40.001, -74.0003),
+        LatLng(40.001, -73.9987),
+        LatLng(39.9998, -73.9995),
+        LatLng(40.0022, -73.9995),
+      ]) {
+        expect(
+          NamedPlaceStore.nearest([building], point.latitude, point.longitude),
+          isNull,
+        );
+      }
+    });
+
+    test('measures corners by distance instead of expanding a bounding box', () {
+      expect(
+        NamedPlaceStore.nearest([building], 39.9999, -74.0001),
+        same(building),
+      );
+      expect(
+        NamedPlaceStore.nearest([building], 39.99985, -74.00015),
+        isNull,
+      );
+    });
+
+    test('overlapping margins choose the nearest edge in either list order', () {
+      const neighbor = NamedPlace(
+        id: 'neighbor',
+        name: 'Neighbor',
+        latitude: 40.001,
+        longitude: -73.9986,
+        boundary: [
+          LatLng(40, -73.9987),
+          LatLng(40, -73.9985),
+          LatLng(40.002, -73.9985),
+          LatLng(40.002, -73.9987),
+        ],
+      );
+      for (final places in const [
+        [building, neighbor],
+        [neighbor, building],
+      ]) {
+        // The large building's edge is closer, despite its more distant center.
+        expect(
+          NamedPlaceStore.nearest(places, 40.001, -73.9989),
+          same(building),
+        );
+        expect(
+          NamedPlaceStore.nearest(places, 40.001, -73.9988),
+          same(neighbor),
+        );
+        expect(
+          NamedPlaceStore.nearest(places, 40.001, -73.99905),
+          same(building),
+        );
+      }
+    });
+
+    test('longitude distances account for latitude', () {
+      const polarBuilding = NamedPlace(
+        id: 'polar',
+        name: 'Polar building',
+        latitude: 80.001,
+        longitude: -73.9995,
+        boundary: [
+          LatLng(80, -74),
+          LatLng(80, -73.999),
+          LatLng(80.002, -73.999),
+          LatLng(80.002, -74),
+        ],
+      );
+      expect(
+        NamedPlaceStore.nearest([polarBuilding], 80.001, -74.0008),
+        same(polarBuilding),
+      );
+      expect(
+        NamedPlaceStore.nearest([polarBuilding], 80.001, -74.0012),
+        isNull,
+      );
+    });
+
+    test('closed rings handle their repeated vertex', () {
+      final closed = NamedPlace(
+        id: building.id,
+        name: building.name,
+        latitude: building.latitude,
+        longitude: building.longitude,
+        boundary: [...building.boundary, building.boundary.first],
+      );
+      expect(
+        NamedPlaceStore.nearest([closed], 40.001, -74.0001),
+        same(closed),
+      );
+    });
+  });
 }

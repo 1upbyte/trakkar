@@ -149,6 +149,9 @@ The people-count pill on the map and the People navigation tab open a live list
 of every device shared with the manager account. Each row displays a matching
 friendly place first; reverse geocoding runs only when no named place covers the
 position. Devices that have not reported a position remain visible in the list.
+Named building boundaries include a 20-meter margin for nearby positions.
+Where margins overlap, the closest building edge wins; a position inside a
+building takes priority over a neighboring building's margin.
 
 The app theme defaults to the phone's system appearance. Settings can override
 it with Light or Dark, and the preference is stored on the device.
