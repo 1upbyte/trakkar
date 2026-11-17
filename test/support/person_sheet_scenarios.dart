@@ -60,7 +60,10 @@ Finder personSheetList() => find.descendant(
 
 Future<void> expandPersonSheet(WidgetTester tester) async {
   await tester.drag(personSheetList(), const Offset(0, -500));
+  // Start any iOS overscroll animation before advancing its elapsed time.
+  await tester.pump();
   await tester.pump(const Duration(seconds: 1));
+  expect(personSheetList(), findsOneWidget);
   await tester.scrollUntilVisible(
     find.text('Give this place a friendly name'),
     100,
@@ -84,6 +87,26 @@ void expectPersonActionVisible(WidgetTester tester) {
       ? find.byType(LiquidGlassTabBar)
       : find.byType(NavigationBar);
   expect(viewport.bottom, lessThanOrEqualTo(tester.getRect(navigation).top));
+  if (find.byType(LiquidGlassTabBar).evaluate().isNotEmpty) {
+    final surface = find.ancestor(
+      of: personSheetList(),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Material &&
+            widget.borderRadius ==
+                const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+    );
+    expect(
+      tester.getRect(surface).bottom,
+      closeTo(
+        tester.view.physicalSize.height / tester.view.devicePixelRatio,
+        1,
+      ),
+    );
+    // The glass menu must stay above the surface and remain interactive.
+    expect(find.text('People').last.hitTestable(), findsOneWidget);
+  }
   expect(action.hitTestable(), findsOneWidget);
   expect(tester.takeException(), isNull);
 }

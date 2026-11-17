@@ -48,6 +48,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen>
     with SingleTickerProviderStateMixin {
   final _mapController = MapController();
+  final _personSheetScaffoldKey = GlobalKey<ScaffoldState>();
   late final AnimationController _cameraAnimation = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 420),
@@ -505,17 +506,22 @@ class _MapScreenState extends State<MapScreen>
         .catchError((Object _) => locationFallback(position));
     _personSheetController?.close();
     late final PersistentBottomSheetController controller;
-    controller = showBottomSheet(
-      context: context,
-      enableDrag: false,
-      elevation: 0,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => LayoutBuilder(
+    final scaffold = isIOS(context)
+        ? _personSheetScaffoldKey.currentState!
+        : Scaffold.of(context);
+    controller = scaffold.showBottomSheet(
+      (sheetContext) => LayoutBuilder(
         builder: (context, constraints) {
+          // The iOS map extends behind the glass tabs. Keep that area inside
+          // the sheet's surface, but outside its scrollable content.
+          final navigationInset = isIOS(this.context)
+              ? MediaQuery.paddingOf(this.context).bottom
+              : 0.0;
           // A small screen fraction can show only the avatar and cut off the
           // person's details. Reserve room for them, accounting for larger text,
           // while leaving the list scrollable on short screens.
-          final initialHeight = MediaQuery.textScalerOf(context).scale(460);
+          final initialHeight =
+              MediaQuery.textScalerOf(context).scale(460) + navigationInset;
           return DraggableScrollableSheet(
             initialChildSize: (initialHeight / constraints.maxHeight).clamp(
               0.28,
@@ -530,6 +536,7 @@ class _MapScreenState extends State<MapScreen>
               imageBytes: state.deviceImages[device.id],
               address: address,
               arrival: state.arrivalSummary(position),
+              bottomInset: navigationInset,
               scrollController: scrollController,
               onNamePlace: () =>
                   _addPlace(LatLng(position.latitude, position.longitude)),
@@ -537,6 +544,9 @@ class _MapScreenState extends State<MapScreen>
           );
         },
       ),
+      enableDrag: false,
+      elevation: 0,
+      backgroundColor: Colors.transparent,
     );
     setState(() => _personSheetController = controller);
     unawaited(
@@ -587,7 +597,7 @@ class _MapScreenState extends State<MapScreen>
         .join(' · ');
     final placeColor = Theme.of(context).colorScheme.tertiary;
 
-    return PopScope(
+    final map = PopScope(
       canPop: _personSheetController == null,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _personSheetController?.close();
@@ -995,6 +1005,15 @@ class _MapScreenState extends State<MapScreen>
         ],
       ),
     );
+    // A sheet owned by the outer scaffold is anchored above its navigation bar.
+    // Hosting it in the extended map body lets the glass tabs float over it.
+    return isIOS(context)
+        ? Scaffold(
+            key: _personSheetScaffoldKey,
+            backgroundColor: Colors.transparent,
+            body: map,
+          )
+        : map;
   }
 }
 
@@ -1202,6 +1221,7 @@ class _PersonSheet extends StatelessWidget {
     required this.imageBytes,
     required this.address,
     required this.arrival,
+    required this.bottomInset,
     required this.scrollController,
     required this.onNamePlace,
   });
@@ -1211,6 +1231,7 @@ class _PersonSheet extends StatelessWidget {
   final Uint8List? imageBytes;
   final Future<String> address;
   final Future<String> arrival;
+  final double bottomInset;
   final ScrollController scrollController;
   final Future<bool> Function() onNamePlace;
 
@@ -1223,6 +1244,7 @@ class _PersonSheet extends StatelessWidget {
       borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       child: SafeArea(
         top: false,
+        minimum: EdgeInsets.only(bottom: bottomInset),
         child: ListView(
           controller: scrollController,
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
