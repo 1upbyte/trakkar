@@ -34,17 +34,15 @@ account and must be handled like a password. Use HTTPS endpoints in production.
 HTTP is enabled for compatibility with self-hosted Traccar instances and local
 development.
 
-## Setup links for friends
+## Share setup with friends
 
-On a configured phone, open **Settings → Copy setup link**, then paste the link
-into a private message. The friend must already have Trakkar installed.
-If the messaging app does not make the link tappable, paste it into the
-**Setup link** field on Trakkar's login page and tap **Use setup link**.
-Beside **Copy setup link**, **Share QR code** displays a scannable code and
-offers **Share image** to send it through the system share sheet. The other
+On a configured phone, open **Settings → Share QR code** to display a scannable
+code. Tap **Share image** to send it through the system share sheet. The other
 phone can scan it with **Scan server code**; legacy server QR codes still work.
+Connection details can also be entered using **Enter connection details
+manually** on the login page.
 
-The format is:
+Shared QR codes encode a provisioning URI in this format:
 
 ```text
 trakkar://setup?data=<URL-encoded base64 provisioning payload>

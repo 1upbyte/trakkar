@@ -105,37 +105,45 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     }, variant: TargetPlatformVariant({platform}));
 
-    testWidgets('$platform onboarding supports setup link entry', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(1179, 2556);
-      tester.view.devicePixelRatio = 3;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final state = _InterfaceState()..phase = AppPhase.onboarding;
-      addTearDown(state.dispose);
-      await tester.pumpWidget(
-        ChangeNotifierProvider<AppState>.value(
-          value: state,
-          child: const TrakkarApp(),
-        ),
-      );
-      final ios = platform == TargetPlatform.iOS;
-      expect(
-        find.byType(CupertinoTextField),
-        ios ? findsWidgets : findsNothing,
-      );
-      expect(find.byType(TextField), ios ? findsNothing : findsWidgets);
-      final field = find.byType(EditableText).first;
-      await tester.ensureVisible(field);
-      await tester.enterText(field, 'invalid-setup');
-      await tester.testTextInput.receiveAction(TextInputAction.go);
-      await tester.pumpAndSettle();
-      expect(
-        find.text('This setup link is invalid or incomplete.'),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-    }, variant: TargetPlatformVariant({platform}));
+    testWidgets(
+      '$platform onboarding supports QR and manual connection details',
+      (tester) async {
+        tester.view.physicalSize = const Size(1179, 2556);
+        tester.view.devicePixelRatio = 3;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        SharedPreferencesAsyncPlatform.instance =
+            InMemorySharedPreferencesAsync.empty();
+        final state = _InterfaceState()..phase = AppPhase.onboarding;
+        addTearDown(state.dispose);
+        await tester.pumpWidget(
+          ChangeNotifierProvider<AppState>.value(
+            value: state,
+            child: const TrakkarApp(),
+          ),
+        );
+        expect(find.text('Setup link'), findsNothing);
+        expect(find.text('Use setup link'), findsNothing);
+        expect(find.text('Scan server code'), findsOneWidget);
+        final manualEntry = find.text('Enter connection details manually');
+        await tester.ensureVisible(manualEntry);
+        await tester.tap(manualEntry);
+        await tester.pumpAndSettle();
+        final ios = platform == TargetPlatform.iOS;
+        expect(
+          find.byType(CupertinoTextField),
+          ios ? findsWidgets : findsNothing,
+        );
+        expect(find.byType(TextField), ios ? findsNothing : findsWidgets);
+        final password = find.byType(EditableText).last;
+        await tester.ensureVisible(password);
+        await tester.enterText(password, '');
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pumpAndSettle();
+        expect(find.text('Enter the manager username.'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+      variant: TargetPlatformVariant({platform}),
+    );
   }
 }
