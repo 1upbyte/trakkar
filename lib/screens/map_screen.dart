@@ -18,6 +18,7 @@ import '../services/building_lookup.dart';
 import '../services/named_place_store.dart';
 import '../widgets/building_highlights.dart';
 import '../widgets/location_label.dart';
+import '../widgets/location_freshness_dot.dart';
 import '../widgets/platform_controls.dart';
 import '../widgets/liquid_glass.dart';
 import 'places_screen.dart';
@@ -777,7 +778,6 @@ class _MapScreenState extends State<MapScreen>
                                   : () => _focusPerson(device, position, state),
                               child: _AvatarMarker(
                                 name: device?.name ?? 'Unknown',
-                                online: device?.status == 'online',
                                 driving: state.isDriving(position),
                                 position: position,
                                 imageBytes: device == null
@@ -1001,14 +1001,12 @@ class _MapScreenState extends State<MapScreen>
 class _AvatarMarker extends StatelessWidget {
   const _AvatarMarker({
     required this.name,
-    required this.online,
     required this.driving,
     required this.position,
     required this.imageBytes,
   });
 
   final String name;
-  final bool online;
   final bool driving;
   final TraccarPosition position;
   final Uint8List? imageBytes;
@@ -1102,18 +1100,7 @@ class _AvatarMarker extends StatelessWidget {
         Positioned(
           left: 78,
           bottom: 3,
-          child: Container(
-            width: 15,
-            height: 15,
-            decoration: BoxDecoration(
-              color: online ? const Color(0xFF36A269) : Colors.grey,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Theme.of(context).colorScheme.surface,
-                width: 2,
-              ),
-            ),
-          ),
+          child: LocationFreshnessDot(position: position, size: 15),
         ),
       ],
     );

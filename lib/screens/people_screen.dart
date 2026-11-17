@@ -7,6 +7,7 @@ import '../app_state.dart';
 import '../models/traccar_device.dart';
 import '../models/traccar_position.dart';
 import '../widgets/location_label.dart';
+import '../widgets/location_freshness_dot.dart';
 import '../widgets/platform_controls.dart';
 
 class PeopleScreen extends StatefulWidget {
@@ -151,20 +152,7 @@ class _PersonTile extends StatelessWidget {
           Positioned(
             right: -1,
             bottom: -1,
-            child: Container(
-              width: 13,
-              height: 13,
-              decoration: BoxDecoration(
-                color: device.status == 'online'
-                    ? const Color(0xFF36A269)
-                    : Colors.grey,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.surface,
-                  width: 2,
-                ),
-              ),
-            ),
+            child: LocationFreshnessDot(position: position, size: 13),
           ),
         ],
       ),

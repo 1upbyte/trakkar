@@ -31,6 +31,11 @@ Positions are collected and uploaded through Traccar Client SDK 1.0.11. Map mark
 updates continue through the existing Traccar `/api/socket` connection. The sidecar
 does not receive or store coordinates.
 
+The avatar dot on the map and People list is green only for a valid GPS fix less
+than 15 seconds old, using its `fixTime`. It turns gray automatically when that fix
+expires, even if no more updates arrive. Missing timestamps and future-dated fixes
+are gray. Traccar's device connection status does not control the dot.
+
 ## Notification and position flow
 
 ```mermaid

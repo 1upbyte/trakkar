@@ -1,4 +1,6 @@
 class TraccarPosition {
+  static const freshnessWindow = Duration(seconds: 15);
+
   const TraccarPosition({
     required this.id,
     required this.deviceId,
@@ -42,6 +44,13 @@ class TraccarPosition {
   final double accuracy;
   final String? address;
   final Map<String, dynamic> attributes;
+
+  bool isRecent({DateTime? now}) {
+    final time = fixTime;
+    if (!valid || time == null) return false;
+    final age = (now ?? DateTime.now()).difference(time);
+    return !age.isNegative && age < freshnessWindow;
+  }
 
   double get speedMph => speed <= 0 ? 0 : speed * 1.150779448;
 
