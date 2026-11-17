@@ -237,6 +237,7 @@
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				A06000000000000000000019 /* Embed App Extensions */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
+				B7A937D8BDE24DB9A4127DF1 /* Remove Static Traccar Framework */,
 			);
 			buildRules = (
 			);
@@ -337,6 +338,24 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		B7A937D8BDE24DB9A4127DF1 /* Remove Static Traccar Framework */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/scripts/remove_static_traccar_framework.sh",
+				"$(BUILT_PRODUCTS_DIR)/TraccarClientSDK.framework/TraccarClientSDK",
+				"$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/TraccarClientSDK.framework/TraccarClientSDK",
+			);
+			name = "Remove Static Traccar Framework";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/scripts/remove_static_traccar_framework.sh\"";
+		};
 		3B06AD1E1E4923F5004D2608 /* Thin Binary */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
