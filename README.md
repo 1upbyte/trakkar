@@ -124,8 +124,11 @@ profile. Android supports continuous live tracking on all supported versions.
 
 Normal background tracking requests time-based 10-minute updates with no distance filter.
 The SDK overrides the interval with zero when a positive distance filter is set.
-Android uses that interval for native location requests; iOS controls its own
-location delivery cadence. After two stationary minutes the SDK pauses frequent
+Android uses the SDK's platform providers: network location for normal 10-minute
+updates and GPS for live 5-second updates. Ending live tracking removes the GPS
+request. Normal Android locations can be less precise and depend on network
+positioning being available. iOS controls its own location delivery cadence.
+After two stationary minutes the SDK pauses frequent
 GPS work and monitors a 100-metre stationary region so leaving it wakes tracking
 again.
 

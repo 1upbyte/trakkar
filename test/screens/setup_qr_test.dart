@@ -31,7 +31,7 @@ void main() {
         ),
       );
       await tester.scrollUntilVisible(find.text('Share QR code'), 400);
-      expect(find.text('Copy setup link'), findsOneWidget);
+      expect(find.text('Copy setup link'), findsNothing);
       await tester.tap(find.text('Share QR code'));
       await tester.pumpAndSettle();
       final dialog = tester.widget<SetupQrDialog>(find.byType(SetupQrDialog));

@@ -9,7 +9,6 @@ import 'package:trakkar/app_state.dart';
 import 'package:trakkar/main.dart';
 import 'package:trakkar/models/provisioning_config.dart';
 import 'package:trakkar/screens/setup_link_screen.dart';
-import 'package:trakkar/screens/onboarding_screen.dart';
 
 class _SetupState extends AppState {
   int logins = 0;
@@ -101,52 +100,6 @@ void main() {
     );
     expect(state.logins, 0);
     expect(state.resets, 0);
-  });
-
-  testWidgets('pasted setup link opens review without logging in', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      ChangeNotifierProvider<AppState>.value(
-        value: state,
-        child: const MaterialApp(home: Scaffold(body: OnboardingScreen())),
-      ),
-    );
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Setup link'),
-      ' $link ',
-    );
-    await tester.ensureVisible(find.text('Use setup link'));
-    await tester.tap(find.text('Use setup link'));
-    await tester.pumpAndSettle();
-    expect(find.text('Log in with this setup?'), findsOneWidget);
-    expect(state.logins, 0);
-    expect(state.resets, 0);
-  });
-
-  testWidgets('invalid pasted link shows safe error', (tester) async {
-    await tester.pumpWidget(
-      ChangeNotifierProvider<AppState>.value(
-        value: state,
-        child: const MaterialApp(home: Scaffold(body: OnboardingScreen())),
-      ),
-    );
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Setup link'),
-      'trakkar://setup?data=private-invalid-value',
-    );
-    await tester.ensureVisible(find.text('Use setup link'));
-    await tester.tap(find.text('Use setup link'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.text('This setup link is invalid or incomplete.'),
-    );
-    expect(find.byType(SetupLinkScreen), findsNothing);
-    expect(
-      find.text('This setup link is invalid or incomplete.'),
-      findsOneWidget,
-    );
-    expect(state.logins, 0);
   });
 
   testWidgets('full URI opens review at startup and while running', (

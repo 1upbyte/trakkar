@@ -135,6 +135,9 @@ object LiveTrackingController {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("baseline", null) ?: return null
         val data = JSONObject(raw)
         return Config(serverUrl = data.getString("serverUrl"), deviceId = data.getString("deviceId"),
+            // MEDIUM uses network location; live mode copies this config with
+            // HIGH to use GPS. Restoring the baseline releases the GPS request.
+            preferPlatformProviders = true,
             // A positive distance makes the SDK discard intervalSeconds.
             location = LocationConfig(accuracy = Accuracy.MEDIUM, distanceMeters = 0, intervalSeconds = 600, stopTimeoutSeconds = 120),
             buffer = true, notification = NotificationConfig(text = "Trakkar is sharing your location"))

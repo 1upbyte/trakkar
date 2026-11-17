@@ -8,7 +8,6 @@ import '../app_state.dart';
 import '../models/provisioning_config.dart';
 import '../user_facing_error.dart';
 import '../widgets/platform_controls.dart';
-import 'setup_link_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({this.initialConfig, super.key});
@@ -20,7 +19,6 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final _setupLinkController = TextEditingController();
   final _clientUrlController = TextEditingController();
   final _liveTrackingUrlController = TextEditingController();
   final _managerUrlController = TextEditingController();
@@ -51,7 +49,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   void dispose() {
-    _setupLinkController.dispose();
     _clientUrlController.dispose();
     _managerUrlController.dispose();
     _liveTrackingUrlController.dispose();
@@ -63,15 +60,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _accept(String value) async {
-    if (_handlingScan) return;
+    final state = context.read<AppState>();
+    if (_handlingScan || state.busy || state.pendingProvisioning != null) {
+      return;
+    }
     _handlingScan = true;
     try {
       if (value.trim().startsWith('trakkar:')) {
-        _openSetupLink(value);
-        setState(() => _scanning = false);
-        return;
+        final config = ProvisioningConfig.fromSetupLink(value.trim());
+        await state.acceptManual(
+          clientUrl: config.clientUrl.toString(),
+          managerUrl: config.managerUrl.toString(),
+          liveTrackingUrl: config.liveTrackingUrl?.toString() ?? '',
+          managerUsername: config.managerUsername,
+          managerPassword: config.managerPassword,
+        );
+      } else {
+        await state.acceptQr(value);
       }
-      await context.read<AppState>().acceptQr(value);
       if (mounted) {
         setState(() {
           _scanning = false;
@@ -87,24 +93,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       }
     } finally {
       _handlingScan = false;
-    }
-  }
-
-  void _openSetupLink(String value) {
-    final link = value.trim();
-    try {
-      ProvisioningConfig.fromSetupLink(link);
-      setState(() => _connectionError = null);
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          settings: const RouteSettings(name: '/setup'),
-          builder: (_) => SetupLinkScreen(link: link),
-        ),
-      );
-    } on FormatException {
-      setState(() {
-        _connectionError = 'This setup link is invalid or incomplete.';
-      });
     }
   }
 
@@ -275,30 +263,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               icon: const Icon(Icons.qr_code_scanner_rounded),
               label: const Text('Scan server code'),
             ),
-          ),
-          const SizedBox(height: 12),
-          PlatformTextField(
-            controller: _setupLinkController,
-            enabled: !state.busy,
-            keyboardType: TextInputType.url,
-            textInputAction: TextInputAction.go,
-            autocorrect: false,
-            enableSuggestions: false,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Setup link',
-              hintText: 'Paste your trakkar://setup link',
-              prefixIcon: Icon(Icons.link_rounded),
-            ),
-            onSubmitted: state.busy ? null : _openSetupLink,
-          ),
-          const SizedBox(height: 8),
-          PlatformButton.outlinedIcon(
-            onPressed: state.busy
-                ? null
-                : () => _openSetupLink(_setupLinkController.text),
-            icon: const Icon(Icons.login_rounded),
-            label: const Text('Use setup link'),
           ),
           const SizedBox(height: 12),
           Center(
