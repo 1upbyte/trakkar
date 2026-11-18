@@ -1228,11 +1228,13 @@ class _PersonSheetSurface extends StatelessWidget {
   const _PersonSheetSurface({
     required this.identifier,
     required this.bottomInset,
+    required this.avatar,
     required this.child,
   });
 
   final String identifier;
   final double bottomInset;
+  final Widget avatar;
   final Widget child;
 
   @override
@@ -1252,27 +1254,43 @@ class _PersonSheetSurface extends StatelessWidget {
           identifier: '$identifier-content',
           container: true,
           explicitChildNodes: true,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Keep the handle outside the scroll view so the sheet receives
-              // the drag even when the details themselves can scroll.
-              SizedBox(
-                key: const ValueKey('person-pane-drag-handle'),
-                height: 24,
-                child: Center(
-                  child: Container(
-                    width: 38,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(2),
+          child: LayoutBuilder(
+            builder: (context, constraints) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Keep the full-width header outside the scroll view so the
+                // sheet receives drags that start on or beside the avatar.
+                SizedBox(
+                  key: const ValueKey('person-pane-drag-handle'),
+                  height: math.min(24.0, constraints.maxHeight),
+                  child: Center(
+                    child: Container(
+                      width: 38,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Flexible(child: child),
-            ],
+                SizedBox(
+                  width: double.infinity,
+                  height: math.min(
+                    90.0,
+                    math.max(0.0, constraints.maxHeight - 24) / 2,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: avatar,
+                    ),
+                  ),
+                ),
+                Flexible(child: child),
+              ],
+            ),
           ),
         ),
       ),
@@ -1302,34 +1320,33 @@ class _PersonSheet extends StatelessWidget {
     return _PersonSheetSurface(
       identifier: 'person-pane',
       bottomInset: bottomInset,
+      avatar: CircleAvatar(
+        radius: 38,
+        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+        child: imageBytes == null
+            ? Text(
+                _initial(device.name),
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                ),
+              )
+            : ClipOval(
+                child: Image.memory(
+                  imageBytes!,
+                  width: 76,
+                  height: 76,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.center,
+                  filterQuality: FilterQuality.high,
+                  gaplessPlayback: true,
+                ),
+              ),
+      ),
       child: ListView(
         shrinkWrap: true,
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
         children: [
-          CircleAvatar(
-            radius: 38,
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            child: imageBytes == null
-                ? Text(
-                    _initial(device.name),
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  )
-                : ClipOval(
-                    child: Image.memory(
-                      imageBytes!,
-                      width: 76,
-                      height: 76,
-                      fit: BoxFit.contain,
-                      alignment: Alignment.center,
-                      filterQuality: FilterQuality.high,
-                      gaplessPlayback: true,
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 14),
           Text(
             device.name,
             textAlign: TextAlign.center,

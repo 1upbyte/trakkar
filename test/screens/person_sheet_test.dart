@@ -50,7 +50,7 @@ void main() {
   }
 
   testWidgets(
-    'small landscape pane scrolls to its bottom with large text',
+    'small landscape pane scrolls and dismisses from beside the avatar',
     (tester) async {
       tester.view.physicalSize = const Size(1704, 960);
       tester.view.devicePixelRatio = 3;
@@ -63,7 +63,11 @@ void main() {
           InMemorySharedPreferencesAsync.empty();
       await openPersonSheet(tester);
       await scrollPersonSheetToSummary(tester);
-      await tester.drag(personSheetDragHandle(), const Offset(0, 180));
+      final handle = tester.getRect(personSheetDragHandle());
+      await tester.dragFrom(
+        handle.bottomRight + const Offset(-24, 38),
+        const Offset(0, 180),
+      );
       await tester.pumpAndSettle();
       expect(personSheetList(), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
