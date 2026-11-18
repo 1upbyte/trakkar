@@ -15,15 +15,15 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   }
 
-  testWidgets('person pane keeps its bottom action visible on iOS', (
+  testWidgets('person pane keeps its location summary visible on iOS', (
     tester,
   ) async {
     await openPersonSheet(tester);
     await binding.takeScreenshot('person-pane-open');
-    expectPersonActionVisible(tester);
+    expectPersonSummaryVisible(tester);
     expectPersonPaneFitsContent(tester);
     final initialHeight = tester.getSize(personSheetList()).height;
-    await scrollPersonSheetToAction(tester);
+    await scrollPersonSheetToSummary(tester);
     expectPersonPaneFitsContent(tester);
     expect(tester.getSize(personSheetList()).height, closeTo(initialHeight, 1));
     await binding.takeScreenshot('person-pane-dragged');
@@ -34,14 +34,8 @@ void main() {
     await finishTransitions(tester);
     await tester.tap(find.text('A').first);
     await finishTransitions(tester);
-    expectPersonActionVisible(tester);
+    expectPersonSummaryVisible(tester);
     await binding.takeScreenshot('person-pane-reopened');
-    await tester.tap(find.text('Give this place a friendly name'));
-    await finishTransitions(tester);
-    expect(find.text('Name this place'), findsOneWidget);
-    await tester.tap(find.text('Cancel'));
-    await finishTransitions(tester);
-    expectPersonActionVisible(tester);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

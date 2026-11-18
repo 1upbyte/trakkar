@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:trakkar/widgets/platform_controls.dart';
 
 import '../test/support/person_sheet_scenarios.dart';
 
@@ -17,27 +16,13 @@ void main() {
       await binding.convertFlutterSurfaceToImage();
       await tester.pump();
       await binding.takeScreenshot('android-person-pane-open');
-      expectPersonActionVisible(tester);
+      expectPersonSummaryVisible(tester);
 
-      final action = find.ancestor(
-        of: find.text('Give this place a friendly name'),
-        matching: find.byType(PlatformButton),
-      );
-      void expectFitsContent() {
-        final viewport = tester.getRect(personSheetList());
-        final gap = viewport.bottom - tester.getRect(action).bottom;
-        debugPrint(
-          'Android person pane: ${viewport.height.toStringAsFixed(1)} logical '
-          'pixels; space below action: ${gap.toStringAsFixed(1)}',
-        );
-        expectPersonPaneFitsContent(tester);
-      }
-
-      expectFitsContent();
+      expectPersonPaneFitsContent(tester);
       final initialHeight = tester.getSize(personSheetList()).height;
-      await scrollPersonSheetToAction(tester);
+      await scrollPersonSheetToSummary(tester);
       await binding.takeScreenshot('android-person-pane-dragged');
-      expectFitsContent();
+      expectPersonPaneFitsContent(tester);
       expect(
         tester.getSize(personSheetList()).height,
         closeTo(initialHeight, 1),

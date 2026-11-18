@@ -8,8 +8,8 @@ flutter drive --driver=test_driver/person_sheet.dart --target=integration_test/p
 
 The test uses a local sample person and location without signing in. It checks
 that the pane fits its content and keeps its height after an upward drag. It
-also checks that the bottom action stays above navigation and responds to taps
-after switching tabs. Screenshots are saved under
+also checks that the location summary stays above navigation after switching
+tabs. Screenshots are saved under
 `build/person-sheet-screenshots/`.
 
 For phone sizes and larger text in landscape, run
@@ -26,7 +26,7 @@ flutter drive --driver=test_driver/person_sheet.dart --target=integration_test/a
 The test runs the real Android app with a local sample person. It checks that
 the pane wraps its content with only the normal bottom padding, stays the same
 height after an upward drag, and closes when its handle is dragged down. It also
-checks that the action and bottom menu remain usable.
+checks that the location summary stays visible and the bottom menu remains usable.
 Screenshots are saved under `build/person-sheet-screenshots/`. The widget tests
 also cover small screens and larger text in landscape, where details must
 remain scrollable. Use a dedicated emulator or test device: the fixture
@@ -41,9 +41,8 @@ scripts/test_ios_person_pane.sh <simulator-UDID>
 XCUITest launches the real app shell with a local sample person and native UIKit
 glass. It opens the person pane and uses real iOS touches to verify that a swipe
 up keeps its height and a swipe down on the handle closes it. The pane surface
-extends behind the bottom menu while its scrollable content and action stay
-above it. The test also taps the action, cancels the dialog, switches tabs
-through the menu, and reopens the pane.
+extends behind the bottom menu while its scrollable content stays above it.
+The test also switches tabs through the menu and reopens the pane.
 
 Build logs and Xcode results, including screenshots of each pane state, are
 saved under `build/person-pane-system-test/`. Use a dedicated simulator: the

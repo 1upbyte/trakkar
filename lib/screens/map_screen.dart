@@ -206,7 +206,7 @@ class _MapScreenState extends State<MapScreen>
     _animateCamera(fitted.center, fitted.zoom.clamp(_minMapZoom, _maxMapZoom));
   }
 
-  Future<bool> _addPlace(LatLng point) async {
+  Future<void> _addPlace(LatLng point) async {
     final name = TextEditingController();
     final radius = TextEditingController(text: '150');
     final result = await showAdaptiveDialog<bool>(
@@ -245,7 +245,6 @@ class _MapScreenState extends State<MapScreen>
         ],
       ),
     );
-    var saved = false;
     if ((result ?? false) && name.text.trim().isNotEmpty && mounted) {
       try {
         await context.read<AppState>().addNamedPlace(
@@ -254,7 +253,6 @@ class _MapScreenState extends State<MapScreen>
           longitude: point.longitude,
           radiusMeters: double.tryParse(radius.text) ?? 150,
         );
-        saved = true;
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -276,7 +274,6 @@ class _MapScreenState extends State<MapScreen>
     }
     name.dispose();
     radius.dispose();
-    return saved;
   }
 
   void _startDrawingPlace({bool auto = false}) {
@@ -530,8 +527,6 @@ class _MapScreenState extends State<MapScreen>
               address: address,
               arrival: state.arrivalSummary(position),
               bottomInset: navigationInset,
-              onNamePlace: () =>
-                  _addPlace(LatLng(position.latitude, position.longitude)),
             ),
           );
         },
@@ -1276,7 +1271,6 @@ class _PersonSheet extends StatelessWidget {
     required this.address,
     required this.arrival,
     required this.bottomInset,
-    required this.onNamePlace,
   });
 
   final TraccarDevice device;
@@ -1285,7 +1279,6 @@ class _PersonSheet extends StatelessWidget {
   final Future<String> address;
   final Future<String> arrival;
   final double bottomInset;
-  final Future<bool> Function() onNamePlace;
 
   @override
   Widget build(BuildContext context) {
@@ -1338,18 +1331,6 @@ class _PersonSheet extends StatelessWidget {
           Text(
             _positionSummary(position),
             style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: PlatformButton.tonalIcon(
-              onPressed: () async {
-                final saved = await onNamePlace();
-                if (saved && context.mounted) Navigator.pop(context);
-              },
-              icon: const Icon(Icons.add_location_alt_outlined),
-              label: const Text('Give this place a friendly name'),
-            ),
           ),
         ],
       ),

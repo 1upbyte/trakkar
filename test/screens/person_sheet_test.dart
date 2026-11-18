@@ -18,10 +18,11 @@ void main() {
         SharedPreferencesAsyncPlatform.instance =
             InMemorySharedPreferencesAsync.empty();
         await openPersonSheet(tester);
-        expectPersonActionVisible(tester);
+        expect(find.text('Give this place a friendly name'), findsNothing);
+        expectPersonSummaryVisible(tester);
         final initialHeight = tester.getSize(personSheetList()).height;
         expectPersonPaneFitsContent(tester);
-        await scrollPersonSheetToAction(tester);
+        await scrollPersonSheetToSummary(tester);
         expectPersonPaneFitsContent(tester);
         expect(
           tester.getSize(personSheetList()).height,
@@ -35,7 +36,7 @@ void main() {
         await tester.tap(find.text('A').first);
         await tester.pump();
         await tester.pump(const Duration(seconds: 1));
-        expectPersonActionVisible(tester);
+        expectPersonSummaryVisible(tester);
         await tester.drag(personSheetDragHandle(), const Offset(0, 280));
         await tester.pumpAndSettle();
         expect(personSheetList(), findsNothing);
@@ -61,7 +62,7 @@ void main() {
       SharedPreferencesAsyncPlatform.instance =
           InMemorySharedPreferencesAsync.empty();
       await openPersonSheet(tester);
-      await scrollPersonSheetToAction(tester);
+      await scrollPersonSheetToSummary(tester);
       await tester.drag(personSheetDragHandle(), const Offset(0, 180));
       await tester.pumpAndSettle();
       expect(personSheetList(), findsNothing);
@@ -84,9 +85,9 @@ void main() {
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.empty();
     await openPersonSheet(tester);
-    await scrollPersonSheetToAction(tester);
-    await tester.tap(find.text('Give this place a friendly name'));
+    await tester.longPressAt(const Offset(100, 200));
     await tester.pumpAndSettle();
+    expect(find.text('Name this place'), findsOneWidget);
     tester.view.viewInsets = const FakeViewPadding(bottom: 900);
     tester.view.padding = const FakeViewPadding(top: 177);
     await tester.pumpAndSettle();
@@ -102,7 +103,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 80));
     }
     await tester.pumpAndSettle();
-    expectPersonActionVisible(tester);
+    expectPersonSummaryVisible(tester);
     await tester.tap(find.text('People').last);
     await tester.pumpAndSettle();
     expect(personSheetList(), findsNothing);

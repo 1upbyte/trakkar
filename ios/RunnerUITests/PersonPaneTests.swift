@@ -11,7 +11,9 @@ final class PersonPaneTests: XCTestCase {
   private var pane: XCUIElement { app.otherElements["person-pane"].firstMatch }
   private var content: XCUIElement { app.otherElements["person-pane-content"].firstMatch }
   private var navigation: XCUIElement { app.otherElements["bottom-navigation"].firstMatch }
-  private var action: XCUIElement { app.buttons["Give this place a friendly name"].firstMatch }
+  private var summary: XCUIElement {
+    app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", "Time unknown")).firstMatch
+  }
 
   private func waitForLayout() {
     var previous: CGRect?
@@ -41,6 +43,8 @@ final class PersonPaneTests: XCTestCase {
       "The pane surface must extend to the screen bottom behind the floating menu")
     XCTAssertLessThanOrEqual(content.frame.maxY, navigation.frame.minY + 1,
       "Pane content must stay above the bottom menu")
+    XCTAssertTrue(summary.exists)
+    XCTAssertLessThanOrEqual(summary.frame.maxY, content.frame.maxY)
     XCTAssertTrue(app.buttons["People"].isHittable,
       "The menu must remain above the pane and accept real iOS touches")
     let attachment = XCTAttachment(screenshot: app.screenshot())
@@ -68,21 +72,11 @@ final class PersonPaneTests: XCTestCase {
   func testPaneFitsBehindMenuAndClosesWhenSwipingDownOnHandle() {
     openPane()
     checkPaneBehindNavigation("person-pane-open")
-    XCTAssertTrue(action.isHittable)
-    XCTAssertLessThanOrEqual(action.frame.maxY, navigation.frame.minY)
 
     let initialHeight = pane.frame.height
     dragPane(by: -350)
     checkPaneBehindNavigation("person-pane-after-upward-swipe")
     XCTAssertEqual(pane.frame.height, initialHeight, accuracy: 1)
-    XCTAssertTrue(action.isHittable)
-    XCTAssertLessThanOrEqual(action.frame.maxY, navigation.frame.minY)
-    action.tap()
-    XCTAssertTrue(app.staticTexts["Name this place"].waitForExistence(timeout: 5))
-    app.buttons["Cancel"].tap()
-    checkPaneBehindNavigation("person-pane-after-dialog")
-    XCTAssertTrue(action.isHittable)
-    XCTAssertLessThanOrEqual(action.frame.maxY, navigation.frame.minY)
 
     dragPane(by: 350)
     let dismissed = XCTNSPredicateExpectation(
