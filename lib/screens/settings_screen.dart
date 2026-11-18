@@ -244,34 +244,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
-                  const Divider(height: 30),
-                  PlatformSwitchTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Share my location'),
-                    subtitle: const Text('Powered only by Traccar Client SDK'),
-                    value: state.tracking,
-                    onChanged: state.busy ? null : state.setTracking,
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: PlatformButton.outlinedIcon(
-                      onPressed: state.busy
-                          ? null
-                          : () async {
-                              final sent = await state.sendPositionNow();
-                              if (context.mounted && sent) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Position sent by the SDK.'),
-                                  ),
-                                );
-                              }
-                            },
-                      icon: const Icon(Icons.my_location_rounded),
-                      label: const Text('Send a position now'),
-                    ),
-                  ),
                 ],
               ),
             ),
