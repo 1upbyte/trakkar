@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import '../models/theme_preference.dart';
+import '../widgets/app_version_label.dart';
 import '../widgets/platform_controls.dart';
 import '../widgets/ios_system_control.dart';
 import 'setup_qr_dialog.dart';
@@ -130,6 +131,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               fontWeight: isIOS(context) ? FontWeight.w700 : FontWeight.w800,
             ),
           ),
+          const SizedBox(height: 6),
+          const AppVersionLabel(),
           const SizedBox(height: 24),
           Text(
             'Account',

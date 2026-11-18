@@ -155,6 +155,11 @@ building takes priority over a neighboring building's margin.
 
 The app theme defaults to the phone's system appearance. Settings can override
 it with Light or Dark, and the preference is stored on the device.
+Settings also shows the installed version and build number on iOS. Android
+GitHub release builds show the release name supplied to the release workflow,
+embedded in the APK so it is available offline. Local Android builds fall back
+to the installed version and build number; pass
+`--dart-define="TRAKKAR_RELEASE_NAME=Release name"` to set a release label locally.
 
 While Traccar reports a person in motion, their map bubble shows walking below
 10 mph or driving at 10 mph and above, together with the latest speed in mph.
