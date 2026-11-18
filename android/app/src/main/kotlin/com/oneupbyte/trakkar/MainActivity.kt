@@ -11,11 +11,32 @@ import com.oneupbyte.trakkar.live.LiveTrackingBridge
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.StandardMethodCodec
 
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         LiveTrackingBridge.install(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
+        MethodChannel(
+            messenger,
+            "com.oneupbyte.trakkar/diagnostics",
+            StandardMethodCodec.INSTANCE,
+            messenger.makeBackgroundTaskQueue(),
+        ).setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "cacheDirectory" -> {
+                        LocalDiagnostics.clean(applicationContext)
+                        result.success(LocalDiagnostics.directory(applicationContext).path)
+                    }
+                    "nativeReport" -> result.success(LocalDiagnostics.report(applicationContext))
+                    else -> result.notImplemented()
+                }
+            } catch (_: Exception) {
+                result.error("diagnostics_unavailable", "Could not read local diagnostics", null)
+            }
+        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "com.oneupbyte.trakkar/tracking-support",

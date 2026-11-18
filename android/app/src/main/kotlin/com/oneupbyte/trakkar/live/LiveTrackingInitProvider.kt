@@ -4,10 +4,17 @@ import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
+import com.oneupbyte.trakkar.LocalDiagnostics
 
 /** Reconciles a persisted temporary SDK profile whenever the process starts. */
 class LiveTrackingInitProvider : ContentProvider() {
-    override fun onCreate(): Boolean { context?.let { LiveTrackingController.reconcile(it) }; return true }
+    override fun onCreate(): Boolean {
+        context?.let {
+            LocalDiagnostics.install(it)
+            LiveTrackingController.reconcile(it)
+        }
+        return true
+    }
     override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor? = null
     override fun getType(uri: Uri): String? = null
     override fun insert(uri: Uri, values: ContentValues?): Uri? = null

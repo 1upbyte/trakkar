@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../app_state.dart';
 import '../models/theme_preference.dart';
+import '../services/local_diagnostics.dart';
 import '../widgets/app_version_label.dart';
 import '../widgets/platform_controls.dart';
 import '../widgets/ios_system_control.dart';
@@ -21,6 +23,31 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  bool _sharingDiagnostics = false;
+
+  Future<void> _shareDiagnostics(BuildContext buttonContext) async {
+    final box = buttonContext.findRenderObject() as RenderBox;
+    final origin = box.localToGlobal(Offset.zero) & box.size;
+    setState(() => _sharingDiagnostics = true);
+    try {
+      final path = await LocalDiagnostics.export();
+      if (!mounted) return;
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(path, mimeType: 'text/plain')],
+          sharePositionOrigin: origin,
+        ),
+      );
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not share the diagnostics log.')),
+      );
+    } finally {
+      if (mounted) setState(() => _sharingDiagnostics = false);
+    }
+  }
+
   Future<void> _saveMapAppearance({
     bool? darkMap,
     double? satelliteSliderValue,
@@ -439,6 +466,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
+          if (LocalDiagnostics.supported) ...[
+            const SizedBox(height: 24),
+            Builder(
+              builder: (buttonContext) => ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: const Text('Share diagnostics log'),
+                subtitle: const Text(
+                  'Share recent crash and app activity details',
+                ),
+                onTap: _sharingDiagnostics
+                    ? null
+                    : () => _shareDiagnostics(buttonContext),
+              ),
+            ),
+          ],
           const SizedBox(height: 28),
           PlatformButton.outlinedIcon(
             style: OutlinedButton.styleFrom(

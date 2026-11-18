@@ -11,9 +11,11 @@ import 'models/theme_preference.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/setup_link_screen.dart';
+import 'services/local_diagnostics.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  LocalDiagnostics.install();
   final links = AppLinks();
   final state = AppState();
   runApp(

@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:traccar_client_sdk/traccar_client_sdk.dart';
 
+import 'local_diagnostics.dart';
+
 class TrackingHealth {
   const TrackingHealth({
     required this.checked,
@@ -64,6 +66,7 @@ class TrackerService {
     required Uri serverUrl,
     required String deviceId,
   }) async {
+    LocalDiagnostics.record(DiagnosticEvent.trackerConfiguring);
     final connection = {
       'serverUrl': serverUrl.toString(),
       'deviceId': deviceId,
@@ -100,6 +103,7 @@ class TrackerService {
   }
 
   Future<void> start() async {
+    LocalDiagnostics.record(DiagnosticEvent.trackerStarting);
     await _sdk.start();
     await _invokeLive('setEnabled', {'enabled': true});
 
@@ -142,6 +146,7 @@ class TrackerService {
   }
 
   Future<void> stop() async {
+    LocalDiagnostics.record(DiagnosticEvent.trackerStopping);
     try {
       if (defaultTargetPlatform == TargetPlatform.iOS) {
         // Disabling the extension is part of stopping location sharing. Report

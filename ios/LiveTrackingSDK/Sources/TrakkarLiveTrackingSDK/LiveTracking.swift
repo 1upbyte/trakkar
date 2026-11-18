@@ -122,6 +122,7 @@ public enum LiveTrackingError: Error { case appGroupUnavailable, stateChanged }
 @MainActor
 public final class LiveTrackingCoordinator {
   public static let shared = LiveTrackingCoordinator()
+  public var onProfileChange: ((Bool) -> Void)?
   private var task: Task<Void, Never>?
   private var reconcileRequested = false
   private var activity: Any?
@@ -151,6 +152,7 @@ public final class LiveTrackingCoordinator {
     previous?.cancel()
     await previous?.value
     if let tracker = try await TrackerKt.sharedTracker() {
+      onProfileChange?(false)
       _ = try await tracker.updateConfig(newConfig: state.config(live: false))
     }
   }
@@ -193,6 +195,7 @@ public final class LiveTrackingCoordinator {
         guard var tracker = try await TrackerKt.sharedTracker() else { return }
         // Repair a temporary persisted profile after process termination.
         if state.temporary {
+          onProfileChange?(false)
           tracker = try await tracker.updateConfig(newConfig: state.config(live: false))
           state.temporary = false
           try state.save()
@@ -206,6 +209,7 @@ public final class LiveTrackingCoordinator {
         activity = CLBackgroundActivitySession()
         state.temporary = true
         try state.save()
+        onProfileChange?(true)
         tracker = try await tracker.updateConfig(newConfig: state.config(live: true))
         // Core Location controls execution. The SDK remains the reporting pipeline.
         let updates = Task {
@@ -252,6 +256,7 @@ public final class LiveTrackingCoordinator {
     guard var state = LiveTrackingState.load(), state.temporary else { return }
     do {
       if let tracker = try await TrackerKt.sharedTracker() {
+        onProfileChange?(false)
         _ = try await tracker.updateConfig(newConfig: state.config(live: false))
       }
       state.temporary = false
