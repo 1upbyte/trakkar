@@ -21,11 +21,15 @@ void main() {
     await openPersonSheet(tester);
     await binding.takeScreenshot('person-pane-open');
     expectPersonActionVisible(tester);
-    await expandPersonSheet(tester);
-    await binding.takeScreenshot('person-pane-expanded');
+    expectPersonPaneFitsContent(tester);
+    final initialHeight = tester.getSize(personSheetList()).height;
+    await scrollPersonSheetToAction(tester);
+    expectPersonPaneFitsContent(tester);
+    expect(tester.getSize(personSheetList()).height, closeTo(initialHeight, 1));
+    await binding.takeScreenshot('person-pane-dragged');
     await tester.tap(find.text('People').last);
     await finishTransitions(tester);
-    expect(find.byType(DraggableScrollableSheet), findsNothing);
+    expect(personSheetList(), findsNothing);
     await tester.tap(find.text('Map').last);
     await finishTransitions(tester);
     await tester.tap(find.text('A').first);

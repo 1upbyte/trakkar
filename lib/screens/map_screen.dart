@@ -514,59 +514,28 @@ class _MapScreenState extends State<MapScreen>
     controller = scaffold.showBottomSheet(
       (sheetContext) => LayoutBuilder(
         builder: (context, constraints) {
-          if (!isIOS(this.context)) {
-            // Material sheets can wrap their content directly. Keep long
-            // details scrollable without stretching short details on a drag.
-            return ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: constraints.maxHeight * 0.85,
-              ),
-              child: _PersonSheet(
-                device: device,
-                position: position,
-                imageBytes: state.deviceImages[device.id],
-                address: address,
-                arrival: state.arrivalSummary(position),
-                bottomInset: 0,
-                shrinkWrap: true,
-                onNamePlace: () =>
-                    _addPlace(LatLng(position.latitude, position.longitude)),
-              ),
-            );
-          }
           // The iOS map extends behind the glass tabs. Keep that area inside
           // the sheet's surface, but outside its scrollable content.
           final navigationInset = isIOS(this.context)
               ? widget.bottomNavigationInset
               : 0.0;
-          // A small screen fraction can show only the avatar and cut off the
-          // person's details. Reserve room for them, accounting for larger text,
-          // while leaving the list scrollable on short screens.
-          final initialHeight =
-              MediaQuery.textScalerOf(context).scale(460) + navigationInset;
-          return DraggableScrollableSheet(
-            initialChildSize: (initialHeight / constraints.maxHeight).clamp(
-              0.28,
-              0.85,
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: constraints.maxHeight * 0.85,
             ),
-            minChildSize: 0.20,
-            maxChildSize: 0.85,
-            expand: false,
-            builder: (context, scrollController) => _PersonSheet(
+            child: _PersonSheet(
               device: device,
               position: position,
               imageBytes: state.deviceImages[device.id],
               address: address,
               arrival: state.arrivalSummary(position),
               bottomInset: navigationInset,
-              scrollController: scrollController,
               onNamePlace: () =>
                   _addPlace(LatLng(position.latitude, position.longitude)),
             ),
           );
         },
       ),
-      enableDrag: !isIOS(context),
       elevation: 0,
       backgroundColor: Colors.transparent,
     );
@@ -1271,7 +1240,28 @@ class _PersonSheetSurface extends StatelessWidget {
           identifier: '$identifier-content',
           container: true,
           explicitChildNodes: true,
-          child: child,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Keep the handle outside the scroll view so the sheet receives
+              // the drag even when the details themselves can scroll.
+              SizedBox(
+                key: const ValueKey('person-pane-drag-handle'),
+                height: 24,
+                child: Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+              Flexible(child: child),
+            ],
+          ),
         ),
       ),
     ),
@@ -1287,8 +1277,6 @@ class _PersonSheet extends StatelessWidget {
     required this.arrival,
     required this.bottomInset,
     required this.onNamePlace,
-    this.scrollController,
-    this.shrinkWrap = false,
   });
 
   final TraccarDevice device;
@@ -1297,8 +1285,6 @@ class _PersonSheet extends StatelessWidget {
   final Future<String> address;
   final Future<String> arrival;
   final double bottomInset;
-  final ScrollController? scrollController;
-  final bool shrinkWrap;
   final Future<bool> Function() onNamePlace;
 
   @override
@@ -1307,21 +1293,9 @@ class _PersonSheet extends StatelessWidget {
       identifier: 'person-pane',
       bottomInset: bottomInset,
       child: ListView(
-        controller: scrollController,
-        shrinkWrap: shrinkWrap,
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
         children: [
-          Center(
-            child: Container(
-              width: 38,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
           CircleAvatar(
             radius: 38,
             backgroundColor: Theme.of(context).colorScheme.primaryContainer,

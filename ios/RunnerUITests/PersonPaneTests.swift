@@ -65,21 +65,16 @@ final class PersonPaneTests: XCTestCase {
     start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
   }
 
-  func testPaneSlidesBehindMenuWithoutOverlappingControls() {
+  func testPaneFitsBehindMenuAndClosesWhenSwipingDownOnHandle() {
     openPane()
     checkPaneBehindNavigation("person-pane-open")
     XCTAssertTrue(action.isHittable)
     XCTAssertLessThanOrEqual(action.frame.maxY, navigation.frame.minY)
 
-    // Native swipes exercise UIKit platform-view composition as the Flutter
-    // pane moves. Synthetic widget gestures do not reproduce that layering.
-    dragPane(by: 240)
-    checkPaneBehindNavigation("person-pane-lowered")
-    let loweredTop = pane.frame.minY
+    let initialHeight = pane.frame.height
     dragPane(by: -350)
-    checkPaneBehindNavigation("person-pane-expanded")
-    XCTAssertLessThan(pane.frame.minY, loweredTop - 40,
-      "The upward gesture must expand the pane")
+    checkPaneBehindNavigation("person-pane-after-upward-swipe")
+    XCTAssertEqual(pane.frame.height, initialHeight, accuracy: 1)
     XCTAssertTrue(action.isHittable)
     XCTAssertLessThanOrEqual(action.frame.maxY, navigation.frame.minY)
     action.tap()
@@ -89,8 +84,12 @@ final class PersonPaneTests: XCTestCase {
     XCTAssertTrue(action.isHittable)
     XCTAssertLessThanOrEqual(action.frame.maxY, navigation.frame.minY)
 
-    dragPane(by: 240)
-    checkPaneBehindNavigation("person-pane-lowered-after-dialog")
+    dragPane(by: 350)
+    let dismissed = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "exists == false"), object: pane)
+    XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+    openPane()
+    checkPaneBehindNavigation("person-pane-after-swipe-and-reopen")
     app.buttons["People"].tap()
     XCTAssertTrue(app.staticTexts["1 person shared with this account"].waitForExistence(timeout: 5))
     XCTAssertFalse(pane.exists)

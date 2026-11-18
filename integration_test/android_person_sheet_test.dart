@@ -35,7 +35,7 @@ void main() {
 
       expectFitsContent();
       final initialHeight = tester.getSize(personSheetList()).height;
-      await expandPersonSheet(tester);
+      await scrollPersonSheetToAction(tester);
       await binding.takeScreenshot('android-person-pane-dragged');
       expectFitsContent();
       expect(
@@ -43,6 +43,16 @@ void main() {
         closeTo(initialHeight, 1),
       );
       await tester.tap(find.text('People').last);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(personSheetList(), findsNothing);
+      await tester.tap(find.text('Map').last);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.text('A').first);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.drag(personSheetDragHandle(), const Offset(0, 280));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
       expect(personSheetList(), findsNothing);

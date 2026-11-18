@@ -38,6 +38,9 @@ Finder personSheetList() => find.descendant(
   matching: find.byType(ListView),
 );
 
+Finder personSheetDragHandle() =>
+    find.byKey(const ValueKey('person-pane-drag-handle'));
+
 void expectPersonPaneFitsContent(WidgetTester tester) {
   final action = find.ancestor(
     of: find.text('Give this place a friendly name'),
@@ -51,7 +54,7 @@ void expectPersonPaneFitsContent(WidgetTester tester) {
   );
 }
 
-Future<void> expandPersonSheet(WidgetTester tester) async {
+Future<void> scrollPersonSheetToAction(WidgetTester tester) async {
   await tester.drag(personSheetList(), const Offset(0, -500));
   // Start any iOS overscroll animation before advancing its elapsed time.
   await tester.pump();

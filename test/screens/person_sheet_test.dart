@@ -19,28 +19,26 @@ void main() {
             InMemorySharedPreferencesAsync.empty();
         await openPersonSheet(tester);
         expectPersonActionVisible(tester);
-        final android =
-            Theme.of(tester.element(personSheetList())).platform ==
-            TargetPlatform.android;
         final initialHeight = tester.getSize(personSheetList()).height;
-        if (android) expectPersonPaneFitsContent(tester);
-        await expandPersonSheet(tester);
-        if (android) {
-          expectPersonPaneFitsContent(tester);
-          expect(
-            tester.getSize(personSheetList()).height,
-            closeTo(initialHeight, 1),
-          );
-        }
+        expectPersonPaneFitsContent(tester);
+        await scrollPersonSheetToAction(tester);
+        expectPersonPaneFitsContent(tester);
+        expect(
+          tester.getSize(personSheetList()).height,
+          closeTo(initialHeight, 1),
+        );
         await tester.tap(find.text('People').last);
         await tester.pumpAndSettle();
-        expect(find.byType(DraggableScrollableSheet), findsNothing);
+        expect(personSheetList(), findsNothing);
         await tester.tap(find.text('Map').last);
         await tester.pumpAndSettle();
         await tester.tap(find.text('A').first);
         await tester.pump();
         await tester.pump(const Duration(seconds: 1));
         expectPersonActionVisible(tester);
+        await tester.drag(personSheetDragHandle(), const Offset(0, 280));
+        await tester.pumpAndSettle();
+        expect(personSheetList(), findsNothing);
         await tester.pumpWidget(const SizedBox.shrink());
       },
       variant: TargetPlatformVariant({
@@ -63,7 +61,10 @@ void main() {
       SharedPreferencesAsyncPlatform.instance =
           InMemorySharedPreferencesAsync.empty();
       await openPersonSheet(tester);
-      await expandPersonSheet(tester);
+      await scrollPersonSheetToAction(tester);
+      await tester.drag(personSheetDragHandle(), const Offset(0, 180));
+      await tester.pumpAndSettle();
+      expect(personSheetList(), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
     },
     variant: TargetPlatformVariant({
@@ -83,7 +84,7 @@ void main() {
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.empty();
     await openPersonSheet(tester);
-    await expandPersonSheet(tester);
+    await scrollPersonSheetToAction(tester);
     await tester.tap(find.text('Give this place a friendly name'));
     await tester.pumpAndSettle();
     tester.view.viewInsets = const FakeViewPadding(bottom: 900);
@@ -104,7 +105,7 @@ void main() {
     expectPersonActionVisible(tester);
     await tester.tap(find.text('People').last);
     await tester.pumpAndSettle();
-    expect(find.byType(DraggableScrollableSheet), findsNothing);
+    expect(personSheetList(), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 }
