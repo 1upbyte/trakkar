@@ -19,7 +19,19 @@ void main() {
             InMemorySharedPreferencesAsync.empty();
         await openPersonSheet(tester);
         expectPersonActionVisible(tester);
+        final android =
+            Theme.of(tester.element(personSheetList())).platform ==
+            TargetPlatform.android;
+        final initialHeight = tester.getSize(personSheetList()).height;
+        if (android) expectPersonPaneFitsContent(tester);
         await expandPersonSheet(tester);
+        if (android) {
+          expectPersonPaneFitsContent(tester);
+          expect(
+            tester.getSize(personSheetList()).height,
+            closeTo(initialHeight, 1),
+          );
+        }
         await tester.tap(find.text('People').last);
         await tester.pumpAndSettle();
         expect(find.byType(DraggableScrollableSheet), findsNothing);
@@ -38,22 +50,27 @@ void main() {
     );
   }
 
-  testWidgets('small landscape pane scrolls to its bottom with large text', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1704, 960);
-    tester.view.devicePixelRatio = 3;
-    tester.view.padding = const FakeViewPadding(left: 102, right: 102);
-    tester.view.viewPadding = const FakeViewPadding(left: 102, right: 102);
-    tester.platformDispatcher.textScaleFactorTestValue = 1.8;
-    addTearDown(tester.view.reset);
-    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-    SharedPreferencesAsyncPlatform.instance =
-        InMemorySharedPreferencesAsync.empty();
-    await openPersonSheet(tester);
-    await expandPersonSheet(tester);
-    await tester.pumpWidget(const SizedBox.shrink());
-  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+  testWidgets(
+    'small landscape pane scrolls to its bottom with large text',
+    (tester) async {
+      tester.view.physicalSize = const Size(1704, 960);
+      tester.view.devicePixelRatio = 3;
+      tester.view.padding = const FakeViewPadding(left: 102, right: 102);
+      tester.view.viewPadding = const FakeViewPadding(left: 102, right: 102);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.empty();
+      await openPersonSheet(tester);
+      await expandPersonSheet(tester);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: TargetPlatformVariant({
+      TargetPlatform.iOS,
+      TargetPlatform.android,
+    }),
+  );
 
   testWidgets('person pane keeps menu clearance after keyboard dismissal', (
     tester,

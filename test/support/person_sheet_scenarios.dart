@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:trakkar/app_state.dart';
 import 'package:trakkar/main.dart';
 import 'package:trakkar/widgets/liquid_glass.dart';
+import 'package:trakkar/widgets/platform_controls.dart';
 
 import 'person_sheet_state.dart';
 
@@ -29,9 +30,26 @@ Future<void> openPersonSheet(WidgetTester tester) async {
 }
 
 Finder personSheetList() => find.descendant(
-  of: find.byType(DraggableScrollableSheet),
+  of: find.byWidgetPredicate(
+    (widget) =>
+        widget is Semantics &&
+        widget.properties.identifier == 'person-pane-content',
+  ),
   matching: find.byType(ListView),
 );
+
+void expectPersonPaneFitsContent(WidgetTester tester) {
+  final action = find.ancestor(
+    of: find.text('Give this place a friendly name'),
+    matching: find.byType(PlatformButton),
+  );
+  final viewport = tester.getRect(personSheetList());
+  expect(
+    viewport.bottom - tester.getRect(action).bottom,
+    closeTo(24, 1),
+    reason: 'The pane should leave only the list padding below its last action',
+  );
+}
 
 Future<void> expandPersonSheet(WidgetTester tester) async {
   await tester.drag(personSheetList(), const Offset(0, -500));

@@ -14,6 +14,22 @@ after expanding the pane and switching tabs. Screenshots are saved under
 For phone sizes and larger text in landscape, run
 `flutter test test/screens/person_sheet_test.dart`.
 
+## Android person pane regression
+
+With an Android emulator or test device running:
+
+```sh
+flutter drive --driver=test_driver/person_sheet.dart --target=integration_test/android_person_sheet_test.dart -d <android-device-id>
+```
+
+The test runs the real Android app with a local sample person. It checks that
+the pane wraps its content with only the normal bottom padding, stays the same
+height after an upward drag, and keeps its action and the bottom menu usable.
+Screenshots are saved under `build/person-sheet-screenshots/`. The widget tests
+also cover small screens and larger text in landscape, where details must
+remain scrollable. Use a dedicated emulator or test device: the fixture
+replaces its installed app. Run `flutter run` to restore the normal app.
+
 ## Native iOS person pane system regression
 
 ```sh

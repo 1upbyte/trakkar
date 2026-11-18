@@ -514,6 +514,26 @@ class _MapScreenState extends State<MapScreen>
     controller = scaffold.showBottomSheet(
       (sheetContext) => LayoutBuilder(
         builder: (context, constraints) {
+          if (!isIOS(this.context)) {
+            // Material sheets can wrap their content directly. Keep long
+            // details scrollable without stretching short details on a drag.
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: constraints.maxHeight * 0.85,
+              ),
+              child: _PersonSheet(
+                device: device,
+                position: position,
+                imageBytes: state.deviceImages[device.id],
+                address: address,
+                arrival: state.arrivalSummary(position),
+                bottomInset: 0,
+                shrinkWrap: true,
+                onNamePlace: () =>
+                    _addPlace(LatLng(position.latitude, position.longitude)),
+              ),
+            );
+          }
           // The iOS map extends behind the glass tabs. Keep that area inside
           // the sheet's surface, but outside its scrollable content.
           final navigationInset = isIOS(this.context)
@@ -546,7 +566,7 @@ class _MapScreenState extends State<MapScreen>
           );
         },
       ),
-      enableDrag: false,
+      enableDrag: !isIOS(context),
       elevation: 0,
       backgroundColor: Colors.transparent,
     );
@@ -1266,8 +1286,9 @@ class _PersonSheet extends StatelessWidget {
     required this.address,
     required this.arrival,
     required this.bottomInset,
-    required this.scrollController,
     required this.onNamePlace,
+    this.scrollController,
+    this.shrinkWrap = false,
   });
 
   final TraccarDevice device;
@@ -1276,7 +1297,8 @@ class _PersonSheet extends StatelessWidget {
   final Future<String> address;
   final Future<String> arrival;
   final double bottomInset;
-  final ScrollController scrollController;
+  final ScrollController? scrollController;
+  final bool shrinkWrap;
   final Future<bool> Function() onNamePlace;
 
   @override
@@ -1286,6 +1308,7 @@ class _PersonSheet extends StatelessWidget {
       bottomInset: bottomInset,
       child: ListView(
         controller: scrollController,
+        shrinkWrap: shrinkWrap,
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
         children: [
           Center(
