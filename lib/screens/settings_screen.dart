@@ -11,6 +11,7 @@ import '../app_state.dart';
 import '../models/theme_preference.dart';
 import '../services/local_diagnostics.dart';
 import '../widgets/app_version_label.dart';
+import '../widgets/apple_satellite_layer.dart';
 import '../widgets/platform_controls.dart';
 import '../widgets/ios_system_control.dart';
 import 'setup_qr_dialog.dart';
@@ -51,11 +52,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveMapAppearance({
     bool? darkMap,
     double? satelliteSliderValue,
+    bool? experimentalAppleSatellite,
   }) async {
     try {
       await context.read<AppState>().saveMapAppearance(
         darkMap: darkMap,
         satelliteSliderValue: satelliteSliderValue,
+        experimentalAppleSatellite: experimentalAppleSatellite,
       );
     } on Object {
       if (!mounted) return;
@@ -384,6 +387,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
+                if (supportsAppleSatellite)
+                  PlatformSwitchTile(
+                    title: const Text('Apple satellite (experimental)'),
+                    subtitle: const Text(
+                      'Use Apple Maps imagery when satellite mode is active.',
+                    ),
+                    value: state.experimentalAppleSatellite,
+                    onChanged: (value) =>
+                        _saveMapAppearance(experimentalAppleSatellite: value),
+                  ),
               ],
             ),
           ),

@@ -16,6 +16,7 @@ import '../models/traccar_device.dart';
 import '../models/traccar_position.dart';
 import '../services/building_lookup.dart';
 import '../services/named_place_store.dart';
+import '../widgets/apple_satellite_layer.dart';
 import '../widgets/building_highlights.dart';
 import '../widgets/location_label.dart';
 import '../widgets/location_freshness_dot.dart';
@@ -573,10 +574,17 @@ class _MapScreenState extends State<MapScreen>
       });
     }
     final baseMapStyle = _baseMapStyle;
+    final satelliteActive = state.satelliteAtZoom(_zoom);
+    final showAppleSatellite =
+        supportsAppleSatellite &&
+        state.experimentalAppleSatellite &&
+        satelliteActive;
     final showSatellite =
-        state.satelliteAtZoom(_zoom) && state.mapTilerApiKey.isNotEmpty;
+        satelliteActive &&
+        !showAppleSatellite &&
+        state.mapTilerApiKey.isNotEmpty;
     final satelliteMissingKey =
-        state.satelliteAtZoom(_zoom) && state.mapTilerApiKey.isEmpty;
+        satelliteActive && !showAppleSatellite && state.mapTilerApiKey.isEmpty;
     final attribution = baseMapStyle?.attributions
         .map((item) => item.text)
         .where((text) => text.isNotEmpty)
@@ -607,6 +615,11 @@ class _MapScreenState extends State<MapScreen>
                 initialZoom: initialPosition == null ? 2.5 : 12,
                 minZoom: _minMapZoom,
                 maxZoom: _maxMapZoom,
+                onMapReady: () {
+                  if (mounted && _zoom != _mapController.camera.zoom) {
+                    setState(() => _zoom = _mapController.camera.zoom);
+                  }
+                },
                 onTap: (_, point) => _handleMapTap(point),
                 onPositionChanged: (camera, _) {
                   final wasSatelliteZoom = state.satelliteAtZoom(_zoom);
@@ -623,7 +636,9 @@ class _MapScreenState extends State<MapScreen>
                     : (_, point) => unawaited(_addPlace(point)),
               ),
               children: [
-                if (baseMapStyle != null)
+                if (showAppleSatellite)
+                  AppleSatelliteLayer(bottomInset: widget.bottomNavigationInset)
+                else if (baseMapStyle != null)
                   vt.VectorTileLayer(
                     theme: baseMapStyle.theme,
                     tileProviders: baseMapStyle.providers,
@@ -648,7 +663,7 @@ class _MapScreenState extends State<MapScreen>
                       '{z}/{x}/{y}@2x.jpg?key=${state.mapTilerApiKey}',
                   userAgentPackageName: 'com.oneupbyte.trakkar',
                   tileProvider: _satelliteTileProvider,
-                  minZoom: state.mapTilerApiKey.isEmpty
+                  minZoom: showAppleSatellite || state.mapTilerApiKey.isEmpty
                       ? _maxMapZoom + 1
                       : state.satelliteAlways
                       ? _minMapZoom
@@ -806,29 +821,31 @@ class _MapScreenState extends State<MapScreen>
                     },
                   ),
                 ),
-                Padding(
-                  padding: EdgeInsets.only(
-                    bottom: isIOS(context)
-                        ? MediaQuery.paddingOf(context).bottom
-                        : 0,
+                if (!showAppleSatellite)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: isIOS(context)
+                          ? MediaQuery.paddingOf(context).bottom
+                          : 0,
+                    ),
+                    child: RichAttributionWidget(
+                      showFlutterMapAttribution: false,
+                      attributions: [
+                        TextSourceAttribution(
+                          showSatellite
+                              ? '© MapTiler · © OpenStreetMap contributors'
+                              : attribution?.isNotEmpty ?? false
+                              ? attribution!
+                              : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
+                        ),
+                      ],
+                    ),
                   ),
-                  child: RichAttributionWidget(
-                    showFlutterMapAttribution: false,
-                    attributions: [
-                      TextSourceAttribution(
-                        showSatellite
-                            ? '© MapTiler · © OpenStreetMap contributors'
-                            : attribution?.isNotEmpty ?? false
-                            ? attribution!
-                            : 'OpenFreeMap · OpenMapTiles · OpenStreetMap contributors',
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
-          if (_baseMapError != null || satelliteMissingKey)
+          if (!showAppleSatellite &&
+              (_baseMapError != null || satelliteMissingKey))
             Positioned(
               top: MediaQuery.paddingOf(context).top + 72,
               left: 16,

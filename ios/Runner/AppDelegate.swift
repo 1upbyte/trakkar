@@ -39,6 +39,10 @@ import TrakkarLiveTrackingSDK
         SystemControlFactory(messenger: registrar.messenger()),
         withId: "com.oneupbyte.trakkar/system-control"
       )
+      registrar.register(
+        AppleSatelliteFactory(messenger: registrar.messenger()),
+        withId: "com.oneupbyte.trakkar/apple-satellite"
+      )
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LiveTrackingBridge") {
       LiveTrackingBridge.register(with: registrar)

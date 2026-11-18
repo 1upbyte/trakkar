@@ -22,6 +22,7 @@ void main() {
         ),
       );
       await tester.scrollUntilVisible(find.text('Dark map'), 300);
+      expect(find.text('Apple satellite (experimental)'), findsNothing);
       await tester.tap(find.text('Dark map'));
       await tester.pumpAndSettle();
       expect(state.darkMap, isTrue);
@@ -63,4 +64,46 @@ void main() {
       expect(state.satelliteAtZoom(state.satelliteZoom), isTrue);
     },
   );
+
+  testWidgets('iOS Apple satellite is opt-in and persists independently', (
+    tester,
+  ) async {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+    final state = AppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: state,
+        child: const MaterialApp(home: Scaffold(body: SettingsScreen())),
+      ),
+    );
+
+    final toggle = find.text('Apple satellite (experimental)');
+    await tester.scrollUntilVisible(toggle, 200);
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+    expect(state.experimentalAppleSatellite, isFalse);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(state.experimentalAppleSatellite, isTrue);
+    expect(
+      await SharedPreferencesAsync().getBool('map.experimentalAppleSatellite'),
+      isTrue,
+    );
+
+    await state.saveMapAppearance(
+      satelliteSliderValue: AppState.satelliteSliderMin,
+    );
+    await tester.pumpAndSettle();
+    expect(state.experimentalAppleSatellite, isTrue);
+    expect(state.satelliteAtZoom(21), isFalse);
+      await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(
+      await SharedPreferencesAsync().getBool('map.experimentalAppleSatellite'),
+      isFalse,
+    );
+  }, variant: const TargetPlatformVariant({TargetPlatform.iOS}));
 }
