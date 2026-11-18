@@ -412,9 +412,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(
                     state.provisioning?.managerUrl.host ?? 'Not connected',
                   ),
-                  trailing: Icon(
-                    state.liveConnected ? Icons.cloud_done : Icons.cloud_off,
-                    color: state.liveConnected ? Colors.green : Colors.orange,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.cloud_outlined),
+                  title: const Text('Sidecar container'),
+                  subtitle: Text(
+                    state.provisioning?.liveTrackingUrl?.host ??
+                        'Not configured',
                   ),
                 ),
               ],
