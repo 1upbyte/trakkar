@@ -458,18 +458,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           if (LocalDiagnostics.supported) ...[
             const SizedBox(height: 24),
-            Builder(
-              builder: (buttonContext) => ListTile(
-                leading: const Icon(Icons.description_outlined),
-                title: const Text('Share diagnostics log'),
-                subtitle: const Text(
-                  'Share recent crash and app activity details',
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Builder(
+                builder: (buttonContext) => PlatformButton.outlinedIcon(
+                  icon: const Icon(Icons.description_outlined),
+                  label: const Text('Share diagnostics log'),
+                  onPressed: _sharingDiagnostics
+                      ? null
+                      : () => _shareDiagnostics(buttonContext),
                 ),
-                onTap: _sharingDiagnostics
-                    ? null
-                    : () => _shareDiagnostics(buttonContext),
               ),
             ),
+            const SizedBox(height: 8),
+            const Text('Share recent crash and app activity details'),
           ],
           const SizedBox(height: 28),
           PlatformButton.outlinedIcon(
