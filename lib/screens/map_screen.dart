@@ -191,10 +191,37 @@ class _MapScreenState extends State<MapScreen>
     _cameraAnimation.forward(from: 0);
   }
 
-  void _fitPositions(AppState state) {
-    final points = state.positions.values
+  List<LatLng> _groupPositions(List<LatLng> points) {
+    if (points.length < 3) return points;
+
+    const distance = Haversine();
+    // Find the smallest radius around any person that contains a majority.
+    final majorityIndex = points.length ~/ 2;
+    var groupCenter = points.first;
+    var groupRadius = double.infinity;
+    for (final point in points) {
+      final distances =
+          points.map((other) => distance.distance(point, other)).toList()
+            ..sort();
+      final radius = distances[majorityIndex];
+      if (radius < groupRadius) {
+        groupCenter = point;
+        groupRadius = radius;
+      }
+    }
+
+    // Keep nearby people in view even when the majority is at the same place.
+    final fitRadius = math.max(10000.0, groupRadius * 4);
+    return points
+        .where((point) => distance.distance(groupCenter, point) <= fitRadius)
+        .toList();
+  }
+
+  void _fitPositions(AppState state, {bool focusOnGroup = false}) {
+    final positions = state.positions.values
         .map((position) => LatLng(position.latitude, position.longitude))
         .toList(growable: false);
+    final points = focusOnGroup ? _groupPositions(positions) : positions;
     if (points.isEmpty) return;
     if (points.length == 1) {
       _animateCamera(points.first, 15);
@@ -883,13 +910,14 @@ class _MapScreenState extends State<MapScreen>
                   : 32,
               child: isIOS(context)
                   ? Semantics(
-                      label: 'Show everyone',
+                      label: 'Center on group',
                       button: true,
                       child: LiquidGlass(
                         radius: 28,
                         child: CupertinoButton(
                           padding: const EdgeInsets.all(16),
-                          onPressed: () => _fitPositions(state),
+                          onPressed: () =>
+                              _fitPositions(state, focusOnGroup: true),
                           child: Icon(
                             CupertinoIcons.arrow_up_left_arrow_down_right,
                             color: Theme.of(context).colorScheme.onSurface,
@@ -899,8 +927,8 @@ class _MapScreenState extends State<MapScreen>
                     )
                   : FloatingActionButton.small(
                       heroTag: 'fitMap',
-                      onPressed: () => _fitPositions(state),
-                      tooltip: 'Show everyone',
+                      onPressed: () => _fitPositions(state, focusOnGroup: true),
+                      tooltip: 'Center on group',
                       child: const Icon(Icons.zoom_out_map_rounded),
                     ),
             ),
