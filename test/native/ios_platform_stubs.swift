@@ -25,15 +25,43 @@ struct Config: Equatable {
   var notification: NotificationConfig
 }
 enum AuthorizationStatus { case notDetermined, authorizedAlways }
-final class CLLocationManager { var authorizationStatus = AuthorizationStatus.authorizedAlways }
+let kCLLocationAccuracyHundredMeters = 100.0
+protocol CLLocationManagerDelegate: AnyObject {}
+final class CLLocationManager {
+  var authorizationStatus = AuthorizationStatus.authorizedAlways
+  weak var delegate: CLLocationManagerDelegate?
+  var desiredAccuracy = 0.0
+  func requestLocation() {}
+}
+struct CLLocation {
+  let coordinate = (latitude: 40.0, longitude: -74.0)
+  let timestamp = Date()
+  let horizontalAccuracy = 20.0
+  let verticalAccuracy = 10.0
+  let altitude = 5.0
+  let speed = 2.0
+  let course = 90.0
+}
+final class UIDevice {
+  static let current = UIDevice()
+  enum BatteryState { case charging, full, unplugged, unknown }
+  var isBatteryMonitoringEnabled = false
+  let batteryLevel: Float = 0.75
+  let batteryState = BatteryState.unplugged
+}
 final class CLServiceSession {
   enum Authorization { case always }
   init(authorization: Authorization) {}
 }
 final class CLBackgroundActivitySession {}
 struct CLLocationUpdate {
+  let location: CLLocation?
   static func liveUpdates() -> AsyncThrowingStream<Self, Error> {
-    AsyncThrowingStream { $0.finish() }
+    AsyncThrowingStream { continuation in
+      NativeTestRuntime.beforeFix?()
+      if let fix = NativeTestRuntime.pushFix { continuation.yield(Self(location: fix)) }
+      continuation.finish()
+    }
   }
 }
 
@@ -46,10 +74,6 @@ final class Tracker {
     let replacement = Tracker(config: newConfig)
     TrackerKt.tracker = replacement
     return replacement
-  }
-  func requestPosition(alarm: String?) async throws -> Bool {
-    NativeTestRuntime.uploads.append(config)
-    return true
   }
 }
 enum TrackerKt {
@@ -77,7 +101,9 @@ enum NativeTestRuntime {
     mach_timebase_info(&timebase)
     return UInt64(uptime * 1_000_000_000 * Double(timebase.denom) / Double(timebase.numer))
   }
-  static var uploads: [Config] = []
+  static var uploads: [URLRequest] = []
+  static var pushFix: CLLocation?
+  static var beforeFix: (() -> Void)?
   static var profiles: [Config] = []
   static var beforeReply: (() async throws -> Void)?
   static var beforeLock: (() -> Void)?
@@ -119,6 +145,11 @@ enum NativeTestRuntime {
 final class URLSession {
   static let shared = URLSession()
   func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+    if request.httpMethod == "POST" {
+      NativeTestRuntime.uploads.append(request)
+      return (Data(), HTTPURLResponse(url: request.url!, statusCode: 200,
+                                      httpVersion: nil, headerFields: nil)!)
+    }
     if let hook = NativeTestRuntime.beforeReply {
       NativeTestRuntime.beforeReply = nil
       try await hook()

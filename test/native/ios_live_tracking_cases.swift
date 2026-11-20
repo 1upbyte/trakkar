@@ -114,21 +114,41 @@ struct NativeRegressions {
               LiveTrackingState.load()?.temporary == true else {
           throw Failure.message("a caller could not save successive updates")
         }
-      case "extension-account":
+      case "extension-account", "extension-account-changed":
         // The extension process has already handled a push for the old setup.
         _ = try await TrackerKt.sharedTracker(config: seed.config(live: false))
-        var replacement = LiveTrackingState(serverUrl: "https://new.test", deviceId: "new-phone")
+        var replacement = LiveTrackingState(serverUrl: "https://new.test", deviceId: "new+phone & café")
         replacement.enabled = true
         replacement.endpoint = "https://sidecar.test"
         replacement.deviceToken = "new-token"
         try replacement.save(creating: true)
+        NativeTestRuntime.pushFix = CLLocation()
+        if CommandLine.arguments[1] == "extension-account-changed" {
+          NativeTestRuntime.beforeFix = {
+            var latest = LiveTrackingState.load()!
+            latest.deviceToken = "replaced-token"
+            try! latest.save()
+          }
+        }
         let reporter = LocationPushReporter()
         await withCheckedContinuation { continuation in
           reporter.receive(payload: ["type": "live_tracking"]) { continuation.resume() }
         }
-        guard let upload = NativeTestRuntime.uploads.last,
-              upload.serverUrl == "https://new.test", upload.deviceId == "new-phone" else {
-          throw Failure.message("reused extension uploaded with the old server/device configuration")
+        if CommandLine.arguments[1] == "extension-account-changed" {
+          guard NativeTestRuntime.uploads.isEmpty else {
+            throw Failure.message("extension uploaded after registration changed")
+          }
+        } else {
+          guard NativeTestRuntime.uploads.count == 1, let upload = NativeTestRuntime.uploads.first,
+                upload.url?.absoluteString == "https://new.test",
+                upload.value(forHTTPHeaderField: "Content-Type") == "application/x-www-form-urlencoded",
+                let body = upload.httpBody,
+                Set(String(decoding: body, as: UTF8.self).split(separator: "&")) == [
+                  "id=new%2Bphone%20%26%20caf%C3%A9", "lat=40.0", "lon=-74.0", "timestamp=1000",
+                  "accuracy=20.0", "altitude=5.0", "speed=3.89", "bearing=90.0", "batt=75", "charge=false",
+                ] else {
+            throw Failure.message("extension uploaded an invalid position or used the old configuration")
+          }
         }
       case "offline-restart":
         current.endpoint = "https://sidecar.test"

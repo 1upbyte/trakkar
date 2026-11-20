@@ -16,8 +16,9 @@ These tests exercise deterministic native policy; they do not establish Core
 Location authorization, APNs delivery, process reuse, or background handoff on iOS.
 Continue to build Runner and its extension and validate delivery on physical devices.
 
-The extension fixture models the pinned SDK's cached-instance contract. Verify
-that contract directly using an SDK 1.0.11 checkout and existing Gradle caches:
+The extension fixture checks one-shot form uploads and account changes during a
+location request. Verify Runner's SDK cached-instance contract directly using an
+SDK 1.0.11 checkout and existing Gradle caches:
 
 ```sh
 python3 test/native/reproduce_sdk_singleton.py /path/to/traccar-client-sdk

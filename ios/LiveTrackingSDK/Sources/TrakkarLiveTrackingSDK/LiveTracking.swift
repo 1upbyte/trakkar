@@ -3,6 +3,7 @@ import CoreLocation
 import Foundation
 import Darwin
 import TraccarClientSDK
+import UIKit
 
 private enum LiveTrackingClock {
   // Unlike wall time, this advances through device sleep and cannot jump when
@@ -16,7 +17,6 @@ private enum LiveTrackingClock {
 }
 
 /// Native SDK adapter shared by Runner and its location push extension.
-/// All reported positions are acquired and uploaded by TraccarClientSDK.
 public struct LiveTrackingState: Codable {
   public var serverUrl: String
   public var deviceId: String
@@ -278,50 +278,137 @@ public final class LiveTrackingCoordinator {
   }
 }
 
-/// An extension has a separate SDK instance/database. Seed it with shared config,
-/// keep its normal tracker stopped, and use the SDK's existing one-shot upload.
+/// Confirms the shared lease and sends one position from the push extension.
 @MainActor
 public final class LocationPushReporter {
   private var task: Task<Void, Never>?
-  private var authorization: Any?
   public init() {}
 
   public func receive(payload: [String: Any], completion: @escaping () -> Void) {
     task?.cancel()
     task = Task {
-      defer { authorization = nil; completion() }
+      defer { completion() }
       guard payload["type"] as? String == "live_tracking",
             var state = LiveTrackingState.load(), state.enabled, state.deviceToken != nil else { return }
+      let authorization: Any?
       if #available(iOS 18.0, *) {
         authorization = CLServiceSession(authorization: .always)
+      } else {
+        authorization = nil
       }
+      defer { withExtendedLifetime(authorization) {} }
       // The payload is only a wake-up hint. Do not compare its server timestamp
       // with the phone's clock; fetchExpiry uses the server-relative lifetime.
       // Delayed pushes and revoked tokens cannot activate an inactive lease.
-      guard let confirmed = await state.fetchExpiry(), confirmed > LiveTrackingClock.milliseconds else { return }
+      guard let confirmed = await state.fetchExpiry(),
+            !Task.isCancelled, confirmed > LiveTrackingClock.milliseconds else { return }
       state.expiresAt = confirmed
       do { try state.save() } catch { return }
       CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
         CFNotificationName("com.oneupbyte.trakkar.live.changed" as CFString), nil, nil, true)
-      do {
-        let cached = try await TrackerKt.sharedTracker(config: state.config(live: false))
-        try await cached.stop()
-        // sharedTracker(config:) reuses its singleton without applying config.
-        // A reused extension process must adopt the current account explicitly.
-        let tracker = try await cached.updateConfig(newConfig: state.config(live: false))
-        // Start the modern location service so Core Location can hand delivery to
-        // the main app. Its launch path re-creates sessions and reads the lease.
-        if #available(iOS 17.0, *) {
-          let handoff = Task {
-            do { for try await _ in CLLocationUpdate.liveUpdates() { break } } catch { }
-          }
-          _ = try await tracker.requestPosition(alarm: nil)
-          handoff.cancel()
-        } else {
-          _ = try await tracker.requestPosition(alarm: nil)
-        }
-      } catch { }
+      let remaining = confirmed - LiveTrackingClock.milliseconds
+      guard remaining > 0, let location = await Self.location(within: remaining),
+            !Task.isCancelled, confirmed > LiveTrackingClock.milliseconds,
+            let current = LiveTrackingState.load(), current.enabled,
+            current.deviceToken == state.deviceToken, current.endpoint == state.endpoint,
+            current.serverUrl == state.serverUrl, current.deviceId == state.deviceId else { return }
+      await Self.upload(location, state: state)
     }
   }
   public func expire() { task?.cancel() }
+
+  private static func location(within milliseconds: Double) async -> CLLocation? {
+    await withTaskGroup(of: CLLocation?.self) { group in
+      group.addTask {
+        try? await Task.sleep(nanoseconds: UInt64(milliseconds * 1_000_000))
+        return nil
+      }
+      group.addTask { @MainActor in
+        // The SDK's one-shot manager enables continuous background updates.
+        // Core Location can deliver a push fix through the extension's session.
+        if #available(iOS 17.0, *) {
+          do {
+            for try await update in CLLocationUpdate.liveUpdates() {
+              if let location = update.location, location.horizontalAccuracy >= 0 { return location }
+            }
+          } catch {}
+          return nil
+        }
+        return await PushLocationRequest.request()
+      }
+      let location = await group.next()
+      group.cancelAll()
+      return location ?? nil
+    }
+  }
+
+  private static func upload(_ location: CLLocation, state: LiveTrackingState) async {
+    guard let url = URL(string: state.serverUrl) else { return }
+    var fields = [
+      "id": state.deviceId,
+      "lat": String(location.coordinate.latitude),
+      "lon": String(location.coordinate.longitude),
+      "timestamp": String(Int64(location.timestamp.timeIntervalSince1970)),
+      "accuracy": String(location.horizontalAccuracy),
+    ]
+    if location.verticalAccuracy >= 0 { fields["altitude"] = String(location.altitude) }
+    if location.speed >= 0 { fields["speed"] = String((location.speed * 194.384).rounded() / 100) }
+    if location.course >= 0 { fields["bearing"] = String(location.course) }
+
+    let device = UIDevice.current
+    let wasMonitoring = device.isBatteryMonitoringEnabled
+    device.isBatteryMonitoringEnabled = true
+    if device.batteryLevel >= 0 { fields["batt"] = String(Int(device.batteryLevel * 100)) }
+    switch device.batteryState {
+    case .charging, .full: fields["charge"] = "true"
+    case .unplugged: fields["charge"] = "false"
+    default: break
+    }
+    device.isBatteryMonitoringEnabled = wasMonitoring
+
+    let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._*")
+    let body = fields.map { key, value in
+      "\(key)=\(value.addingPercentEncoding(withAllowedCharacters: allowed) ?? "")"
+    }.joined(separator: "&")
+    var request = URLRequest(url: url, timeoutInterval: 3)
+    request.httpMethod = "POST"
+    request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+    request.httpBody = Data(body.utf8)
+    _ = try? await URLSession.shared.data(for: request)
+  }
+}
+
+private final class PushLocationRequest: NSObject, CLLocationManagerDelegate {
+  private let results: AsyncStream<CLLocation>.Continuation
+
+  private init(results: AsyncStream<CLLocation>.Continuation) {
+    self.results = results
+  }
+
+  @MainActor
+  static func request() async -> CLLocation? {
+    let (stream, results) = AsyncStream<CLLocation>.makeStream()
+    let delegate = PushLocationRequest(results: results)
+    let manager = CLLocationManager()
+    manager.delegate = delegate
+    manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+    defer {
+      withExtendedLifetime(delegate) { manager.delegate = nil }
+      results.finish()
+    }
+    manager.requestLocation()
+    var iterator = stream.makeAsyncIterator()
+    return await iterator.next()
+  }
+
+  func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    if let location = locations.last(where: { $0.horizontalAccuracy >= 0 }) {
+      results.yield(location)
+    }
+    results.finish()
+  }
+
+  func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    results.finish()
+  }
 }

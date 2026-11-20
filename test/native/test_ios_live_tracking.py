@@ -24,6 +24,7 @@ class IOSLiveTrackingTests(unittest.TestCase):
         source = (NATIVE / "LiveTracking.swift").read_text()
         source = source.replace("import CoreLocation\n", "")
         source = source.replace("import TraccarClientSDK\n", "")
+        source = source.replace("import UIKit\n", "")
         source = source.replace(
             "FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?",
             "NativeTestRuntime.directory",
@@ -78,6 +79,9 @@ class IOSLiveTrackingTests(unittest.TestCase):
 
     def test_reused_extension_uploads_with_current_account(self):
         self.run_case("extension-account")
+
+    def test_extension_rechecks_account_after_location_request(self):
+        self.run_case("extension-account-changed")
 
     def test_clock_rollback_does_not_extend_offline_lease(self):
         self.run_case("clock-backward")
