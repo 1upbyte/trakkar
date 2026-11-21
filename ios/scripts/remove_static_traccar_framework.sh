@@ -5,6 +5,9 @@ embedded_framework="${TARGET_BUILD_DIR:?}/${FRAMEWORKS_FOLDER_PATH:?}/TraccarCli
 sdk_binary="${BUILT_PRODUCTS_DIR:?}/TraccarClientSDK.framework/TraccarClientSDK"
 
 [ -d "$embedded_framework" ] || exit 0
+# Simulator builds are never uploaded. Removing the bundle there races Xcode's
+# code-sign-on-copy step for it and breaks incremental builds.
+[ "${PLATFORM_NAME:-}" = "iphonesimulator" ] && exit 0
 
 # SDK 1.0.11 is static: its code and debug symbols are linked into Runner and
 # LocationPushService. SwiftPM also embeds the framework, which Xcode replaces

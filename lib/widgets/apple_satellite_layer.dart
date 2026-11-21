@@ -10,9 +10,16 @@ bool get supportsAppleSatellite =>
 
 /// Draws Apple imagery below FlutterMap's interactive layers.
 class AppleSatelliteLayer extends StatefulWidget {
-  const AppleSatelliteLayer({required this.bottomInset, super.key});
+  const AppleSatelliteLayer({
+    required this.bottomInset,
+    this.onMaxZoomChanged,
+    super.key,
+  });
 
   final double bottomInset;
+
+  /// Reports the highest zoom MapKit can draw at the correct scale.
+  final ValueChanged<double>? onMaxZoomChanged;
 
   @override
   State<AppleSatelliteLayer> createState() => _AppleSatelliteLayerState();
@@ -54,6 +61,12 @@ class _AppleSatelliteLayerState extends State<AppleSatelliteLayer> {
   }
 
   @override
+  void dispose() {
+    _channel?.setMethodCallHandler(null);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => IgnorePointer(
     child: UiKitView(
       viewType: _viewType,
@@ -61,7 +74,13 @@ class _AppleSatelliteLayerState extends State<AppleSatelliteLayer> {
       creationParamsCodec: const StandardMessageCodec(),
       onPlatformViewCreated: (id) {
         if (!mounted) return;
-        _channel = MethodChannel('$_viewType/$id');
+        _channel = MethodChannel('$_viewType/$id')
+          ..setMethodCallHandler((call) async {
+            final zoom = call.arguments;
+            if (call.method == 'maxZoom' && zoom is double && mounted) {
+              widget.onMaxZoomChanged?.call(zoom);
+            }
+          });
         _sendCamera();
       },
     ),

@@ -29,6 +29,9 @@ private final class AppleSatellitePlatformView: NSObject, FlutterPlatformView {
       name: "com.oneupbyte.trakkar/apple-satellite/\(id)", binaryMessenger: messenger
     )
     super.init()
+    map.onMaxZoomChanged = { [weak self] zoom in
+      self?.channel.invokeMethod("maxZoom", arguments: zoom)
+    }
     map.update(arguments)
     channel.setMethodCallHandler { [weak self] call, result in
       guard call.method == "update" else {
@@ -59,6 +62,11 @@ private final class AppleImageryMap: UIView {
   private var appliedCamera: Camera?
   private var appliedSize = CGSize.zero
   private var distancePerGroundHeight = 1.2
+  private var appliedBottomInset: Double?
+  /// MapKit will not move the camera closer than this; learned when it clamps.
+  private var minimumDistance: Double?
+  private var reportedMaxZoom: Double?
+  var onMaxZoomChanged: ((Double) -> Void)?
   private let map = MKMapView()
 
   override init(frame: CGRect) {
@@ -69,6 +77,10 @@ private final class AppleImageryMap: UIView {
       map.mapType = .satellite
     }
     map.isPitchEnabled = false
+    // MapKit's default range stops the camera near zoom 19 on phones, below
+    // Flutter's maximum of 21. Allow it closer so the imagery keeps scaling
+    // with the markers (beyond Apple's sharpest level it is simply enlarged).
+    map.cameraZoomRange = MKMapView.CameraZoomRange(minCenterCoordinateDistance: 1)
     isUserInteractionEnabled = false
     map.showsCompass = false
     map.showsScale = false
@@ -87,8 +99,13 @@ private final class AppleImageryMap: UIView {
     else { return }
 
     // Give MapKit's own logo and legal attribution room above the glass tabs.
-    if map.layoutMargins.bottom != bottomInset {
+    // Only touch the margins when the inset changes: the getter folds in the
+    // safe area, so comparing against it re-set them on every camera update,
+    // and each set shifted MapKit's imagery away from Flutter's markers.
+    if appliedBottomInset != bottomInset {
+      appliedBottomInset = bottomInset
       map.layoutMargins.bottom = bottomInset
+      appliedCamera = nil
     }
     requestedCamera = Camera(latitude: latitude, longitude: longitude, worldWidth: worldWidth, heading: heading)
     applyCamera()
@@ -132,8 +149,48 @@ private final class AppleImageryMap: UIView {
     if (0.5...2).contains(correction), abs(correction - 1) > 0.0025 {
       target.centerCoordinateDistance *= correction
       map.setCamera(target, animated: false)
-      // Keep a bounded estimate in case MapKit clamps a subsequent zoom.
+    }
+    let appliedDistance = map.camera.centerCoordinateDistance
+    if appliedDistance > target.centerCoordinateDistance * 1.005 {
+      // MapKit refused to zoom in this far despite the zoom range. Remember
+      // its limit so Flutter can stop zooming there instead of spreading
+      // markers over static imagery.
+      minimumDistance = min(minimumDistance ?? .infinity, appliedDistance)
+    } else if abs(correction - 1) > 0.0025 {
+      // Only learn the camera ratio from frames MapKit applied unclamped.
       distancePerGroundHeight = min(2, max(0.5, target.centerCoordinateDistance / groundHeight))
     }
+    reportMaxZoom(
+      zoom: log2(requestedCamera.worldWidth / 256),
+      exactDistance: groundHeight * distancePerGroundHeight
+    )
+
+    // MapKit centers its camera inside the layout margins (safe area plus the
+    // attribution inset), not the view. Flutter positions markers around the
+    // view's middle, so move the camera until that point shows `center`.
+    let desired = MKMapPoint(center)
+    let shown = MKMapPoint(map.convert(CGPoint(x: map.bounds.midX, y: map.bounds.midY), toCoordinateFrom: map))
+    var offsetX = desired.x - shown.x
+    if offsetX > worldWidth / 2 { offsetX -= worldWidth }
+    if offsetX < -worldWidth / 2 { offsetX += worldWidth }
+    let offsetY = desired.y - shown.y
+    if hypot(offsetX, offsetY) > 0.25 * mapPointsPerPoint {
+      let current = MKMapPoint(target.centerCoordinate)
+      var x = (current.x + offsetX).truncatingRemainder(dividingBy: worldWidth)
+      if x < 0 { x += worldWidth }
+      let y = min(MKMapRect.world.height, max(0, current.y + offsetY))
+      target.centerCoordinate = MKMapPoint(x: x, y: y).coordinate
+      map.setCamera(target, animated: false)
+    }
+  }
+
+  private func reportMaxZoom(zoom: Double, exactDistance: Double) {
+    guard let minimumDistance, exactDistance > 0 else { return }
+    // Each zoom level halves the camera distance needed for exact scale.
+    let maxZoom = zoom + log2(exactDistance / minimumDistance)
+    guard maxZoom.isFinite else { return }
+    if let reportedMaxZoom, abs(reportedMaxZoom - maxZoom) < 0.01 { return }
+    reportedMaxZoom = maxZoom
+    onMaxZoomChanged?(maxZoom)
   }
 }

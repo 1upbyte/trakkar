@@ -63,6 +63,8 @@ class _MapScreenState extends State<MapScreen>
   Object? _baseMapError;
   bool _fittedInitialPositions = false;
   double _zoom = 12;
+  // The native view lowers this only if MapKit ever refuses to zoom closer.
+  double _appleMaxZoom = _maxMapZoom;
   bool _drawingPlace = false;
   bool _autoBuilding = false;
   bool _buildingBusy = false;
@@ -582,6 +584,22 @@ class _MapScreenState extends State<MapScreen>
     _showPersonSheet(device, position, state);
   }
 
+  /// Apple imagery is opt-in on iOS and only matters when satellite can show.
+  bool _usesAppleImagery(AppState state) =>
+      supportsAppleSatellite &&
+      state.enhancedMapSharpness &&
+      (state.satelliteAlways || state.satelliteAutoAtStreetZoom);
+
+  double _maxZoomFor(AppState state) => _usesAppleImagery(state)
+      ? math.min(_maxMapZoom, _appleMaxZoom)
+      : _maxMapZoom;
+
+  /// Keeps satellite on at Apple's zoom cap even if the user's threshold sits
+  /// above it, so the map cannot flip between styles at the limit.
+  bool _satelliteAt(AppState state, double zoom) =>
+      state.satelliteAtZoom(zoom) ||
+      (_usesAppleImagery(state) && zoom >= _maxZoomFor(state) - 0.01);
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -601,9 +619,18 @@ class _MapScreenState extends State<MapScreen>
       });
     }
     final baseMapStyle = _baseMapStyle;
-    final satelliteActive = state.satelliteAtZoom(_zoom);
-    // iOS draws sharper MapKit imagery; other platforms use MapTiler tiles.
-    final showAppleSatellite = supportsAppleSatellite && satelliteActive;
+    final maxZoom = _maxZoomFor(state);
+    if (_zoom > maxZoom + 0.001) {
+      // Enabling Apple imagery (or learning its limit) can lower the cap below
+      // the current camera; FlutterMap only clamps on the next move.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final camera = _mapController.camera;
+        if (camera.zoom > maxZoom) _mapController.move(camera.center, maxZoom);
+      });
+    }
+    final satelliteActive = _satelliteAt(state, _zoom);
+    final showAppleSatellite = _usesAppleImagery(state) && satelliteActive;
     final showSatellite =
         satelliteActive &&
         !showAppleSatellite &&
@@ -639,7 +666,7 @@ class _MapScreenState extends State<MapScreen>
                     : const Color(0xFFE9ECE8),
                 initialZoom: initialPosition == null ? 2.5 : 12,
                 minZoom: _minMapZoom,
-                maxZoom: _maxMapZoom,
+                maxZoom: maxZoom,
                 onMapReady: () {
                   if (mounted && _zoom != _mapController.camera.zoom) {
                     setState(() => _zoom = _mapController.camera.zoom);
@@ -647,8 +674,8 @@ class _MapScreenState extends State<MapScreen>
                 },
                 onTap: (_, point) => _handleMapTap(point),
                 onPositionChanged: (camera, _) {
-                  final wasSatelliteZoom = state.satelliteAtZoom(_zoom);
-                  final isSatelliteZoom = state.satelliteAtZoom(camera.zoom);
+                  final wasSatelliteZoom = _satelliteAt(state, _zoom);
+                  final isSatelliteZoom = _satelliteAt(state, camera.zoom);
                   final zoomChanged = _zoom != camera.zoom;
                   _zoom = camera.zoom;
                   _scheduleBuildings();
@@ -662,7 +689,14 @@ class _MapScreenState extends State<MapScreen>
               ),
               children: [
                 if (showAppleSatellite)
-                  AppleSatelliteLayer(bottomInset: widget.bottomNavigationInset)
+                  AppleSatelliteLayer(
+                    bottomInset: widget.bottomNavigationInset,
+                    onMaxZoomChanged: (zoom) {
+                      final clamped = zoom.clamp(_minMapZoom, _maxMapZoom);
+                      if ((clamped - _appleMaxZoom).abs() < 0.01) return;
+                      setState(() => _appleMaxZoom = clamped);
+                    },
+                  )
                 else if (baseMapStyle != null)
                   vt.VectorTileLayer(
                     theme: baseMapStyle.theme,

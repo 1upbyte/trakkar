@@ -40,8 +40,8 @@ class AppState extends ChangeNotifier {
   static const _trackingWantedKey = 'tracking.wanted';
   static const _satelliteZoomKey = 'map.satelliteZoom';
   static const _satelliteAlwaysKey = 'map.satelliteAlways';
-  // Retired opt-in flag; Apple imagery is now always used on iOS.
-  static const _legacyAppleSatelliteKey = 'map.experimentalAppleSatellite';
+  // Kept from the earlier opt-in so existing choices carry over.
+  static const _enhancedSharpnessKey = 'map.experimentalAppleSatellite';
   Future<void> _appearanceSave = Future.value();
   static const _darkMapKey = 'map.darkMode';
   static const _satelliteAutoKey = 'map.satelliteAutoAtStreetZoom';
@@ -83,6 +83,9 @@ class AppState extends ChangeNotifier {
   List<NamedPlace> namedPlaces = const [];
   double satelliteZoom = 19;
   bool satelliteAlways = false;
+
+  /// iOS only: draw satellite imagery with Apple MapKit instead of MapTiler.
+  bool enhancedMapSharpness = false;
   bool darkMap = false;
   bool satelliteAutoAtStreetZoom = true;
   String mapTilerApiKey = '';
@@ -95,20 +98,26 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  Future<void> bootstrap() async {
-    namedPlaces = await _namedPlaceStore.load();
+  /// Loads on-device map and theme preferences without touching credentials.
+  Future<void> loadLocalPreferences() async {
     satelliteAutoAtStreetZoom =
         await _preferences.getBool(_satelliteAutoKey) ?? true;
     satelliteZoom = (await _preferences.getDouble(_satelliteZoomKey) ?? 19)
         .clamp(2, 21);
     satelliteAlways = await _preferences.getBool(_satelliteAlwaysKey) ?? false;
-    await _preferences.remove(_legacyAppleSatelliteKey);
+    enhancedMapSharpness =
+        await _preferences.getBool(_enhancedSharpnessKey) ?? false;
     darkMap = await _preferences.getBool(_darkMapKey) ?? false;
     final savedTheme = await _preferences.getString(_themePreferenceKey);
     themePreference = ThemePreference.values.firstWhere(
       (preference) => preference.name == savedTheme,
       orElse: () => ThemePreference.system,
     );
+  }
+
+  Future<void> bootstrap() async {
+    namedPlaces = await _namedPlaceStore.load();
+    await loadLocalPreferences();
     provisioning = await _credentialStore.readProvisioning();
     firstName = await _preferences.getString(_firstNameKey) ?? '';
     deviceUsername = await _preferences.getString(_deviceUsernameKey) ?? '';
@@ -655,6 +664,7 @@ class AppState extends ChangeNotifier {
     double? satelliteZoom,
     bool? satelliteAlways,
     double? satelliteSliderValue,
+    bool? enhancedMapSharpness,
   }) {
     if (satelliteSliderValue != null) {
       satelliteAlways = satelliteSliderValue >= satelliteSliderMax;
@@ -669,17 +679,21 @@ class AppState extends ChangeNotifier {
     this.darkMap = darkMap ?? this.darkMap;
     this.satelliteZoom = (satelliteZoom ?? this.satelliteZoom).clamp(2, 21);
     this.satelliteAlways = satelliteAlways ?? this.satelliteAlways;
+    this.enhancedMapSharpness =
+        enhancedMapSharpness ?? this.enhancedMapSharpness;
     notifyListeners();
     final auto = this.satelliteAutoAtStreetZoom;
     final dark = this.darkMap;
     final zoom = this.satelliteZoom;
     final always = this.satelliteAlways;
+    final enhanced = this.enhancedMapSharpness;
     // Serialize writes so rapid changes cannot restore an older preference.
     final save = _appearanceSave.catchError((Object _) {}).then((_) async {
       await _preferences.setBool(_satelliteAutoKey, auto);
       await _preferences.setBool(_darkMapKey, dark);
       await _preferences.setDouble(_satelliteZoomKey, zoom);
       await _preferences.setBool(_satelliteAlwaysKey, always);
+      await _preferences.setBool(_enhancedSharpnessKey, enhanced);
     });
     _appearanceSave = save;
     return save;
@@ -842,6 +856,7 @@ class AppState extends ChangeNotifier {
     namedPlaces = const [];
     satelliteZoom = 19;
     satelliteAlways = false;
+    enhancedMapSharpness = false;
     darkMap = false;
     satelliteAutoAtStreetZoom = true;
     mapTilerApiKey = '';
@@ -879,6 +894,7 @@ class AppState extends ChangeNotifier {
         _preferences.remove(_darkMapKey),
         _preferences.remove(_satelliteZoomKey),
         _preferences.remove(_satelliteAlwaysKey),
+        _preferences.remove(_enhancedSharpnessKey),
         _preferences.remove(_themePreferenceKey),
         _namedPlaceStore.save(const []),
       ]),
