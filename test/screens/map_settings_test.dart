@@ -22,7 +22,11 @@ void main() {
         ),
       );
       await tester.scrollUntilVisible(find.text('Dark map'), 300);
-      expect(find.text('Apple satellite (experimental)'), findsNothing);
+      expect(
+        find.text('Enhanced map sharpness (experimental)'),
+        findsNothing,
+        reason: 'Apple imagery is iOS only',
+      );
       await tester.tap(find.text('Dark map'));
       await tester.pumpAndSettle();
       expect(state.darkMap, isTrue);
@@ -65,7 +69,7 @@ void main() {
     },
   );
 
-  testWidgets('iOS always uses Apple satellite without an opt-in toggle', (
+  testWidgets('iOS enhanced sharpness toggle starts off and persists', (
     tester,
   ) async {
     SharedPreferencesAsyncPlatform.instance =
@@ -78,8 +82,30 @@ void main() {
         child: const MaterialApp(home: Scaffold(body: SettingsScreen())),
       ),
     );
-    await tester.scrollUntilVisible(find.byType(Slider), 150);
+    final toggle = find.text('Enhanced map sharpness (experimental)');
+    await tester.scrollUntilVisible(toggle, 200);
+    await tester.ensureVisible(toggle);
     await tester.pumpAndSettle();
-    expect(find.text('Apple satellite (experimental)'), findsNothing);
+    expect(state.enhancedMapSharpness, isFalse);
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(state.enhancedMapSharpness, isTrue);
+    expect(
+      await SharedPreferencesAsync().getBool('map.experimentalAppleSatellite'),
+      isTrue,
+    );
+
+    final reloaded = AppState();
+    addTearDown(reloaded.dispose);
+    await reloaded.loadLocalPreferences();
+    expect(reloaded.enhancedMapSharpness, isTrue);
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(
+      await SharedPreferencesAsync().getBool('map.experimentalAppleSatellite'),
+      isFalse,
+    );
   }, variant: const TargetPlatformVariant({TargetPlatform.iOS}));
 }

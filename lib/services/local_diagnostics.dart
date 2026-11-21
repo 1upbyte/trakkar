@@ -28,7 +28,8 @@ abstract final class LocalDiagnostics {
   static AppLifecycleListener? _lifecycle;
   static int _queuedEntries = 0;
 
-  static bool get supported => !kIsWeb && (Platform.isIOS || Platform.isAndroid);
+  static bool get supported =>
+      !kIsWeb && (Platform.isIOS || Platform.isAndroid);
 
   static void install() {
     if (!supported || _lifecycle != null) return;
@@ -59,29 +60,32 @@ abstract final class LocalDiagnostics {
     if (_lifecycle == null || _queuedEntries >= 16) return;
     final timestamp = DateTime.now().toUtc().toIso8601String();
     _queuedEntries++;
-    _pending = _pending.then((_) async {
-      final frames = stack
-          ?.toString()
-          .split('\n')
-          .where((line) => line.length <= 256 && _frame.hasMatch(line))
-          .take(12);
-      final entry = ['$timestamp ${event.name}', ...?frames, ''].join('\n');
-      final directory = await _getDirectory();
-      if (directory == null) return;
-      final current = File('${directory.path}/events.log');
-      final previous = File('${directory.path}/events.previous.log');
-      await _removeIfExpired(previous);
-      await _removeIfExpired(current);
-      if (await current.exists() &&
-          await current.length() + entry.length > _maxLogBytes) {
-        await current.rename(previous.path);
-      }
-      await current.writeAsString(entry, mode: FileMode.append);
-    }).catchError((Object _) {
-      _directory = null;
-    }).whenComplete(() {
-      _queuedEntries--;
-    });
+    _pending = _pending
+        .then((_) async {
+          final frames = stack
+              ?.toString()
+              .split('\n')
+              .where((line) => line.length <= 256 && _frame.hasMatch(line))
+              .take(12);
+          final entry = ['$timestamp ${event.name}', ...?frames, ''].join('\n');
+          final directory = await _getDirectory();
+          if (directory == null) return;
+          final current = File('${directory.path}/events.log');
+          final previous = File('${directory.path}/events.previous.log');
+          await _removeIfExpired(previous);
+          await _removeIfExpired(current);
+          if (await current.exists() &&
+              await current.length() + entry.length > _maxLogBytes) {
+            await current.rename(previous.path);
+          }
+          await current.writeAsString(entry, mode: FileMode.append);
+        })
+        .catchError((Object _) {
+          _directory = null;
+        })
+        .whenComplete(() {
+          _queuedEntries--;
+        });
   }
 
   static Future<Directory?> _getDirectory() async {
@@ -130,7 +134,9 @@ abstract final class LocalDiagnostics {
     }
     final report = StringBuffer()
       ..writeln('Trakkar ${info.version} (${info.buildNumber})')
-      ..writeln('${Platform.operatingSystem} ${Platform.operatingSystemVersion}')
+      ..writeln(
+        '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+      )
       ..writeln('Exported ${DateTime.now().toUtc().toIso8601String()}')
       ..writeln();
     for (final name in _logNames) {

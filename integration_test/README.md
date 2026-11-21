@@ -1,3 +1,32 @@
+# Demo mode for manual UI testing
+
+Run the real app with fake data and no server setup. No signing is needed.
+
+**Xcode (iOS simulator):** open `ios/Runner.xcworkspace`, choose the
+**Runner Demo** scheme and any simulator, then press Run. The scheme sets the
+`TRAKKAR_DEMO=1` launch variable; the normal **Runner** scheme is unchanged.
+Run `flutter pub get` once beforehand if Xcode reports missing Flutter files.
+
+**Command line (any platform):**
+
+```sh
+flutter run --dart-define=TRAKKAR_DEMO=true -d <device-id>
+```
+
+The launch variable is only honored in the iOS simulator, so device builds can
+enter demo mode only through the `--dart-define` flag.
+
+The app opens straight to the map, signed in as "You", with four sample people
+around Manhattan and Brooklyn and three saved places. Alex is driving, Sam and
+Jordan are close enough to cluster, and Riley is offline with an old fix.
+Adding or deleting places and changing the profile picture only affect
+in-memory data. Theme and map appearance settings still save on the device.
+Demo mode never contacts a Traccar server, opens the live socket, or starts
+native location tracking. Resetting the app in Settings restores the sample data
+instead of returning to server setup.
+
+Demo mode is off by default. Builds without the flag behave exactly as before.
+
 # Person pane regression
 
 Boot an iOS simulator, then run:

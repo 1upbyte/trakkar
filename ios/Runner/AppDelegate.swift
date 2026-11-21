@@ -56,6 +56,15 @@ import TrakkarLiveTrackingSDK
       switch call.method {
       case "cacheDirectory": result(RunnerDiagnostics.directory.path)
       case "nativeReport": RunnerDiagnostics.shared.read(result)
+      case "demoMode":
+        // Set by the "Runner Demo" Xcode scheme. Dart's Platform.environment
+        // does not see Xcode launch variables, so read them natively. Device
+        // builds never honor it.
+        #if targetEnvironment(simulator)
+        result(ProcessInfo.processInfo.environment["TRAKKAR_DEMO"] == "1")
+        #else
+        result(false)
+        #endif
       default: result(FlutterMethodNotImplemented)
       }
     }

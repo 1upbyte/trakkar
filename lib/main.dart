@@ -7,21 +7,23 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'demo/demo_app_state.dart';
 import 'models/theme_preference.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/setup_link_screen.dart';
 import 'services/local_diagnostics.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LocalDiagnostics.install();
-  final links = AppLinks();
-  final state = AppState();
+  // Demo mode skips server setup and setup links entirely.
+  final demoMode = await resolveDemoMode();
+  final state = demoMode ? DemoAppState() : AppState();
   runApp(
-    ChangeNotifierProvider.value(
+    ChangeNotifierProvider<AppState>.value(
       value: state,
-      child: TrakkarApp(setupLinks: links.uriLinkStream),
+      child: TrakkarApp(setupLinks: demoMode ? null : AppLinks().uriLinkStream),
     ),
   );
   unawaited(state.bootstrap());

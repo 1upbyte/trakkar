@@ -124,16 +124,19 @@ void main() {
       }
     });
 
-    test('measures corners by distance instead of expanding a bounding box', () {
-      expect(
-        NamedPlaceStore.nearest([building], 39.9999, -74.0001),
-        same(building),
-      );
-      expect(
-        NamedPlaceStore.nearest([building], 39.99985, -74.00015),
-        isNull,
-      );
-    });
+    test(
+      'measures corners by distance instead of expanding a bounding box',
+      () {
+        expect(
+          NamedPlaceStore.nearest([building], 39.9999, -74.0001),
+          same(building),
+        );
+        expect(
+          NamedPlaceStore.nearest([building], 39.99985, -74.00015),
+          isNull,
+        );
+      },
+    );
 
     test('overlapping margins choose the nearest edge in either list order', () {
       const neighbor = NamedPlace(
@@ -199,10 +202,7 @@ void main() {
         longitude: building.longitude,
         boundary: [...building.boundary, building.boundary.first],
       );
-      expect(
-        NamedPlaceStore.nearest([closed], 40.001, -74.0001),
-        same(closed),
-      );
+      expect(NamedPlaceStore.nearest([closed], 40.001, -74.0001), same(closed));
     });
   });
 }

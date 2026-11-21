@@ -135,10 +135,11 @@ labels, even when the map is rotated. The default view centers on this phone's
 device position at a neighborhood zoom. The OpenFreeMap Positron vector style
 keeps useful road and city context but omits restaurant, shop, and other POI
 labels. At zoom 20 and above, the default-on satellite setting switches to
-satellite imagery. On iOS this is Apple MapKit imagery, drawn natively beneath
-the map's markers. On other platforms it overlays MapTiler `satellite-v4`
-512-pixel HiDPI tiles, cached for 90 days with a 512 MB cache limit. Map
-interaction is limited to zoom levels 2 through 21. The MapTiler key comes from
+satellite imagery: MapTiler `satellite-v4` 512-pixel HiDPI tiles, cached for
+90 days with a 512 MB cache limit. On iOS, the off-by-default "Enhanced map
+sharpness (experimental)" setting draws Apple MapKit imagery natively beneath
+the markers instead. Apple's sharpest imagery is around zoom 19; closer than
+that it is enlarged. Map interaction is limited to zoom levels 2 through 21. The MapTiler key comes from
 the Traccar server attribute `trakkarMapTilerKey` and is held only in memory by
 the client. Nearby people are
 clustered into overlapping profile previews; tapping a cluster spreads its
