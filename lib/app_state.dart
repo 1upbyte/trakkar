@@ -40,7 +40,8 @@ class AppState extends ChangeNotifier {
   static const _trackingWantedKey = 'tracking.wanted';
   static const _satelliteZoomKey = 'map.satelliteZoom';
   static const _satelliteAlwaysKey = 'map.satelliteAlways';
-  static const _appleSatelliteKey = 'map.experimentalAppleSatellite';
+  // Retired opt-in flag; Apple imagery is now always used on iOS.
+  static const _legacyAppleSatelliteKey = 'map.experimentalAppleSatellite';
   Future<void> _appearanceSave = Future.value();
   static const _darkMapKey = 'map.darkMode';
   static const _satelliteAutoKey = 'map.satelliteAutoAtStreetZoom';
@@ -82,7 +83,6 @@ class AppState extends ChangeNotifier {
   List<NamedPlace> namedPlaces = const [];
   double satelliteZoom = 19;
   bool satelliteAlways = false;
-  bool experimentalAppleSatellite = false;
   bool darkMap = false;
   bool satelliteAutoAtStreetZoom = true;
   String mapTilerApiKey = '';
@@ -102,8 +102,7 @@ class AppState extends ChangeNotifier {
     satelliteZoom = (await _preferences.getDouble(_satelliteZoomKey) ?? 19)
         .clamp(2, 21);
     satelliteAlways = await _preferences.getBool(_satelliteAlwaysKey) ?? false;
-    experimentalAppleSatellite =
-        await _preferences.getBool(_appleSatelliteKey) ?? false;
+    await _preferences.remove(_legacyAppleSatelliteKey);
     darkMap = await _preferences.getBool(_darkMapKey) ?? false;
     final savedTheme = await _preferences.getString(_themePreferenceKey);
     themePreference = ThemePreference.values.firstWhere(
@@ -413,9 +412,7 @@ class AppState extends ChangeNotifier {
   }
 
   void _updateLiveTrackingVisibility() {
-    _liveTracking?.setVisible(
-      _appForeground && phase == AppPhase.ready,
-    );
+    _liveTracking?.setVisible(_appForeground && phase == AppPhase.ready);
   }
 
   void _connectLive() {
@@ -658,7 +655,6 @@ class AppState extends ChangeNotifier {
     double? satelliteZoom,
     bool? satelliteAlways,
     double? satelliteSliderValue,
-    bool? experimentalAppleSatellite,
   }) {
     if (satelliteSliderValue != null) {
       satelliteAlways = satelliteSliderValue >= satelliteSliderMax;
@@ -673,21 +669,17 @@ class AppState extends ChangeNotifier {
     this.darkMap = darkMap ?? this.darkMap;
     this.satelliteZoom = (satelliteZoom ?? this.satelliteZoom).clamp(2, 21);
     this.satelliteAlways = satelliteAlways ?? this.satelliteAlways;
-    this.experimentalAppleSatellite =
-        experimentalAppleSatellite ?? this.experimentalAppleSatellite;
     notifyListeners();
     final auto = this.satelliteAutoAtStreetZoom;
     final dark = this.darkMap;
     final zoom = this.satelliteZoom;
     final always = this.satelliteAlways;
-    final appleSatellite = this.experimentalAppleSatellite;
     // Serialize writes so rapid changes cannot restore an older preference.
     final save = _appearanceSave.catchError((Object _) {}).then((_) async {
       await _preferences.setBool(_satelliteAutoKey, auto);
       await _preferences.setBool(_darkMapKey, dark);
       await _preferences.setDouble(_satelliteZoomKey, zoom);
       await _preferences.setBool(_satelliteAlwaysKey, always);
-      await _preferences.setBool(_appleSatelliteKey, appleSatellite);
     });
     _appearanceSave = save;
     return save;

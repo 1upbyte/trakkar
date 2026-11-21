@@ -65,7 +65,7 @@ void main() {
     },
   );
 
-  testWidgets('iOS Apple satellite is opt-in and persists independently', (
+  testWidgets('iOS always uses Apple satellite without an opt-in toggle', (
     tester,
   ) async {
     SharedPreferencesAsyncPlatform.instance =
@@ -78,32 +78,8 @@ void main() {
         child: const MaterialApp(home: Scaffold(body: SettingsScreen())),
       ),
     );
-
-    final toggle = find.text('Apple satellite (experimental)');
-    await tester.scrollUntilVisible(toggle, 200);
-      await tester.ensureVisible(toggle);
-      await tester.pumpAndSettle();
-    expect(state.experimentalAppleSatellite, isFalse);
-    await tester.tap(toggle);
+    await tester.scrollUntilVisible(find.byType(Slider), 150);
     await tester.pumpAndSettle();
-    expect(state.experimentalAppleSatellite, isTrue);
-    expect(
-      await SharedPreferencesAsync().getBool('map.experimentalAppleSatellite'),
-      isTrue,
-    );
-
-    await state.saveMapAppearance(
-      satelliteSliderValue: AppState.satelliteSliderMin,
-    );
-    await tester.pumpAndSettle();
-    expect(state.experimentalAppleSatellite, isTrue);
-    expect(state.satelliteAtZoom(21), isFalse);
-      await tester.ensureVisible(toggle);
-    await tester.tap(toggle);
-    await tester.pumpAndSettle();
-    expect(
-      await SharedPreferencesAsync().getBool('map.experimentalAppleSatellite'),
-      isFalse,
-    );
+    expect(find.text('Apple satellite (experimental)'), findsNothing);
   }, variant: const TargetPlatformVariant({TargetPlatform.iOS}));
 }
