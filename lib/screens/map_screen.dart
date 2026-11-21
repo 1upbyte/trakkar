@@ -602,10 +602,8 @@ class _MapScreenState extends State<MapScreen>
     }
     final baseMapStyle = _baseMapStyle;
     final satelliteActive = state.satelliteAtZoom(_zoom);
-    final showAppleSatellite =
-        supportsAppleSatellite &&
-        state.experimentalAppleSatellite &&
-        satelliteActive;
+    // iOS draws sharper MapKit imagery; other platforms use MapTiler tiles.
+    final showAppleSatellite = supportsAppleSatellite && satelliteActive;
     final showSatellite =
         satelliteActive &&
         !showAppleSatellite &&

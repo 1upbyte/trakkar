@@ -134,11 +134,13 @@ People appear as screen-upright profile-picture circles without permanent name
 labels, even when the map is rotated. The default view centers on this phone's
 device position at a neighborhood zoom. The OpenFreeMap Positron vector style
 keeps useful road and city context but omits restaurant, shop, and other POI
-labels. At zoom 20 and above, the default-on satellite setting overlays
-MapTiler `satellite-v4` 512-pixel HiDPI tiles. Satellite tiles are cached for 90
-days with a 512 MB cache limit, and map interaction is limited to zoom levels 2
-through 21. The MapTiler key comes from the Traccar server attribute
-`trakkarMapTilerKey` and is held only in memory by the client. Nearby people are
+labels. At zoom 20 and above, the default-on satellite setting switches to
+satellite imagery. On iOS this is Apple MapKit imagery, drawn natively beneath
+the map's markers. On other platforms it overlays MapTiler `satellite-v4`
+512-pixel HiDPI tiles, cached for 90 days with a 512 MB cache limit. Map
+interaction is limited to zoom levels 2 through 21. The MapTiler key comes from
+the Traccar server attribute `trakkarMapTilerKey` and is held only in memory by
+the client. Nearby people are
 clustered into overlapping profile previews; tapping a cluster spreads its
 members apart, and tapping a person centers and zooms the map before opening a
 low, draggable details sheet that does not block the map. A user can change
