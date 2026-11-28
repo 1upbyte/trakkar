@@ -28,6 +28,12 @@ const _streetStyleUri = 'https://tiles.openfreemap.org/styles/positron';
 const _darkStreetStyleUri = 'https://tiles.openfreemap.org/styles/dark';
 const _minMapZoom = 2.0;
 const _maxMapZoom = 21.0;
+
+/// MapKit draws a globe when zoomed out and stops zooming out entirely near
+/// zoom 2.7, so its imagery cannot stay aligned with Flutter's flat Web
+/// Mercator markers there. Its error is under about a point from zoom 8 in.
+const _appleImageryMinZoom = 8.0;
+
 const _personFocusZoom = 18.0;
 
 class MapScreen extends StatefulWidget {
@@ -630,13 +636,20 @@ class _MapScreenState extends State<MapScreen>
       });
     }
     final satelliteActive = _satelliteAt(state, _zoom);
-    final showAppleSatellite = _usesAppleImagery(state) && satelliteActive;
+    // Further out, use MapTiler satellite tiles when configured and the
+    // normal map otherwise.
+    final showAppleSatellite =
+        _usesAppleImagery(state) &&
+        satelliteActive &&
+        _zoom >= _appleImageryMinZoom;
     final showSatellite =
         satelliteActive &&
         !showAppleSatellite &&
         state.mapTilerApiKey.isNotEmpty;
     final satelliteMissingKey =
-        satelliteActive && !showAppleSatellite && state.mapTilerApiKey.isEmpty;
+        satelliteActive &&
+        !_usesAppleImagery(state) &&
+        state.mapTilerApiKey.isEmpty;
     final attribution = baseMapStyle?.attributions
         .map((item) => item.text)
         .where((text) => text.isNotEmpty)

@@ -139,7 +139,9 @@ satellite imagery: MapTiler `satellite-v4` 512-pixel HiDPI tiles, cached for
 90 days with a 512 MB cache limit. On iOS, the off-by-default "Enhanced map
 sharpness (experimental)" setting draws Apple MapKit imagery natively beneath
 the markers instead. Apple's sharpest imagery is around zoom 19; closer than
-that it is enlarged. Map interaction is limited to zoom levels 2 through 21. The MapTiler key comes from
+that it is enlarged. Below zoom 8 MapKit's imagery cannot line up with the
+markers, so the map uses MapTiler satellite tiles there when configured, and
+the normal map otherwise. Map interaction is limited to zoom levels 2 through 21. The MapTiler key comes from
 the Traccar server attribute `trakkarMapTilerKey` and is held only in memory by
 the client. Nearby people are
 clustered into overlapping profile previews; tapping a cluster spreads its

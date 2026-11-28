@@ -156,8 +156,11 @@ private final class AppleImageryMap: UIView {
       // its limit so Flutter can stop zooming there instead of spreading
       // markers over static imagery.
       minimumDistance = min(minimumDistance ?? .infinity, appliedDistance)
-    } else if abs(correction - 1) > 0.0025 {
-      // Only learn the camera ratio from frames MapKit applied unclamped.
+    } else if abs(correction - 1) > 0.0025,
+              appliedDistance > target.centerCoordinateDistance * 0.995 {
+      // Only learn the camera ratio from frames MapKit applied unclamped. It
+      // also caps how far out the camera goes (near zoom 2.7); learning there
+      // skewed the scale of later frames.
       distancePerGroundHeight = min(2, max(0.5, target.centerCoordinateDistance / groundHeight))
     }
     reportMaxZoom(

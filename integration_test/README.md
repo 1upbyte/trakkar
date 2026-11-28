@@ -16,6 +16,9 @@ flutter run --dart-define=TRAKKAR_DEMO=true -d <device-id>
 The launch variable is only honored in the iOS simulator, so device builds can
 enter demo mode only through the `--dart-define` flag.
 
+**Your own iPhone with a free Apple ID:** see
+[`ios/local-signing/README.md`](../ios/local-signing/README.md).
+
 The app opens straight to the map, signed in as "You", with four sample people
 around Manhattan and Brooklyn and three saved places. Alex is driving, Sam and
 Jordan are close enough to cluster, and Riley is offline with an old fix.
